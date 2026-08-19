@@ -37,6 +37,34 @@ export function splitEvenly(total: number, parts: number): number[] {
   });
 }
 
+/**
+ * Split `total` across `weights` proportionally, in integer centavos, using the
+ * largest-remainder method so the parts still sum back to `total` exactly.
+ * Non-positive or absent weight mass falls back to an even split.
+ */
+export function allocateProportionally(total: number, weights: number[]): number[] {
+  const parts = weights.length;
+  if (parts === 0) return [];
+  const weightSum = weights.reduce((a, w) => a + (Number.isFinite(w) && w > 0 ? w : 0), 0);
+  if (weightSum <= 0) return splitEvenly(total, parts);
+
+  const cents = Math.round(roundMoney(total) * 100);
+  const exact = weights.map((w) => (cents * (Number.isFinite(w) && w > 0 ? w : 0)) / weightSum);
+  const floors = exact.map((v) => Math.floor(v));
+  let leftover = cents - floors.reduce((a, b) => a + b, 0);
+
+  const order = exact
+    .map((value, index) => ({ index, remainder: value - Math.floor(value) }))
+    .sort((a, b) => b.remainder - a.remainder || a.index - b.index);
+
+  const result = [...floors];
+  for (let i = 0; leftover > 0 && i < order.length; i += 1) {
+    result[order[i].index] += 1;
+    leftover -= 1;
+  }
+  return result.map((c) => c / 100);
+}
+
 /** Parse a user-typed amount; anything unparseable becomes 0. */
 export function parseAmount(raw: string): number {
   const cleaned = raw.replace(/[₱,\s]/g, '');
