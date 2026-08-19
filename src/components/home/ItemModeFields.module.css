@@ -1,0 +1,17 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.field > label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text2);
+}

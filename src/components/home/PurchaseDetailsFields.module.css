@@ -1,0 +1,24 @@
+.grid {
+  display: grid;
+  grid-template-columns: minmax(160px, 220px) 1fr;
+  gap: 14px;
+  align-items: start;
+}
+
+.dateField {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.dateField > label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text2);
+}
+
+@media (max-width: 620px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
