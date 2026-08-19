@@ -3,15 +3,25 @@
   grid-template-columns: minmax(160px, 220px) 1fr;
   gap: 14px;
   align-items: start;
+  /* Shared row-1 height so the Date label and the Paid By label+toggle row
+     (which is taller, since it carries the One Payor/Multiple Payors
+     ModeToggle) line up — keeps the Date input and Paid By field on the
+     same baseline instead of the toggle pushing Paid By's field down. */
+  --field-head-h: 32px;
 }
 
 .dateField {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  /* Matches PayorModeFields' .wrap gap so both columns' fields sit on the
+     same line after their (now equal-height) header rows. */
+  gap: 8px;
 }
 
 .dateField > label {
+  display: flex;
+  align-items: center;
+  min-height: var(--field-head-h);
   font-size: 12px;
   font-weight: 500;
   color: var(--text2);
