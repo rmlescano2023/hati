@@ -1,0 +1,45 @@
+input.cell {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  height: auto;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  font-size: inherit;
+  padding: 3px 6px;
+  transition:
+    background 0.12s,
+    border-color 0.12s;
+}
+
+input.cell.numeric {
+  text-align: right;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+input.cell:hover:not(:disabled) {
+  border-color: var(--border2);
+  background: var(--surface2);
+  cursor: text;
+}
+
+input.cell:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--surface2);
+  box-shadow: 0 0 0 2px rgba(78, 168, 124, 0.18);
+}
+
+input.cell.muted {
+  color: var(--text3);
+}
+
+input.cell.invalid,
+input.cell.invalid:focus {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 2px rgba(229, 103, 90, 0.18);
+}

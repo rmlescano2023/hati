@@ -1,0 +1,49 @@
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 13px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 400;
+  background: var(--surface2);
+  transition: all 0.15s;
+  user-select: none;
+  color: var(--text2);
+}
+
+.pill:hover:not(.disabled) {
+  border-color: var(--border2);
+  color: var(--text);
+}
+
+.checked {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  color: var(--accent-text);
+  font-weight: 500;
+}
+
+.disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+.pill input {
+  display: none;
+}
+
+.dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+  transition: background 0.12s;
+  flex-shrink: 0;
+}
+
+.checked .dot {
+  background: currentColor;
+}

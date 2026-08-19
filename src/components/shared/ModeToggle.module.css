@@ -1,0 +1,31 @@
+.toggle {
+  display: inline-flex;
+  gap: 3px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 3px;
+}
+
+.option {
+  border: none;
+  background: none;
+  border-radius: 4px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-family: var(--font);
+  color: var(--text2);
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.option:hover:not(.active) {
+  color: var(--text);
+}
+
+.active {
+  background: var(--accent);
+  color: #0d1512;
+  font-weight: 600;
+}
