@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Group Expenses Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+:root {
+  --bg: #f5f4f0;
+  --surface: #ffffff;
+  --surface2: #f0efe9;
+  --border: #e2e0d8;
+  --border2: #c8c6bc;
+  --text: #1a1916;
+  --text2: #6b6960;
+  --text3: #a8a69e;
+  --accent: #2a5c45;
+  --accent-bg: #eaf3ee;
+  --accent-text: #1d4732;
+  --danger: #c0392b;
+  --danger-bg: #fdf0ee;
+  --danger-text: #8b2318;
+  --info: #1a4a7a;
+  --info-bg: #eaf1fb;
+  --info-text: #123360;
+  --warn-bg: #fff8ed;
+  --warn-text: #7a4f00;
+  --radius: 10px;
+  --radius-sm: 6px;
+  --radius-pill: 99px;
+  --shadow: 0 1px 4px rgba(0,0,0,0.07);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.09);
+  --font: 'DM Sans', system-ui, sans-serif;
+  --mono: 'DM Mono', monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{background:var(--bg);min-height:100%}
+body{font-family:var(--font);font-size:14px;color:var(--text);background:var(--bg);min-height:100vh}
+#root{max-width:960px;margin:0 auto;padding:0 1.5rem 5rem}
+
+/* Header */
+.app-header{padding:2rem 0 0;margin-bottom:2rem}
+.app-header h1{font-size:22px;font-weight:600;letter-spacing:-0.03em;color:var(--text)}
+.app-header p{font-size:13px;color:var(--text2);margin-top:3px}
+
+/* Nav */
+.nav{display:flex;gap:2px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:4px;margin-bottom:1.75rem;width:fit-content}
+.nav-btn{padding:7px 18px;font-size:13px;font-family:var(--font);font-weight:400;border:none;background:none;cursor:pointer;color:var(--text2);border-radius:var(--radius-sm);transition:all .15s;letter-spacing:.01em}
+.nav-btn.active{background:var(--surface);color:var(--text);font-weight:500;box-shadow:var(--shadow)}
+.nav-btn:hover:not(.active){color:var(--text);background:rgba(255,255,255,0.5)}
+
+/* Cards */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.4rem;margin-bottom:1rem;box-shadow:var(--shadow)}
+.card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1.1rem}
+.sec-label{font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--text3)}
+
+/* Form elements */
+.field{display:flex;flex-direction:column;gap:5px}
+.field label{font-size:12px;font-weight:500;color:var(--text2)}
+input[type=text],input[type=number],input[type=date],select{
+  height:38px;border:1px solid var(--border);border-radius:var(--radius-sm);padding:0 11px;
+  background:var(--bg);color:var(--text);font-size:13px;font-family:var(--font);width:100%;
+  transition:border-color .15s,box-shadow .15s;
+}
+input:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(42,92,69,0.1)}
+input::placeholder{color:var(--text3)}
+select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236b6960' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:32px}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;gap:5px;padding:8px 15px;border:1px solid var(--border2);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);cursor:pointer;font-size:13px;font-family:var(--font);font-weight:400;transition:all .15s;white-space:nowrap;line-height:1}
+.btn:hover{background:var(--surface2);border-color:var(--border2)}
+.btn:active{transform:scale(0.98)}
+.btn-primary{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:500}
+.btn-primary:hover{background:#234e3a;border-color:#234e3a}
+.btn-danger{color:var(--danger);border-color:#e8b5b0;background:var(--surface)}
+.btn-danger:hover{background:var(--danger-bg)}
+.btn-sm{padding:5px 11px;font-size:12px}
+.btn-ghost{border-color:transparent;background:transparent;color:var(--text2);padding:4px 8px}
+.btn-ghost:hover{color:var(--text);background:var(--surface2);border-color:transparent}
+.btn-icon{padding:5px 9px;font-size:16px;line-height:1;border-color:transparent;background:transparent;color:var(--text3)}
+.btn-icon:hover{color:var(--danger);background:var(--danger-bg);border-color:transparent}
+
+/* Member chips */
+.chips-wrap{display:flex;flex-wrap:wrap;gap:6px;min-height:28px}
+.member-chip{display:inline-flex;align-items:center;gap:5px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-pill);padding:5px 8px 5px 12px;font-size:12px;font-weight:500}
+.chip-remove{cursor:pointer;color:var(--text3);font-size:14px;border:none;background:none;padding:0;line-height:1;transition:color .12s}
+.chip-remove:hover{color:var(--danger)}
+
+/* Owner pills (checkbox) */
+.owner-grid{display:flex;flex-wrap:wrap;gap:6px;margin-top:5px}
+.owner-check{display:inline-flex;align-items:center;gap:7px;padding:6px 13px;border:1px solid var(--border);border-radius:var(--radius-pill);cursor:pointer;font-size:12px;font-weight:400;background:var(--surface);transition:all .15s;user-select:none;color:var(--text2)}
+.owner-check:hover:not(.disabled){border-color:var(--border2);color:var(--text)}
+.owner-check.checked{border-color:var(--accent);background:var(--accent-bg);color:var(--accent-text);font-weight:500}
+.owner-check.disabled{opacity:.38;cursor:not-allowed}
+.owner-check input{display:none}
+.check-dot{width:9px;height:9px;border-radius:50%;border:1.5px solid currentColor;transition:background .12s;flex-shrink:0}
+.owner-check.checked .check-dot{background:currentColor}
+
+/* Form grids */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+
+/* Total bar */
+.total-bar{display:flex;justify-content:space-between;align-items:center;padding:11px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:.85rem}
+.total-bar .tl{font-size:12px;color:var(--text2);font-weight:500}
+.total-bar .tr{font-size:18px;font-weight:600;font-family:var(--mono);color:var(--text);letter-spacing:-0.02em}
+
+/* Item list */
+.item-list-wrap{border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden}
+.item-list-head{display:grid;grid-template-columns:1fr 100px 1fr 36px;gap:8px;padding:7px 12px;background:var(--surface2);font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.08em}
+.item-list-head .r{text-align:right}
+.item-row{display:grid;grid-template-columns:1fr 100px 1fr 36px;gap:8px;align-items:center;padding:9px 12px;border-top:1px solid var(--border);font-size:13px}
+.item-row:hover{background:var(--bg)}
+.owner-pills{display:flex;flex-wrap:wrap;gap:4px}
+.owner-pill{font-size:10px;font-weight:500;padding:2px 8px;border-radius:var(--radius-pill);background:var(--info-bg);color:var(--info-text);border:1px solid rgba(26,74,122,0.15)}
+.num{text-align:right;font-family:var(--mono);font-size:12px}
+
+/* Divider */
+.divider{border:none;border-top:1px solid var(--border);margin:1.1rem 0}
+.row{display:flex;gap:8px;align-items:center}
+.spacer{flex:1}
+
+/* Breakdown */
+.group-block{margin-bottom:1rem}
+.block-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1rem;flex-wrap:wrap;gap:8px}
+.store-name{font-size:16px;font-weight:600;letter-spacing:-0.02em}
+.meta-row{display:flex;gap:8px;align-items:center;margin-top:3px;flex-wrap:wrap}
+.date-lbl{font-size:12px;color:var(--text2);font-family:var(--mono)}
+.payor-badge{font-size:11px;font-weight:600;padding:3px 10px;border-radius:var(--radius-pill);background:var(--accent-bg);color:var(--accent-text);border:1px solid rgba(42,92,69,0.2)}
+
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-weight:600;font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid var(--border);padding:8px 10px}
+td{padding:8px 10px;border-bottom:1px solid var(--border);font-size:13px}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:var(--bg)}
+.total-row td{font-weight:600;background:var(--surface2) !important;font-family:var(--mono);font-size:12px}
+th.r,td.r{text-align:right;font-family:var(--mono);font-size:12px}
+.dash{color:var(--text3)}
+
+/* Summary */
+.sum-table th,
+.sum-table td{text-align:right}
+.sum-table th:first-child,
+.sum-table td:first-child{text-align:left;font-weight:600;font-size:13px}
+.zero{color:var(--text3);font-family:var(--mono);font-size:12px}
+.owes{color:var(--danger);font-weight:600;font-family:var(--mono);font-size:12px}
+.self-cell{color:var(--text3);font-size:11px}
+
+/* Net cards */
+.net-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-top:1rem}
+.net-card{padding:14px 16px;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface)}
+.net-card .nc-name{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);margin-bottom:6px}
+.net-card .nc-val{font-size:22px;font-weight:600;font-family:var(--mono);letter-spacing:-0.03em}
+.nc-val.pos{color:var(--accent)}
+.nc-val.neg{color:var(--danger)}
+.nc-val.zero{color:var(--text3)}
+.net-card .nc-sub{font-size:11px;color:var(--text2);margin-top:3px}
+
+.empty{text-align:center;padding:3.5rem 1rem;color:var(--text2);font-size:13px}
+.empty strong{display:block;font-size:15px;font-weight:500;color:var(--text);margin-bottom:4px}
+.tip{font-size:11px;color:var(--text3);margin-top:.6rem;line-height:1.5}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script>
+const {useState} = React;
+const h = React.createElement;
+const fmt = n => parseFloat(n||0).toFixed(2);
+const fmtP = n => `₱${fmt(n)}`;
+
+function OwnerPill({label, checked, disabled, onChange}) {
+  return h('label', {
+    className: `owner-check${checked?' checked':''}${disabled?' disabled':''}`,
+  },
+    h('input', {type:'checkbox', checked, disabled, onChange: disabled?e=>e.preventDefault():onChange}),
+    h('span', {className:'check-dot'}),
+    label
+  );
+}
+
+// mode: 'split' = equal split among checked owners, 'custom' = per-member amount entry
+function HomePage({records, setRecords, members, setMembers}) {
+  const [date, setDate] = useState(new Date().toISOString().slice(0,10));
+  const [paidBy, setPaidBy] = useState('');
+  const [itemName, setItemName] = useState('');
+  const [price, setPrice] = useState('');
+  const [mode, setMode] = useState('split'); // 'split' | 'custom'
+  const [owners, setOwners] = useState({});
+  const [allSelected, setAllSelected] = useState(false);
+  const [customAmts, setCustomAmts] = useState({}); // {memberName: string}
+  const [staged, setStaged] = useState([]);
+  const [newMember, setNewMember] = useState('');
+
+  const resetItemFields = () => {
+    setItemName(''); setPrice(''); setOwners({}); setAllSelected(false); setCustomAmts({});
+  };
+
+  const addMember = () => {
+    const m = newMember.trim();
+    if (m && !members.includes(m)) setMembers([...members, m]);
+    setNewMember('');
+  };
+
+  const toggleAll = () => {
+    const next = !allSelected;
+    setAllSelected(next);
+    if (next) { const o={}; members.forEach(m=>o[m]=true); setOwners(o); }
+    else setOwners({});
+  };
+
+  const toggleOwner = m => {
+    const next = {...owners, [m]:!owners[m]};
+    setOwners(next);
+    setAllSelected(members.every(x=>next[x]));
+  };
+
+  const selectedOwners = members.filter(m=>owners[m]);
+
+  // custom mode: auto-fill price from sum of custom amounts
+  const customTotal = Object.values(customAmts).reduce((a,v)=>a+(parseFloat(v)||0),0);
+  const customOwners = members.filter(m=>(parseFloat(customAmts[m])||0)>0);
+
+  const addItem = () => {
+    if (!itemName.trim()) return alert('Enter an item name.');
+    if (mode==='split') {
+      if (!price || selectedOwners.length===0) return alert('Enter a price and select at least one owner.');
+      setStaged([...staged,{id:Date.now(),name:itemName.trim(),price:parseFloat(price),mode:'split',owners:selectedOwners}]);
+    } else {
+      if (customOwners.length===0) return alert('Enter an amount for at least one member.');
+      const ownerAmts = {};
+      customOwners.forEach(m=>ownerAmts[m]=parseFloat(customAmts[m]));
+      setStaged([...staged,{id:Date.now(),name:itemName.trim(),price:customTotal,mode:'custom',ownerAmts,owners:customOwners}]);
+    }
+    resetItemFields();
+  };
+
+  const removeItem = id => setStaged(staged.filter(s=>s.id!==id));
+  const totalAmt = staged.reduce((a,b)=>a+b.price,0);
+
+  const save = () => {
+    if (!date||!paidBy||staged.length===0) return alert('Fill in date, paid by, and at least one item.');
+    setRecords([...records,{id:Date.now(),date,paidBy,items:staged}]);
+    setStaged([]); setPaidBy(''); resetItemFields();
+  };
+
+  return h('div', null,
+    h('div',{className:'card'},
+      h('div',{className:'card-header'},
+        h('span',{className:'sec-label'},'Group members'),
+        members.length>0 && h('button',{className:'btn btn-sm btn-danger',onClick:()=>{setMembers([]);setOwners({});setAllSelected(false);setCustomAmts({});}},'Clear all')
+      ),
+      h('div',{className:'row',style:{marginBottom:'10px'}},
+        h('input',{type:'text',placeholder:'Enter member name…',value:newMember,
+          onChange:ev=>setNewMember(ev.target.value),
+          onKeyDown:ev=>ev.key==='Enter'&&addMember(),
+          style:{flex:1}}),
+        h('button',{className:'btn',onClick:addMember,style:{flexShrink:0}},'+ Add')
+      ),
+      members.length===0
+        ? h('div',{style:{fontSize:'12px',color:'var(--text3)',padding:'2px 0'}},'No members yet. Add some above.')
+        : h('div',{className:'chips-wrap'},
+            members.map(m=>h('div',{className:'member-chip',key:m},
+              m,
+              h('button',{className:'chip-remove',onClick:()=>setMembers(members.filter(x=>x!==m))},'×')
+            ))
+          )
+    ),
+
+    h('div',{className:'card'},
+      h('div',{className:'sec-label',style:{marginBottom:'1rem'}},'Purchase details'),
+      h('div',{className:'grid2'},
+        h('div',{className:'field'},h('label',null,'Date'),h('input',{type:'date',value:date,onChange:ev=>setDate(ev.target.value)})),
+        h('div',{className:'field'},
+          h('label',null,'Paid by'),
+          h('select',{value:paidBy,onChange:ev=>setPaidBy(ev.target.value)},
+            h('option',{value:''},'— select —'),
+            members.map(m=>h('option',{value:m,key:m},m))
+          )
+        )
+      )
+    ),
+
+    h('div',{className:'card'},
+      // Header row: label + mode toggle
+      h('div',{className:'row',style:{marginBottom:'1rem'}},
+        h('span',{className:'sec-label',style:{margin:0}},'Add item'),
+        h('span',{className:'spacer'}),
+        h('div',{style:{display:'flex',gap:'3px',background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:'var(--radius-sm)',padding:'3px'}},
+          h('button',{
+            className:'btn btn-sm'+(mode==='split'?' btn-primary':''),
+            style:{border:'none',borderRadius:'4px',padding:'4px 12px'},
+            onClick:()=>{setMode('split');resetItemFields();}
+          },'Equal split'),
+          h('button',{
+            className:'btn btn-sm'+(mode==='custom'?' btn-primary':''),
+            style:{border:'none',borderRadius:'4px',padding:'4px 12px'},
+            onClick:()=>{setMode('custom');resetItemFields();}
+          },'Custom amounts')
+        )
+      ),
+
+      // Item name (always shown)
+      h('div',{className:'field',style:{marginBottom:'14px'}},
+        h('label',null,'Item name'),
+        h('input',{type:'text',placeholder:'e.g. Samgyup dinner, Gin…',value:itemName,onChange:ev=>setItemName(ev.target.value)})
+      ),
+
+      // SPLIT MODE
+      mode==='split' && h('div',null,
+        h('div',{className:'field',style:{marginBottom:'14px'}},
+          h('label',null,'Total price (₱)'),
+          h('input',{type:'number',placeholder:'0.00',value:price,onChange:ev=>setPrice(ev.target.value)})
+        ),
+        h('div',{className:'field'},
+          h('label',null,'Owner(s) — split equally among:'),
+          members.length===0
+            ? h('div',{style:{fontSize:'12px',color:'var(--text3)',paddingTop:'5px'}},'Add group members first.')
+            : h('div',{className:'owner-grid'},
+                h(OwnerPill,{label:'All members',checked:allSelected,disabled:false,onChange:toggleAll}),
+                members.map(m=>h(OwnerPill,{key:m,label:m,checked:!!owners[m],disabled:allSelected,onChange:()=>toggleOwner(m)}))
+              )
+        )
+      ),
+
+      // CUSTOM MODE
+      mode==='custom' && h('div',null,
+        members.length===0
+          ? h('div',{style:{fontSize:'12px',color:'var(--text3)',paddingTop:'5px'}},'Add group members first.')
+          : h('div',null,
+              h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginBottom:'10px'}},
+                members.map(m=>h('div',{className:'field',key:m},
+                  h('label',null,m),
+                  h('input',{type:'number',placeholder:'0.00',
+                    value:customAmts[m]||'',
+                    onChange:ev=>setCustomAmts({...customAmts,[m]:ev.target.value})
+                  })
+                ))
+              ),
+              h('div',{style:{display:'flex',justifyContent:'flex-end',alignItems:'center',gap:'8px',fontSize:'13px',color:'var(--text2)'}},
+                'Total: ',
+                h('span',{style:{fontFamily:'var(--mono)',fontWeight:600,fontSize:'15px',color:'var(--text)'}},fmtP(customTotal))
+              )
+            )
+      ),
+
+      h('div',{className:'row',style:{marginTop:'1rem',justifyContent:'flex-end'}},
+        h('button',{className:'btn',onClick:addItem},'+ Add item')
+      ),
+      h('div',{className:'divider'}),
+      h('div',{className:'total-bar'},
+        h('span',{className:'tl'},`${staged.length} item${staged.length!==1?'s':''} staged`),
+        h('span',{className:'tr'},fmtP(totalAmt))
+      ),
+      staged.length>0 && h('div',{className:'item-list-wrap'},
+        h('div',{className:'item-list-head'},
+          h('span',null,'Item'),
+          h('span',{className:'r'},'Price'),
+          h('span',null,'Owners / amounts'),
+          h('span',null,'')
+        ),
+        staged.map(s=>h('div',{className:'item-row',key:s.id},
+          h('span',null,s.name),
+          h('span',{className:'num'},fmtP(s.price)),
+          h('div',{className:'owner-pills'},
+            s.mode==='custom'
+              ? Object.entries(s.ownerAmts).map(([o,a])=>h('span',{className:'owner-pill',key:o},`${o}: ₱${fmt(a)}`))
+              : s.owners.map(o=>h('span',{className:'owner-pill',key:o},o))
+          ),
+          h('button',{className:'btn btn-icon',onClick:()=>removeItem(s.id),title:'Remove'},'×')
+        ))
+      ),
+      staged.length>0 && h('div',{className:'row',style:{marginTop:'1rem',justifyContent:'flex-end'}},
+        h('button',{className:'btn btn-primary',onClick:save},'Save to breakdown →')
+      )
+    )
+  );
+}
+
+function BreakdownPage({records,members}) {
+  if (!records.length) return h('div',{className:'empty'},h('strong',null,'No records yet'),h('span',null,'Add expenses from the Home page.'));
+
+  const getBreakdown = rec => {
+    const bd={}; members.forEach(m=>bd[m]=0);
+    rec.items.forEach(item=>{
+      if (item.mode==='custom') {
+        Object.entries(item.ownerAmts).forEach(([o,a])=>{bd[o]=(bd[o]||0)+a;});
+      } else {
+        const share=item.price/item.owners.length;
+        item.owners.forEach(o=>{bd[o]=(bd[o]||0)+share;});
+      }
+    });
+    return bd;
+  };
+
+  return h('div',null,
+    records.map(rec=>{
+      const bd=getBreakdown(rec);
+      const total=rec.items.reduce((a,b)=>a+b.price,0);
+      return h('div',{className:'card group-block',key:rec.id},
+        h('div',{className:'block-header'},
+          h('div',null,
+            h('div',{className:'meta-row'},
+              h('span',{className:'date-lbl'},rec.date),
+              h('span',{className:'payor-badge'},`Paid by ${rec.paidBy}`)
+            )
+          )
+        ),
+        h('table',null,
+          h('thead',null,
+            h('tr',null,
+              h('th',null,'Item'),
+              h('th',{className:'r'},'Price'),
+              ...members.map(m=>h('th',{className:'r',key:m},m))
+            )
+          ),
+          h('tbody',null,
+            rec.items.map(item=>{
+              const share=item.mode==='custom'?null:item.price/item.owners.length;
+              return h('tr',{key:item.id},
+                h('td',null,item.name),
+                h('td',{className:'r'},fmtP(item.price)),
+                ...members.map(m=>{
+                  const val=item.mode==='custom'?(item.ownerAmts[m]||0):( item.owners.includes(m)?share:0);
+                  return h('td',{className:'r'+(val===0?' dash':''),key:m},val>0?fmtP(val):'—');
+                })
+              );
+            }),
+            h('tr',{className:'total-row'},
+              h('td',null,h('strong',null,'Total')),
+              h('td',{className:'r'},h('strong',null,fmtP(total))),
+              ...members.map(m=>h('td',{className:'r',key:m},h('strong',null,bd[m]>0?fmtP(bd[m]):'—')))
+            )
+          )
+        )
+      );
+    })
+  );
+}
+
+function SummaryPage({records,members}) {
+  if (!records.length) return h('div',{className:'empty'},h('strong',null,'No records yet'),h('span',null,'Add expenses from the Home page.'));
+
+  const payors=[...new Set(records.map(r=>r.paidBy))];
+
+  const getBreakdown = rec => {
+    const bd={}; members.forEach(m=>bd[m]=0);
+    rec.items.forEach(item=>{
+      if (item.mode==='custom') {
+        Object.entries(item.ownerAmts).forEach(([o,a])=>{bd[o]=(bd[o]||0)+a;});
+      } else {
+        const share=item.price/item.owners.length;
+        item.owners.forEach(o=>{bd[o]=(bd[o]||0)+share;});
+      }
+    });
+    return bd;
+  };
+
+  const payorOwes={};
+  payors.forEach(p=>{payorOwes[p]={}; members.forEach(m=>payorOwes[p][m]=0);});
+  records.forEach(rec=>{
+    const bd=getBreakdown(rec);
+    members.forEach(m=>{if(m!==rec.paidBy) payorOwes[rec.paidBy][m]=(payorOwes[rec.paidBy][m]||0)+bd[m];});
+  });
+
+  const net={};
+  members.forEach(m=>net[m]=0);
+  payors.forEach(p=>{
+    members.forEach(m=>{
+      if(m!==p){
+        net[p]+=(payorOwes[p][m]||0);
+        net[m]-=(payorOwes[p][m]||0);
+      }
+    });
+  });
+
+  // Build written obligation sentences: debtor owes creditor
+  // net[m] < 0 means m owes; net[m] > 0 means m is owed
+  // Build per-pair obligations from payorOwes
+  const obligations=[];
+  payors.forEach(p=>{
+    members.forEach(m=>{
+      if(m!==p){
+        const v=payorOwes[p][m]||0;
+        if(v>0.005) obligations.push({debtor:m,creditor:p,amount:v});
+      }
+    });
+  });
+
+  const downloadSOA = () => {
+    const dateStr = new Date().toLocaleDateString('en-PH',{year:'numeric',month:'long',day:'numeric'});
+    const allDates = records.map(r=>r.date).sort();
+    const periodFrom = allDates[0]||'—';
+    const periodTo = allDates[allDates.length-1]||'—';
+    const grandTotal = records.reduce((a,r)=>a+r.items.reduce((b,i)=>b+i.price,0),0);
+
+    let html = `<!DOCTYPE html><html><head><meta charset="UTF-8"/>
+<title>Group Expenses — eSOA</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap');
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'DM Sans',sans-serif;font-size:13px;color:#1a1916;background:#fff;padding:40px 48px;max-width:820px;margin:0 auto}
+  .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px;padding-bottom:20px;border-bottom:2px solid #1a1916}
+  .header-left h1{font-size:22px;font-weight:600;letter-spacing:-0.03em;margin-bottom:3px}
+  .header-left p{font-size:12px;color:#6b6960}
+  .header-right{text-align:right;font-size:12px;color:#6b6960;line-height:1.8}
+  .section{margin-bottom:28px}
+  .section-title{font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:#a8a69e;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #e2e0d8}
+  table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:4px}
+  th{text-align:left;font-weight:600;font-size:10px;color:#a8a69e;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #e2e0d8;padding:6px 8px}
+  td{padding:6px 8px;border-bottom:1px solid #f0efe9}
+  .r{text-align:right;font-family:'DM Mono',monospace}
+  .total-row td{font-weight:600;background:#f5f4f0;font-family:'DM Mono',monospace}
+  .net-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:4px}
+  .net-card{padding:12px;border:1px solid #e2e0d8;border-radius:8px}
+  .nc-name{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:#a8a69e;margin-bottom:4px}
+  .nc-val{font-size:18px;font-weight:600;font-family:'DM Mono',monospace}
+  .pos{color:#2a5c45}.neg{color:#c0392b}.zero-v{color:#a8a69e}
+  .nc-sub{font-size:10px;color:#6b6960;margin-top:2px}
+  .obligations{display:flex;flex-direction:column;gap:8px}
+  .ob-row{display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid #e2e0d8;border-radius:8px;background:#fafaf8}
+  .ob-debtor{font-weight:600;color:#c0392b}
+  .ob-creditor{font-weight:600;color:#2a5c45}
+  .ob-amt{font-family:'DM Mono',monospace;font-weight:600;margin-left:auto;font-size:13px}
+  .footer{margin-top:40px;padding-top:16px;border-top:1px solid #e2e0d8;font-size:11px;color:#a8a69e;display:flex;justify-content:space-between}
+  @media print{body{padding:24px}button{display:none}}
+</style></head><body>
+<div class="header">
+  <div class="header-left">
+    <h1>Group Expenses</h1>
+    <p>Statement of Account &nbsp;·&nbsp; Generated ${dateStr}</p>
+    <p style="margin-top:3px">Period: ${periodFrom} to ${periodTo}</p>
+  </div>
+  <div class="header-right">
+    <div><strong>Members</strong></div>
+    <div>${members.join(', ')}</div>
+    <div style="margin-top:8px"><strong>Grand Total</strong></div>
+    <div style="font-family:'DM Mono',sans-serif;font-size:15px;font-weight:600">₱${fmt(grandTotal)}</div>
+  </div>
+</div>`;
+
+    // Breakdown per record
+    html+=`<div class="section"><div class="section-title">Transaction Breakdown</div>`;
+    records.forEach(rec=>{
+      const bd=getBreakdown(rec);
+      const total=rec.items.reduce((a,b)=>a+b.price,0);
+      html+=`<div style="margin-bottom:18px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <div style="font-weight:600;font-size:13px">${rec.date}</div>
+          <span style="font-size:11px;font-weight:600;padding:2px 10px;border-radius:99px;background:#eaf3ee;color:#1d4732;border:1px solid rgba(42,92,69,0.2)">Paid by ${rec.paidBy}</span>
+        </div>
+        <table><thead><tr><th>Item</th><th class="r">Price</th>${members.map(m=>`<th class="r">${m}</th>`).join('')}</tr></thead><tbody>`;
+      rec.items.forEach(item=>{
+        const share=item.mode==='custom'?null:item.price/item.owners.length;
+        html+=`<tr><td>${item.name}</td><td class="r">₱${fmt(item.price)}</td>`;
+        members.forEach(m=>{
+          const val=item.mode==='custom'?(item.ownerAmts[m]||0):(item.owners.includes(m)?share:0);
+          html+=`<td class="r">${val>0?'₱'+fmt(val):'—'}</td>`;
+        });
+        html+=`</tr>`;
+      });
+      html+=`<tr class="total-row"><td><strong>Total</strong></td><td class="r"><strong>₱${fmt(total)}</strong></td>`;
+      members.forEach(m=>{html+=`<td class="r"><strong>${bd[m]>0?'₱'+fmt(bd[m]):'—'}</strong></td>`;});
+      html+=`</tr></tbody></table></div>`;
+    });
+    html+=`</div>`;
+
+    // Summary table
+    html+=`<div class="section"><div class="section-title">Amounts Owed to Each Payor</div>
+    <table class="sum-table"><thead><tr><th>Payor</th>${members.map(m=>`<th class="r">${m}</th>`).join('')}</tr></thead><tbody>`;
+    payors.forEach(p=>{
+      html+=`<tr><td><strong>${p}</strong></td>`;
+      members.forEach(m=>{
+        if(m===p){html+=`<td class="r" style="color:#a8a69e">—</td>`;return;}
+        const v=payorOwes[p][m]||0;
+        html+=`<td class="r" style="${v>0?'color:#c0392b;font-weight:600':''}">${v>0?'₱'+fmt(v):'₱0.00'}</td>`;
+      });
+      html+=`</tr>`;
+    });
+    html+=`</tbody></table></div>`;
+
+    // Net balances
+    html+=`<div class="section"><div class="section-title">Net Balances</div><div class="net-grid">`;
+    members.forEach(m=>{
+      const v=net[m];
+      const cls=v>0.005?'pos':v<-0.005?'neg':'zero-v';
+      const sub=v>0.005?'is owed back':v<-0.005?'owes':'settled up';
+      html+=`<div class="net-card"><div class="nc-name">${m}</div><div class="nc-val ${cls}">₱${fmt(Math.abs(v))}</div><div class="nc-sub">${sub}</div></div>`;
+    });
+    html+=`</div></div>`;
+
+    // Written obligations
+    if(obligations.length>0){
+      html+=`<div class="section"><div class="section-title">Payment Obligations</div><div class="obligations">`;
+      obligations.forEach(ob=>{
+        html+=`<div class="ob-row">
+          <span><span class="ob-debtor">${ob.debtor}</span> owes <span class="ob-creditor">${ob.creditor}</span> a total of</span>
+          <span class="ob-amt">₱${fmt(ob.amount)}</span>
+        </div>`;
+      });
+      html+=`</div></div>`;
+    }
+
+    html+=`<div class="footer"><span>Group Expenses Tracker</span><span>Generated on ${dateStr}</span></div>
+</body></html>`;
+
+    const blob=new Blob([html],{type:'text/html'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download=`group-expenses-SOA-${new Date().toISOString().slice(0,10)}.html`;
+    a.click();
+  };
+
+  return h('div',null,
+    h('div',{className:'card'},
+      h('div',{className:'sec-label',style:{marginBottom:'1rem'}},'Amounts owed to each payor'),
+      h('table',{className:'sum-table'},
+        h('thead',null,
+          h('tr',null,
+            h('th',null,'Payor ↓ / Member →'),
+            ...members.map(m=>h('th',{key:m},m))
+          )
+        ),
+        h('tbody',null,
+          payors.map(p=>h('tr',{key:p},
+            h('td',null,p),
+            ...members.map(m=>{
+              if(m===p) return h('td',{key:m,className:'self-cell r'},'—');
+              const val=payorOwes[p][m]||0;
+              return h('td',{key:m,className:(val>0?'owes':'zero')+' r'},val>0?fmtP(val):'₱0.00');
+            })
+          ))
+        )
+      ),
+      h('p',{className:'tip'},'Red values = how much that member owes to the payor in that row.')
+    ),
+
+    h('div',{className:'card'},
+      h('div',{className:'sec-label',style:{marginBottom:'0'}},'Net balances'),
+      h('div',{className:'net-grid'},
+        members.map(m=>{
+          const v=net[m];
+          return h('div',{className:'net-card',key:m},
+            h('div',{className:'nc-name'},m),
+            h('div',{className:`nc-val ${v>0.005?'pos':v<-0.005?'neg':'zero'}`},fmtP(Math.abs(v))),
+            h('div',{className:'nc-sub'},v>0.005?'is owed back':v<-0.005?'owes':'settled up')
+          );
+        })
+      )
+    ),
+
+    h('div',{className:'card'},
+      h('div',{className:'card-header'},
+        h('span',{className:'sec-label',style:{margin:0}},'Payment obligations'),
+        h('button',{className:'btn btn-primary btn-sm',onClick:downloadSOA},'⬇ Download eSOA')
+      ),
+      obligations.length===0
+        ? h('div',{style:{fontSize:'13px',color:'var(--text3)'}}, 'No obligations — everyone is settled up!')
+        : h('div',{style:{display:'flex',flexDirection:'column',gap:'8px'}},
+            obligations.map((ob,i)=>h('div',{key:i,style:{
+              display:'flex',alignItems:'center',justifyContent:'space-between',
+              padding:'11px 16px',border:'1px solid var(--border)',borderRadius:'var(--radius-sm)',
+              background:'var(--bg)',gap:'12px'
+            }},
+              h('span',{style:{fontSize:'13px',lineHeight:'1.5'}},
+                h('strong',{style:{color:'var(--danger)'}},' '+ob.debtor+' '),
+                'owes',
+                h('strong',{style:{color:'var(--accent)'}},' '+ob.creditor+' '),
+                'a total of'
+              ),
+              h('span',{style:{fontFamily:'var(--mono)',fontWeight:600,fontSize:'15px',color:'var(--text)',whiteSpace:'nowrap'}},fmtP(ob.amount))
+            ))
+          )
+    )
+  );
+}
+
+function App() {
+  const [page,setPage]=useState('home');
+  const [records,setRecords]=useState([]);
+  const [members,setMembers]=useState([]);
+  const pages=[['home','Home'],['breakdown','Breakdown'],['summary','Summary']];
+
+  return h('div',{id:'root-inner'},
+    h('div',{className:'app-header'},
+      h('h1',null,'Group Expenses'),
+      h('p',null,'Track shared purchases and see who owes what.')
+    ),
+    h('div',{className:'nav'},
+      pages.map(([id,label])=>h('button',{key:id,className:`nav-btn${page===id?' active':''}`,onClick:()=>setPage(id)},label))
+    ),
+    page==='home'&&h(HomePage,{records,setRecords,members,setMembers}),
+    page==='breakdown'&&h(BreakdownPage,{records,members}),
+    page==='summary'&&h(SummaryPage,{records,members})
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(h(App));
+</script>
+</body>
+</html>
