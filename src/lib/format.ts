@@ -22,6 +22,15 @@ export function formatMoney(value: number): string {
   return `₱${formatAmount(value)}`;
 }
 
+/**
+ * Money for the PDF. DM Sans and DM Mono have no U+20B1 glyph, so the peso sign
+ * would print as a zero-width .notdef struck through the first digit — the
+ * statement spells the currency out instead.
+ */
+export function formatPdfMoney(value: number): string {
+  return `PHP ${formatAmount(value)}`;
+}
+
 /** `"2026-04-27"` -> `"April 27, 2026"`. Parsed as UTC so the day never shifts. */
 export function formatLongDate(iso: string): string {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);

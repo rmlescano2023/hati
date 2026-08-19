@@ -3,6 +3,7 @@ import { EmptyState } from '../components/shared/EmptyState';
 import { FinalSettlement } from '../components/summary/FinalSettlement';
 import { NetBalanceCards } from '../components/summary/NetBalanceCards';
 import { OwedMatrix, type MatrixView } from '../components/summary/OwedMatrix';
+import { ExportEsoaButton } from '../components/summary/ExportEsoaButton';
 import { useAppData } from '../context/AppDataContext';
 import {
   getFinalSettlement,
@@ -43,6 +44,7 @@ export function SummaryPage() {
         onViewChange={setView}
       />
       <NetBalanceCards balances={balances} />
+      <ExportEsoaButton members={sortedMembers} records={records} />
     </>
   );
 }

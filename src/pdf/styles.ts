@@ -1,0 +1,213 @@
+import { StyleSheet } from '@react-pdf/renderer';
+
+/** Print palette — a statement is read on white paper, not in the app's dark theme. */
+export const palette = {
+  text: '#1a1916',
+  text2: '#6b6960',
+  text3: '#a8a69e',
+  border: '#e2e0d8',
+  borderStrong: '#1a1916',
+  surface: '#f5f4f0',
+  accent: '#2a5c45',
+  accentBg: '#eaf3ee',
+  danger: '#c0392b',
+  white: '#ffffff',
+};
+
+export const styles = StyleSheet.create({
+  page: {
+    paddingTop: 40,
+    paddingBottom: 48,
+    paddingHorizontal: 40,
+    fontFamily: 'DM Sans',
+    fontSize: 9,
+    color: palette.text,
+    backgroundColor: palette.white,
+  },
+
+  /* ------------------------------- header -------------------------------- */
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    borderBottomWidth: 1.5,
+    borderBottomColor: palette.borderStrong,
+    paddingBottom: 14,
+    marginBottom: 20,
+  },
+  headerLeft: { flexDirection: 'column', maxWidth: '60%' },
+  brandRow: { flexDirection: 'row', alignItems: 'center' },
+  wordmark: { fontSize: 20, fontWeight: 700, letterSpacing: -0.6 },
+  headerSub: { fontSize: 9, color: palette.text2, marginTop: 3 },
+  headerRight: { flexDirection: 'column', alignItems: 'flex-end', maxWidth: '40%' },
+  headerLabel: {
+    fontSize: 7,
+    fontWeight: 700,
+    letterSpacing: 0.8,
+    color: palette.text3,
+    textTransform: 'uppercase',
+  },
+  headerValue: { fontSize: 9, color: palette.text2, textAlign: 'right', marginTop: 2 },
+  grandTotal: {
+    fontFamily: 'DM Mono',
+    fontWeight: 500,
+    fontSize: 14,
+    marginTop: 6,
+    color: palette.text,
+  },
+
+  /* ------------------------------ sections ------------------------------- */
+  section: { marginBottom: 20 },
+  sectionTitle: {
+    fontSize: 8,
+    fontWeight: 700,
+    letterSpacing: 0.9,
+    textTransform: 'uppercase',
+    color: palette.text3,
+    borderBottomWidth: 1,
+    borderBottomColor: palette.border,
+    paddingBottom: 5,
+    marginBottom: 9,
+  },
+
+  /* ---------------------------- settlement ------------------------------- */
+  settlementBlock: {
+    borderWidth: 1,
+    borderColor: palette.border,
+    borderRadius: 6,
+    padding: 10,
+    marginBottom: 8,
+    backgroundColor: '#fafaf8',
+  },
+  settlementHead: { fontSize: 11, color: palette.text2, marginBottom: 6 },
+  settlementDebtor: { fontSize: 12, fontWeight: 700, color: palette.danger },
+  settlementLine: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 2,
+  },
+  settlementCreditor: { fontSize: 9, fontWeight: 700, color: palette.accent },
+  settlementAmount: { fontFamily: 'DM Mono', fontWeight: 500, fontSize: 9 },
+  settlementTotal: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    borderTopColor: palette.border,
+    marginTop: 5,
+    paddingTop: 4,
+  },
+  settledUp: {
+    fontSize: 10,
+    color: palette.accent,
+    backgroundColor: palette.accentBg,
+    borderWidth: 1,
+    borderColor: '#c9e0d3',
+    borderRadius: 6,
+    padding: 12,
+    textAlign: 'center',
+  },
+
+  /* --------------------------- net balances ------------------------------ */
+  netGrid: { flexDirection: 'row', flexWrap: 'wrap' },
+  netCard: {
+    width: '25%',
+    padding: 4,
+  },
+  netCardInner: {
+    borderWidth: 1,
+    borderColor: palette.border,
+    borderRadius: 6,
+    padding: 8,
+    alignItems: 'center',
+  },
+  netName: {
+    fontSize: 7,
+    fontWeight: 700,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    color: palette.text3,
+  },
+  netValue: { fontFamily: 'DM Mono', fontWeight: 500, fontSize: 10.5, marginTop: 3 },
+  netSub: { fontSize: 7, color: palette.text2, marginTop: 2 },
+
+  /* -------------------------------- tables ------------------------------- */
+  groupHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 5,
+  },
+  groupDate: { fontSize: 10, fontWeight: 700 },
+  payorBadge: {
+    fontSize: 7.5,
+    fontWeight: 700,
+    color: palette.accent,
+    backgroundColor: palette.accentBg,
+    borderWidth: 1,
+    borderColor: '#c9e0d3',
+    borderRadius: 8,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    marginLeft: 4,
+  },
+  payorRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end' },
+
+  tableGroup: { marginBottom: 16 },
+  groupAnchor: { height: 0 },
+  headRow: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: palette.border,
+    backgroundColor: palette.white,
+    paddingVertical: 4,
+  },
+  headCell: {
+    fontSize: 6.5,
+    fontWeight: 700,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    color: palette.text3,
+    paddingHorizontal: 3,
+  },
+  row: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0efe9',
+    paddingVertical: 3.5,
+  },
+  cell: { fontSize: 8, paddingHorizontal: 3 },
+  cellNum: { fontFamily: 'DM Mono', fontSize: 7.5, paddingHorizontal: 3, textAlign: 'right' },
+  totalRow: {
+    flexDirection: 'row',
+    backgroundColor: palette.surface,
+    paddingVertical: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: palette.border,
+  },
+  totalCell: { fontSize: 8, fontWeight: 700, paddingHorizontal: 3 },
+  totalCellNum: {
+    fontFamily: 'DM Mono',
+    fontWeight: 500,
+    fontSize: 7.5,
+    paddingHorizontal: 3,
+    textAlign: 'right',
+  },
+  muted: { color: palette.text3 },
+  owes: { color: palette.danger, fontWeight: 500 },
+
+  /* -------------------------------- footer ------------------------------- */
+  footer: {
+    position: 'absolute',
+    bottom: 22,
+    left: 40,
+    right: 40,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    borderTopColor: palette.border,
+    paddingTop: 6,
+    fontSize: 7.5,
+    color: palette.text3,
+  },
+});
