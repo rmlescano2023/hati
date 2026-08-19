@@ -1,0 +1,81 @@
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
+.head {
+  font-size: 17px;
+  font-weight: 400;
+  color: var(--text2);
+  letter-spacing: -0.01em;
+}
+
+.debtor {
+  font-size: 19px;
+  font-weight: 600;
+  color: var(--danger-text);
+  letter-spacing: -0.02em;
+}
+
+.lines {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--text2);
+  padding-left: 2px;
+}
+
+.creditor {
+  font-weight: 600;
+  color: var(--accent-text);
+}
+
+.lineAmount {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid var(--border);
+  padding-top: 9px;
+  margin-top: 2px;
+}
+
+.totalLabel {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text3);
+}
+
+.totalAmount {
+  font-family: var(--mono);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}

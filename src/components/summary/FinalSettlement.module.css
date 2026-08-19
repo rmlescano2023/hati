@@ -1,0 +1,23 @@
+.blocks {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.settled {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.6rem 1rem;
+  font-size: 14px;
+  color: var(--accent-text);
+  background: var(--accent-bg);
+  border: 1px solid rgba(78, 168, 124, 0.25);
+  border-radius: var(--radius);
+}
+
+.more {
+  display: flex;
+  justify-content: center;
+  margin-top: 4px;
+}
