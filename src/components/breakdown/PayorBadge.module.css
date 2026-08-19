@@ -20,5 +20,9 @@
   font-family: var(--mono);
   font-weight: 500;
   opacity: 0.85;
-  margin-left: 4px;
+}
+
+.prefix {
+  font-size: 11px;
+  color: var(--text2);
 }

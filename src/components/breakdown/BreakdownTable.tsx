@@ -79,9 +79,12 @@ export function BreakdownTable({ group, members }: Props) {
             <td>
               <span className={styles.totalLabel}>Total</span>
             </td>
-            <td className={styles.dash}>{formatMoney(group.grandTotal)}</td>
+            <td className={styles.totalValue}>{formatMoney(group.grandTotal)}</td>
             {members.map((m) => (
-              <td key={m} className={styles.dash}>
+              <td
+                key={m}
+                className={`${styles.totalValue} ${group.totals[m] > 0 ? '' : styles.empty}`}
+              >
                 {group.totals[m] > 0 ? formatMoney(group.totals[m]) : '—'}
               </td>
             ))}

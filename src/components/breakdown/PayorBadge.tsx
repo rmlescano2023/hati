@@ -20,10 +20,10 @@ export function PayorBadge({ payors, payorMode }: Props) {
 
   return (
     <div className={styles.badges}>
+      <span className={styles.prefix}>Paid by</span>
       {payors.map((p) => (
         <span className={styles.badge} key={p.member}>
-          {p.member}
-          <span className={styles.amount}>{formatMoney(p.amount)}</span>
+          {p.member} <span className={styles.amount}>{formatMoney(p.amount)}</span>
         </span>
       ))}
     </div>
