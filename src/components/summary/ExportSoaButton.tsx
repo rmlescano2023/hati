@@ -33,7 +33,7 @@ export function ExportSoaButton({ members, records }: Props) {
         onClick={handleClick}
         disabled={busy || records.length === 0}
       >
-        {busy ? 'Preparing eSOA…' : '↓ Download eSOA'}
+        {busy ? 'Preparing SOA…' : '↓ Download SOA'}
       </Button>
       <p className={styles.hint}>
         A paginated PDF statement — settlement, balances and every item.
