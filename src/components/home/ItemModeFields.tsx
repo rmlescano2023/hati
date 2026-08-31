@@ -47,7 +47,7 @@ export function ItemModeFields({ members, draft, handlers, derived }: Props) {
         <input
           id="item-name"
           type="text"
-          placeholder="e.g. Samgyup Dinner, Gin…"
+          placeholder="e.g. Dinner, Groceries, Taxi"
           value={draft.name}
           onChange={(e) => handlers.setName(e.target.value)}
         />

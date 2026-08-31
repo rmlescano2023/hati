@@ -35,8 +35,9 @@
   background: var(--bg);
 }
 
-.itemCol {
-  min-width: 160px;
+.table th.itemCol {
+  min-width: 240px;
+  padding-left: 13px;
 }
 
 .priceCol {
@@ -51,8 +52,10 @@
   width: 36px;
 }
 
-.r {
+.table th.r,
+.table td.r {
   text-align: right;
+  padding-right: 13px;
 }
 
 .totalRow td {
@@ -65,7 +68,7 @@
 
 .totalRow td:first-child {
   font-family: var(--font);
-  padding-left: 12px;
+  padding-left: 13px;
 }
 
 .totalLabel {
@@ -74,15 +77,16 @@
   font-size: 13px;
 }
 
-.totalValue {
+/* `.table td` sets the padding shorthand, so this needs matching specificity. */
+.table td.totalValue {
   color: var(--text);
   font-family: var(--mono);
   font-size: 12px;
   text-align: right;
-  padding-right: 12px;
+  padding-right: 13px;
 }
 
-.totalValue.empty {
+.table td.totalValue.empty {
   color: var(--text3);
 }
 

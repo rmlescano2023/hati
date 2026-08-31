@@ -38,7 +38,7 @@ export async function downloadEsoa({ members, records }: Args): Promise<void> {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `hati-esoa-${todayIso()}.pdf`;
+  link.download = `Hati-SOA-${todayIso()}.pdf`;
   document.body.appendChild(link);
   link.click();
   link.remove();
