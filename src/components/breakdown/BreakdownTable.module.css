@@ -52,6 +52,32 @@
   width: 36px;
 }
 
+/* The price is the item's full cost; the member columns are shares of it.
+   All of them are right-aligned mono numerals, so without emphasis the price
+   reads as just another share. Three signals separate it:
+
+   1. A 2px rule — deliberately heavier than the 1px --border row lines, so it
+      reads as a section break rather than another gridline.
+   2. Semibold price values against regular shares.
+   3. A brighter column header than the member names carry.
+
+   A background tint is deliberately not used: input.cell:hover already claims
+   --surface2 as its "this cell is editable" affordance, and tinting the
+   column would swallow it. */
+.table th.priceCol,
+.table td.priceCell {
+  border-right: 2px solid var(--border2);
+}
+
+.table th.priceCol {
+  color: var(--text2);
+}
+
+/* Sits on the EditableCell's <input>, which never inherits font-weight. */
+.priceInput {
+  font-weight: 600;
+}
+
 .table th.r,
 .table td.r {
   text-align: right;

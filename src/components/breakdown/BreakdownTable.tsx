@@ -20,7 +20,7 @@ export function BreakdownTable({ group, members }: Props) {
         <thead>
           <tr>
             <th className={styles.itemCol}>Item</th>
-            <th className={`${styles.priceCol} ${styles.r}`}>Price</th>
+            <th className={`${styles.priceCol} ${styles.r}`}>Item Total</th>
             {members.map((m) => (
               <th key={m} className={`${styles.memberCol} ${styles.r}`}>
                 {m}
@@ -40,12 +40,13 @@ export function BreakdownTable({ group, members }: Props) {
                   onCommit={(name) => updateItemName(row.recordId, row.item.id, name)}
                 />
               </td>
-              <td>
+              <td className={styles.priceCell}>
                 <EditableCell
                   kind="money"
                   value={row.total}
                   format={formatMoney}
-                  ariaLabel={`Price of ${row.item.name}`}
+                  className={styles.priceInput}
+                  ariaLabel={`Item total for ${row.item.name}`}
                   onCommit={(total) => updateItemTotal(row.recordId, row.item.id, total)}
                 />
               </td>
@@ -79,7 +80,9 @@ export function BreakdownTable({ group, members }: Props) {
             <td>
               <span className={styles.totalLabel}>Total</span>
             </td>
-            <td className={styles.totalValue}>{formatMoney(group.grandTotal)}</td>
+            <td className={`${styles.totalValue} ${styles.priceCell}`}>
+              {formatMoney(group.grandTotal)}
+            </td>
             {members.map((m) => (
               <td
                 key={m}
