@@ -16,7 +16,7 @@
   text-align: left;
   font-weight: 600;
   font-size: 10px;
-  color: var(--text3);
+  color: var(--text);
   text-transform: uppercase;
   letter-spacing: 0.08em;
   border-bottom: 1px solid var(--border);
@@ -54,15 +54,14 @@
 
 /* The price is the item's full cost; the member columns are shares of it.
    All of them are right-aligned mono numerals, so without emphasis the price
-   reads as just another share. Two signals separate it, both typographic:
-   the header is full-brightness and bolder than the member names, and the
-   values themselves are semibold.
+   reads as just another share. Every header is full-brightness, so this one
+   stays a step ahead on weight (700 against 600 — both are real faces in the
+   loaded DM Sans range, not synthesised), and its values are semibold.
 
    A background tint is deliberately not used: input.cell:hover already claims
    --surface2 as its "this cell is editable" affordance, and tinting the
    column would swallow it. */
 .table th.priceCol {
-  color: var(--text);
   font-weight: 700;
 }
 
