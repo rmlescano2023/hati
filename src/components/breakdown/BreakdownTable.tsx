@@ -40,7 +40,7 @@ export function BreakdownTable({ group, members }: Props) {
                   onCommit={(name) => updateItemName(row.recordId, row.item.id, name)}
                 />
               </td>
-              <td className={styles.priceCell}>
+              <td>
                 <EditableCell
                   kind="money"
                   value={row.total}
@@ -80,9 +80,7 @@ export function BreakdownTable({ group, members }: Props) {
             <td>
               <span className={styles.totalLabel}>Total</span>
             </td>
-            <td className={`${styles.totalValue} ${styles.priceCell}`}>
-              {formatMoney(group.grandTotal)}
-            </td>
+            <td className={styles.totalValue}>{formatMoney(group.grandTotal)}</td>
             {members.map((m) => (
               <td
                 key={m}
