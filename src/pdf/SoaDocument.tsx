@@ -23,7 +23,7 @@ import {
 import { EPSILON } from '../lib/money';
 import type { OwedMatrix, PurchaseRecord } from '../types';
 
-export type EsoaProps = {
+export type SoaProps = {
   members: string[];
   records: PurchaseRecord[];
 };
@@ -52,14 +52,11 @@ function DocHeader({
     <View style={styles.header}>
       <View style={styles.headerLeft}>
         <Text style={styles.wordmark}>Hati</Text>
-        <Text style={styles.headerSub}>Electronic Statement of Account</Text>
+        <Text style={styles.headerSub}>Statement of Account</Text>
         <Text style={styles.headerSub}>
           Period: {periodFrom} — {periodTo}
         </Text>
         <Text style={styles.headerSub}>Generated {generatedOn}</Text>
-        <Text style={[styles.headerSub, { marginTop: 4 }]}>
-          All amounts are in Philippine Pesos (PHP).
-        </Text>
       </View>
       <View style={styles.headerRight}>
         <Text style={styles.headerLabel}>Members</Text>
@@ -124,13 +121,13 @@ function OwedMatrixSection({
 function Footer() {
   return (
     <View style={styles.footer} fixed>
-      <Text>Hati — Group Expenses</Text>
+      <Text>Hati</Text>
       <Text render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
     </View>
   );
 }
 
-export function EsoaDocument({ members, records }: EsoaProps) {
+export function SoaDocument({ members, records }: SoaProps) {
   const sortedMembers = sortNames(members);
   const groups = groupRecordsForBreakdown(records, sortedMembers, 'asc');
   const raw = getRawOwedMatrix(records, sortedMembers);
@@ -150,7 +147,7 @@ export function EsoaDocument({ members, records }: EsoaProps) {
 
   return (
     <Document
-      title={`Hati eSOA — ${generatedOn}`}
+      title={`Hati SOA — ${generatedOn}`}
       author="Hati"
       subject="Group expenses statement of account"
       creator="Hati"

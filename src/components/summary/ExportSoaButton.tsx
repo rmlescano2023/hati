@@ -1,15 +1,15 @@
 import { useState } from 'react';
 import { Button } from '../shared/Button';
-import { downloadEsoa } from '../../pdf/downloadEsoa';
+import { downloadSoa } from '../../pdf/downloadSoa';
 import type { PurchaseRecord } from '../../types';
-import styles from './ExportEsoaButton.module.css';
+import styles from './ExportSoaButton.module.css';
 
 type Props = {
   members: string[];
   records: PurchaseRecord[];
 };
 
-export function ExportEsoaButton({ members, records }: Props) {
+export function ExportSoaButton({ members, records }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -17,7 +17,7 @@ export function ExportEsoaButton({ members, records }: Props) {
     setBusy(true);
     setError('');
     try {
-      await downloadEsoa({ members, records });
+      await downloadSoa({ members, records });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not generate the PDF.');
     } finally {
