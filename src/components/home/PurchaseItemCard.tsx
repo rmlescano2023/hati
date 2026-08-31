@@ -156,7 +156,7 @@ export function PurchaseItemCard() {
   };
 
   return (
-    <Card label="Purchase Details">
+    <Card label="Purchase Details" className={styles.card}>
       <div className={styles.section}>
         <PurchaseDetailsFields
           members={members}

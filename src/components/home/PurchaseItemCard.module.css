@@ -1,3 +1,11 @@
+/* "One Payor / Multiple Payors" and "Equal Split / Custom Amounts" have
+   different label widths but sit in the same card, so pin both to one width.
+   240px clears the widest state of either (Equal Split / Custom Amounts, at
+   224px with both labels bold) with room for the system-ui fallback face. */
+.card {
+  --mode-toggle-w: 240px;
+}
+
 .section {
   display: flex;
   flex-direction: column;
