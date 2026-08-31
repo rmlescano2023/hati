@@ -156,23 +156,7 @@ export function PurchaseItemCard() {
   };
 
   return (
-    <Card
-      label="Purchase Details"
-      actions={
-        <ModeToggle
-          ariaLabel="Item split mode"
-          value={draft.mode}
-          onChange={(mode) => {
-            resetItemDraft(mode);
-            setError('');
-          }}
-          options={[
-            { value: 'equal', label: 'Equal Split' },
-            { value: 'custom', label: 'Custom Amounts' },
-          ]}
-        />
-      }
-    >
+    <Card label="Purchase Details">
       <div className={styles.section}>
         <PurchaseDetailsFields
           members={members}
@@ -196,6 +180,18 @@ export function PurchaseItemCard() {
 
         <div className={styles.subhead}>
           <span className={styles.subLabel}>Add Item</span>
+          <ModeToggle
+            ariaLabel="Item split mode"
+            value={draft.mode}
+            onChange={(mode) => {
+              resetItemDraft(mode);
+              setError('');
+            }}
+            options={[
+              { value: 'equal', label: 'Equal Split' },
+              { value: 'custom', label: 'Custom Amounts' },
+            ]}
+          />
         </div>
 
         <ItemModeFields
