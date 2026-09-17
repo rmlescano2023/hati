@@ -35,22 +35,24 @@ export function HistoryDetailPage({ sessionId, onBack }: Props) {
         <Button variant="ghost" size="sm" onClick={onBack}>
           ← History
         </Button>
+      </div>
+
+      <header className={styles.header}>
+        <div className={styles.titles}>
+          <h2 className={styles.heading}>
+            <span className={styles.date}>{sessionTitle(session)}</span>
+          </h2>
+          <p className={styles.meta}>
+            Finished {formatLongDate(closedOn)}
+            {members.length > 0 && <> · {joinNames(members)}</>}
+          </p>
+        </div>
         <ExportSoaButton
           layout="inline"
           members={sortNames(session.members)}
           records={session.records}
           fileNameSuffix={closedOn}
         />
-      </div>
-
-      <header className={styles.header}>
-        <h2 className={styles.heading}>
-          <span className={styles.date}>{sessionTitle(session)}</span>
-        </h2>
-        <p className={styles.meta}>
-          Finished {formatLongDate(closedOn)}
-          {members.length > 0 && <> · {joinNames(members)}</>}
-        </p>
       </header>
 
       {groupRecordsForBreakdown(session.records, sortNames(session.members)).map((group) => (

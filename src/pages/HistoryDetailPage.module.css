@@ -1,17 +1,24 @@
 .bar {
   display: flex;
   align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+/* Title block on the left, the export action on the right of the same row. */
+.header {
+  display: flex;
+  align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 8px 14px;
+  gap: 10px 16px;
   margin-bottom: 1rem;
 }
 
-.header {
+.titles {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin-bottom: 1.25rem;
+  gap: 3px;
+  min-width: 0;
 }
 
 .heading {
