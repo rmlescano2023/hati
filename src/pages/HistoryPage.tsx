@@ -35,7 +35,7 @@ export function HistoryPage({ onOpenSession }: Props) {
 
   return (
     <>
-      <h2 className={styles.heading}>Closed</h2>
+      <h2 className={styles.heading}>Closed Sessions</h2>
       <div className={styles.list}>
         {closed.map((session) => (
           <SessionCard
