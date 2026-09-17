@@ -6,7 +6,9 @@
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 10px;
-  margin-bottom: 1.75rem;
+  /* Matches the 1rem Card rhythm, so a tab bar sits the same distance above
+     its content as the cards below sit from each other. */
+  margin-bottom: 1rem;
 }
 
 .nav {
