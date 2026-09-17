@@ -13,22 +13,27 @@ type Props = {
   onChange: (tab: SessionTabId) => void;
 };
 
-/** The workspace's inner nav. Shares NavTabs' styling so both read as one system. */
+/**
+ * The workspace's inner nav. Shares NavTabs' styling so both read as one system,
+ * including the `.row` wrapper that carries the spacing below the tabs.
+ */
 export function SessionTabs({ active, onChange }: Props) {
   return (
-    <nav className={styles.nav} role="tablist" aria-label="Session">
-      {TABS.map(({ id, label }) => (
-        <button
-          key={id}
-          type="button"
-          role="tab"
-          aria-selected={active === id}
-          className={`${styles.tab} ${active === id ? styles.active : ''}`}
-          onClick={() => onChange(id)}
-        >
-          {label}
-        </button>
-      ))}
-    </nav>
+    <div className={styles.row}>
+      <nav className={styles.nav} role="tablist" aria-label="Session">
+        {TABS.map(({ id, label }) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={active === id}
+            className={`${styles.tab} ${active === id ? styles.active : ''}`}
+            onClick={() => onChange(id)}
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
+    </div>
   );
 }

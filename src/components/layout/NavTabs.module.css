@@ -1,4 +1,5 @@
-/* Tabs on the left, the New Session action on the right of the same row. */
+/* Tabs on the left, any action on the right of the same row. Both NavTabs and
+   SessionTabs use it, so the spacing below a tab bar is defined once. */
 .row {
   display: flex;
   align-items: center;
