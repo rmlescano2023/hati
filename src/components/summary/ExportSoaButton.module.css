@@ -27,6 +27,10 @@
   gap: 4px;
 }
 
+.inline > button {
+  width: var(--footer-action-width);
+}
+
 .wrap > button {
   width: 100%;
   max-width: var(--footer-action-width);

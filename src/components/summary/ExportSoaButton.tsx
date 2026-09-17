@@ -12,8 +12,9 @@ type Props = {
   /** Overrides the caption under the button. Ignored when `layout` is 'inline'. */
   hint?: string;
   /**
-   * 'block' is the full-width page-footer action; 'inline' is the compact form
-   * History puts in each session's header, with no caption.
+   * 'block' is the page-footer action with its caption underneath; 'inline' is
+   * the same button in a header row, without the caption — a caption reads as
+   * explanatory text under a footer CTA, not beside a back link.
    */
   layout?: 'block' | 'inline';
 };
@@ -48,8 +49,8 @@ export function ExportSoaButton({
   if (layout === 'inline') {
     return (
       <div className={styles.inline}>
-        <Button size="sm" onClick={handleClick} disabled={disabled}>
-          {busy ? 'Preparing…' : '↓ Download SOA'}
+        <Button variant="primary" size="lg" onClick={handleClick} disabled={disabled}>
+          {busy ? 'Preparing SOA…' : '↓ Download SOA'}
         </Button>
         {error && <p className={styles.error}>{error}</p>}
       </div>
