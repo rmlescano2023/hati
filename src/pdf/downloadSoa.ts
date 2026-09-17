@@ -6,6 +6,12 @@ import type { PurchaseRecord } from '../types';
 type Args = {
   members: string[];
   records: PurchaseRecord[];
+  /**
+   * Tail of the filename, after `Hati-SOA-`. Defaults to today's date; History
+   * passes the exported range instead, so a statement is identifiable by the
+   * period it covers rather than the day it happened to be generated.
+   */
+  fileNameSuffix?: string;
 };
 
 /**
@@ -18,7 +24,7 @@ type Args = {
  * The renderer is imported dynamically so its ~1MB of code never lands in the
  * initial page bundle.
  */
-export async function downloadSoa({ members, records }: Args): Promise<void> {
+export async function downloadSoa({ members, records, fileNameSuffix }: Args): Promise<void> {
   const [{ pdf }, { registerPdfFonts }, { SoaDocument }] = await Promise.all([
     import('@react-pdf/renderer'),
     import('./fonts'),
@@ -38,7 +44,7 @@ export async function downloadSoa({ members, records }: Args): Promise<void> {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `Hati-SOA-${todayIso()}.pdf`;
+  link.download = `Hati-SOA-${fileNameSuffix || todayIso()}.pdf`;
   document.body.appendChild(link);
   link.click();
   link.remove();

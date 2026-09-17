@@ -4,6 +4,7 @@ import { EmptyState } from '../components/shared/EmptyState';
 import { useAppData } from '../context/AppDataContext';
 import { groupRecordsForBreakdown } from '../lib/calculations';
 import { sortNames } from '../lib/format';
+import { isRecordEditable } from '../lib/freeze';
 
 export function BreakdownPage() {
   const { members, records } = useAppData();
@@ -21,7 +22,12 @@ export function BreakdownPage() {
   return (
     <>
       {groups.map((group) => (
-        <BreakdownGroup key={group.key} group={group} members={sortedMembers} />
+        <BreakdownGroup
+          key={group.key}
+          group={group}
+          members={sortedMembers}
+          editable={isRecordEditable(group.date)}
+        />
       ))}
     </>
   );

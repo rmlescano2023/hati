@@ -18,3 +18,20 @@
   color: var(--text3);
   text-align: center;
 }
+
+/* Compact form for a session header on History: no caption, sized to its label. */
+.inline {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.inline > button {
+  width: var(--footer-action-width);
+}
+
+.wrap > button {
+  width: 100%;
+  max-width: var(--footer-action-width);
+}

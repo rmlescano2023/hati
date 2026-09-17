@@ -1,6 +1,6 @@
 import { EditableCell } from '../shared/EditableCell';
 import { Button } from '../shared/Button';
-import { useAppData } from '../../context/AppDataContext';
+import { useAppDataOptional } from '../../context/AppDataContext';
 import { formatMoney } from '../../lib/format';
 import type { BreakdownGroup } from '../../types';
 import styles from './BreakdownTable.module.css';
@@ -9,10 +9,14 @@ type Props = {
   group: BreakdownGroup;
   /** Alphabetical member columns. */
   members: string[];
+  /** Frozen groups render read-only cells and drop the remove-item column. */
+  editable?: boolean;
 };
 
-export function BreakdownTable({ group, members }: Props) {
-  const { updateItemName, updateItemTotal, updateItemMemberAmount, removeItem } = useAppData();
+export function BreakdownTable({ group, members, editable = true }: Props) {
+  // Null on the History page, which renders these cards read-only and outside
+  // any session; every call below is gated on `editable` regardless.
+  const data = useAppDataOptional();
 
   return (
     <div className={styles.scroll}>
@@ -26,7 +30,7 @@ export function BreakdownTable({ group, members }: Props) {
                 {m}
               </th>
             ))}
-            <th className={styles.actionCol} aria-label="Actions" />
+            {editable && <th className={styles.actionCol} aria-label="Actions" />}
           </tr>
         </thead>
         <tbody>
@@ -37,7 +41,8 @@ export function BreakdownTable({ group, members }: Props) {
                   kind="text"
                   value={row.item.name}
                   ariaLabel={`Item name for ${row.item.name}`}
-                  onCommit={(name) => updateItemName(row.recordId, row.item.id, name)}
+                  disabled={!editable}
+                  onCommit={(name) => data?.updateItemName(row.recordId, row.item.id, name)}
                 />
               </td>
               <td>
@@ -47,7 +52,8 @@ export function BreakdownTable({ group, members }: Props) {
                   format={formatMoney}
                   className={styles.priceInput}
                   ariaLabel={`Item total for ${row.item.name}`}
-                  onCommit={(total) => updateItemTotal(row.recordId, row.item.id, total)}
+                  disabled={!editable}
+                  onCommit={(total) => data?.updateItemTotal(row.recordId, row.item.id, total)}
                 />
               </td>
               {members.map((m) => (
@@ -58,22 +64,25 @@ export function BreakdownTable({ group, members }: Props) {
                     format={formatMoney}
                     emptyDisplay="—"
                     ariaLabel={`${m}'s share of ${row.item.name}`}
+                    disabled={!editable}
                     onCommit={(amount) =>
-                      updateItemMemberAmount(row.recordId, row.item.id, m, amount)
+                      data?.updateItemMemberAmount(row.recordId, row.item.id, m, amount)
                     }
                   />
                 </td>
               ))}
-              <td className={styles.action}>
-                <Button
-                  variant="icon"
-                  title="Remove item"
-                  aria-label={`Remove ${row.item.name}`}
-                  onClick={() => removeItem(row.recordId, row.item.id)}
-                >
-                  ×
-                </Button>
-              </td>
+              {editable && (
+                <td className={styles.action}>
+                  <Button
+                    variant="icon"
+                    title="Remove item"
+                    aria-label={`Remove ${row.item.name}`}
+                    onClick={() => data?.removeItem(row.recordId, row.item.id)}
+                  >
+                    ×
+                  </Button>
+                </td>
+              )}
             </tr>
           ))}
           <tr className={styles.totalRow}>
@@ -89,7 +98,7 @@ export function BreakdownTable({ group, members }: Props) {
                 {group.totals[m] > 0 ? formatMoney(group.totals[m]) : '—'}
               </td>
             ))}
-            <td />
+            {editable && <td />}
           </tr>
         </tbody>
       </table>

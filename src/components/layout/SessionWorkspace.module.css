@@ -1,0 +1,13 @@
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-bottom: 0.75rem;
+}
+
+.started {
+  font-size: 12px;
+  color: var(--text3);
+}

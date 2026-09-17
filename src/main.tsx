@@ -6,12 +6,12 @@ import './styles/global.css';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
-import { AppDataProvider } from './context/AppDataContext';
+import { SessionsStoreProvider } from './context/SessionsStoreContext';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <AppDataProvider>
+    <SessionsStoreProvider>
       <App />
-    </AppDataProvider>
+    </SessionsStoreProvider>
   </StrictMode>,
 );

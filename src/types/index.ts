@@ -45,10 +45,28 @@ export type PurchaseRecord = {
   createdAt: string;
 };
 
-export type AppData = {
-  schemaVersion: number;
+export type SessionStatus = 'draft' | 'closed';
+
+/**
+ * One batch of expenses — a trip, a hangout, a night out. A session is a
+ * `draft` while you are still adding to it and `closed` once it has been
+ * settled up and filed into History. Each session owns its own roster, so two
+ * groups running in parallel never share members.
+ */
+export type Session = {
+  id: string;
+  status: SessionStatus;
+  /** ISO timestamp, set at creation. */
+  createdAt: string;
+  /** ISO timestamp, set when the session is closed; null while it is a draft. */
+  closedAt: string | null;
   members: string[];
   records: PurchaseRecord[];
+};
+
+export type AppData = {
+  schemaVersion: number;
+  sessions: Session[];
 };
 
 /** Input shape accepted by `addRecord` — ids and timestamps are filled in for you. */

@@ -16,3 +16,8 @@
   font-weight: 500;
   color: var(--text);
 }
+
+/* An action passed as a child sits clear of the explanatory text above it. */
+.empty > button {
+  margin-top: 1rem;
+}

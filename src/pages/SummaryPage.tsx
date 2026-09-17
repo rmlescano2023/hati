@@ -4,6 +4,7 @@ import { FinalSettlement } from '../components/summary/FinalSettlement';
 import { NetBalanceCards } from '../components/summary/NetBalanceCards';
 import { OwedMatrix, type MatrixView } from '../components/summary/OwedMatrix';
 import { ExportSoaButton } from '../components/summary/ExportSoaButton';
+import { CloseSessionButton } from '../components/summary/CloseSessionButton';
 import { useAppData } from '../context/AppDataContext';
 import {
   getFinalSettlement,
@@ -13,7 +14,7 @@ import {
 } from '../lib/calculations';
 import { sortNames } from '../lib/format';
 
-export function SummaryPage() {
+export function SummaryPage({ onClosed }: { onClosed: () => void }) {
   const { members, records } = useAppData();
   const [view, setView] = useState<MatrixView>('netted');
 
@@ -45,6 +46,7 @@ export function SummaryPage() {
       />
       <NetBalanceCards balances={balances} />
       <ExportSoaButton members={sortedMembers} records={records} />
+      <CloseSessionButton onClosed={onClosed} />
     </>
   );
 }

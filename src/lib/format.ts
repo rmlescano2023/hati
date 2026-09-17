@@ -48,6 +48,17 @@ export function todayIso(): string {
 }
 
 /**
+ * The span two dates cover, as `"April 26, 2026 — April 28, 2026"`. A single
+ * day collapses to just that date rather than repeating itself. Matches the
+ * em-dash the SOA's "Period" header uses.
+ */
+export function formatDateRange(from: string, to: string): string {
+  const start = formatLongDate(from);
+  const end = formatLongDate(to);
+  return start === end ? start : `${start} — ${end}`;
+}
+
+/**
  * Title-case a member name: "renmar lescano" -> "Renmar Lescano".
  * Hyphenated and apostrophised parts are capitalised too ("mary-jane" -> "Mary-Jane").
  */
