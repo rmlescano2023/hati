@@ -85,19 +85,15 @@ and stays readable on History for good.
 
 ### History — look back
 
-Every closed session, newest first, each under a **Closed \<date>** heading with
-its own **Download SOA** button on the right. That button exports just that
-session, and is never gated by the freeze rule — a session stays downloadable
-however old it gets.
+A list of closed sessions, newest first, as the same summary cards Home uses —
+led by the date it was closed rather than started. The list stays scannable;
+nothing expands in place.
 
-Each session is shown with the same
-Breakdown cards you already know — read-only, and rendered against that
-session's own member roster. Because each session carries its own roster,
-nothing you do later can rewrite it.
-
-Sessions stay separate rather than being flattened into one list, so two
-unrelated sessions that happen to share a date and payor don't merge into a
-single card.
+Opening one takes you to that session on its own, showing the same Breakdown
+cards you already know — read-only, and rendered against that session's own
+member roster, so nothing you do later can rewrite it. Its **Download SOA**
+button sits at the top of that screen, and is never gated by the freeze rule:
+a session stays downloadable however old it gets.
 
 ### SOA export
 
@@ -105,8 +101,8 @@ single card.
 every line item — via `@react-pdf/renderer`. There are two entry points:
 
 - A session's **Summary** tab exports that session, named `Hati-SOA-<today>.pdf`.
-- **History** exports one closed session, named for the date it was closed,
-  `Hati-SOA-<closed-date>.pdf`.
+- A closed session's **History** screen exports that session, named for the date
+  it was closed, `Hati-SOA-<closed-date>.pdf`.
 
 Either way the statement's "Period" header is derived from the earliest and
 latest purchase date in the records it was given.

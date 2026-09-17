@@ -1,8 +1,7 @@
 import { useMemo } from 'react';
+import { SessionCard } from '../components/sessions/SessionCard';
 import { EmptyState } from '../components/shared/EmptyState';
 import { useSessionsStore } from '../context/SessionsStoreContext';
-import { getGrandTotal } from '../lib/calculations';
-import { formatLongDate, formatMoney, joinNames, pluralize } from '../lib/format';
 import styles from './HomePage.module.css';
 
 type Props = {
@@ -39,28 +38,13 @@ export function HomePage({ onOpenSession }: Props) {
     <>
       <h2 className={styles.heading}>In Progress</h2>
       <div className={styles.list}>
-        {drafts.map((session) => {
-          const total = getGrandTotal(session.records);
-          return (
-            <button
-              type="button"
-              key={session.id}
-              className={styles.card}
-              onClick={() => onOpenSession(session.id)}
-            >
-              <span className={styles.top}>
-                <span className={styles.date}>
-                  {formatLongDate(session.createdAt.slice(0, 10))}
-                </span>
-                <span className={styles.total}>{formatMoney(total)}</span>
-              </span>
-              <span className={styles.members}>
-                {session.members.length > 0 ? joinNames(session.members) : 'No members yet'}
-              </span>
-              <span className={styles.count}>{pluralize(session.records.length, 'purchase')}</span>
-            </button>
-          );
-        })}
+        {drafts.map((session) => (
+          <SessionCard
+            key={session.id}
+            session={session}
+            onClick={() => onOpenSession(session.id)}
+          />
+        ))}
       </div>
     </>
   );

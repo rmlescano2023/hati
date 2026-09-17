@@ -8,6 +8,7 @@ import { Button } from './components/shared/Button';
 import { useSessionsStore } from './context/SessionsStoreContext';
 import { HomePage } from './pages/HomePage';
 import { HistoryPage } from './pages/HistoryPage';
+import { HistoryDetailPage } from './pages/HistoryDetailPage';
 
 /**
  * Top level is just Home and History; opening a session swaps the whole shell
@@ -16,7 +17,11 @@ import { HistoryPage } from './pages/HistoryPage';
 type Screen =
   | { kind: 'home' }
   | { kind: 'history' }
+  | { kind: 'historyDetail'; sessionId: string }
   | { kind: 'session'; sessionId: string; tab: SessionTabId };
+
+/** The two screens that sit under a top-level tab and keep the tab bar. */
+const TOP_LEVEL = new Set<Screen['kind']>(['home', 'history']);
 
 export default function App() {
   const { createSession } = useSessionsStore();
@@ -25,23 +30,32 @@ export default function App() {
   const openSession = (sessionId: string) =>
     setScreen({ kind: 'session', sessionId, tab: 'expenses' });
 
-  const nav =
-    screen.kind === 'session' ? null : (
-      <NavTabs
-        active={screen.kind as TabId}
-        onChange={(tab) => setScreen({ kind: tab })}
-        actions={
-          <Button variant="primary" onClick={() => openSession(createSession())}>
-            + New Session
-          </Button>
-        }
-      />
-    );
+  const nav = !TOP_LEVEL.has(screen.kind) ? null : (
+    <NavTabs
+      active={screen.kind as TabId}
+      onChange={(tab) => setScreen({ kind: tab })}
+      actions={
+        <Button variant="primary" onClick={() => openSession(createSession())}>
+          + New Session
+        </Button>
+      }
+    />
+  );
 
   return (
     <PageShell header={<Header />} nav={nav}>
       {screen.kind === 'home' && <HomePage onOpenSession={openSession} />}
-      {screen.kind === 'history' && <HistoryPage />}
+      {screen.kind === 'history' && (
+        <HistoryPage
+          onOpenSession={(sessionId) => setScreen({ kind: 'historyDetail', sessionId })}
+        />
+      )}
+      {screen.kind === 'historyDetail' && (
+        <HistoryDetailPage
+          sessionId={screen.sessionId}
+          onBack={() => setScreen({ kind: 'history' })}
+        />
+      )}
       {screen.kind === 'session' && (
         <SessionWorkspace
           sessionId={screen.sessionId}

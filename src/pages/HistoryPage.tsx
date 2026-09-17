@@ -1,13 +1,18 @@
 import { useMemo } from 'react';
-import { BreakdownGroup } from '../components/breakdown/BreakdownGroup';
+import { SessionCard } from '../components/sessions/SessionCard';
 import { EmptyState } from '../components/shared/EmptyState';
-import { ExportSoaButton } from '../components/summary/ExportSoaButton';
 import { useSessionsStore } from '../context/SessionsStoreContext';
-import { groupRecordsForBreakdown } from '../lib/calculations';
-import { compareNames, formatLongDate, sortNames } from '../lib/format';
-import styles from './HistoryPage.module.css';
+import styles from './HomePage.module.css';
 
-export function HistoryPage() {
+type Props = {
+  onOpenSession: (sessionId: string) => void;
+};
+
+/**
+ * The archive. Deliberately just a scannable list — a session's records only
+ * render once you open it, on `HistoryDetailPage`.
+ */
+export function HistoryPage({ onOpenSession }: Props) {
   const { sessions } = useSessionsStore();
 
   const closed = useMemo(
@@ -30,35 +35,16 @@ export function HistoryPage() {
 
   return (
     <>
-      {closed.map((session) => {
-        const closedOn = (session.closedAt ?? session.createdAt).slice(0, 10);
-        const members = [...session.members].sort(compareNames);
-        return (
-          <section key={session.id} className={styles.session}>
-            <div className={styles.sessionHeader}>
-              <h2 className={styles.sessionHeading}>
-                <span className={styles.closedLabel}>Closed</span>
-                <span className={styles.closedDate}>{formatLongDate(closedOn)}</span>
-              </h2>
-              <ExportSoaButton
-                layout="inline"
-                members={sortNames(session.members)}
-                records={session.records}
-                fileNameSuffix={closedOn}
-              />
-            </div>
-            {groupRecordsForBreakdown(session.records, sortNames(session.members)).map((group) => (
-              <BreakdownGroup
-                key={group.key}
-                group={group}
-                members={members}
-                editable={false}
-                lockedReason="closed"
-              />
-            ))}
-          </section>
-        );
-      })}
+      <h2 className={styles.heading}>Closed</h2>
+      <div className={styles.list}>
+        {closed.map((session) => (
+          <SessionCard
+            key={session.id}
+            session={session}
+            onClick={() => onOpenSession(session.id)}
+          />
+        ))}
+      </div>
     </>
   );
 }
