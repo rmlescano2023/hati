@@ -1,5 +1,6 @@
 import { lazy, Suspense, useMemo } from 'react';
 import { SessionCard } from '../components/sessions/SessionCard';
+import { Button } from '../components/shared/Button';
 import { EmptyState } from '../components/shared/EmptyState';
 import { useSessionsStore } from '../context/SessionsStoreContext';
 import styles from './HomePage.module.css';
@@ -14,6 +15,8 @@ const DevSessionsBar = import.meta.env.DEV
 
 type Props = {
   onOpenSession: (sessionId: string) => void;
+  /** Starts a session and opens it — the same action the nav row offers. */
+  onNewSession: () => void;
 };
 
 /**
@@ -21,7 +24,7 @@ type Props = {
  * parallel; closed sessions live on the History tab. New sessions are started
  * from the action in the nav row.
  */
-export function HomePage({ onOpenSession }: Props) {
+export function HomePage({ onOpenSession, onNewSession }: Props) {
   const { sessions } = useSessionsStore();
 
   const drafts = useMemo(
@@ -45,8 +48,12 @@ export function HomePage({ onOpenSession }: Props) {
         {devBar}
         <EmptyState
           title="No sessions in progress"
-          description="Start one with “+ New Session” above to add members and log what everyone spent."
-        />
+          description="Start one to add members and log what everyone spent."
+        >
+          <Button variant="primary" size="lg" onClick={onNewSession}>
+            + New Session
+          </Button>
+        </EmptyState>
       </>
     );
   }

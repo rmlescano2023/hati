@@ -24,27 +24,35 @@ type Screen =
 const TOP_LEVEL = new Set<Screen['kind']>(['home', 'history']);
 
 export default function App() {
-  const { createSession } = useSessionsStore();
+  const { sessions, createSession } = useSessionsStore();
   const [screen, setScreen] = useState<Screen>({ kind: 'home' });
 
   const openSession = (sessionId: string) =>
     setScreen({ kind: 'session', sessionId, tab: 'expenses' });
+  const newSession = () => openSession(createSession());
+
+  // An empty Home carries the action in its own empty state, so the nav row
+  // drops it there rather than offering the same button twice.
+  const homeIsEmpty = !sessions.some((s) => s.status === 'draft');
+  const showNewSession = !(screen.kind === 'home' && homeIsEmpty);
 
   const nav = !TOP_LEVEL.has(screen.kind) ? null : (
     <NavTabs
       active={screen.kind as TabId}
       onChange={(tab) => setScreen({ kind: tab })}
       actions={
-        <Button variant="primary" onClick={() => openSession(createSession())}>
-          + New Session
-        </Button>
+        showNewSession && (
+          <Button variant="primary" onClick={newSession}>
+            + New Session
+          </Button>
+        )
       }
     />
   );
 
   return (
     <PageShell header={<Header />} nav={nav}>
-      {screen.kind === 'home' && <HomePage onOpenSession={openSession} />}
+      {screen.kind === 'home' && <HomePage onOpenSession={openSession} onNewSession={newSession} />}
       {screen.kind === 'history' && (
         <HistoryPage
           onOpenSession={(sessionId) => setScreen({ kind: 'historyDetail', sessionId })}
