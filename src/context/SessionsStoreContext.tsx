@@ -32,6 +32,8 @@ type SessionsStoreValue = {
     sessionId: string,
     data: { members: string[]; records: PurchaseRecord[] },
   ) => void;
+  /** Dev-only seeding: swap the whole session list. */
+  replaceAllSessions: (sessions: Session[]) => void;
 };
 
 const SessionsStoreContext = createContext<SessionsStoreValue | null>(null);
@@ -288,6 +290,11 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
     [updateSession],
   );
 
+  const replaceAllSessions = useCallback(
+    (sessions: Session[]) => setData((prev) => ({ ...prev, sessions })),
+    [setData],
+  );
+
   const value = useMemo<SessionsStoreValue>(
     () => ({
       sessions: data.sessions,
@@ -303,6 +310,7 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
       updateItemTotal,
       updateItemMemberAmount,
       replaceSessionData,
+      replaceAllSessions,
     }),
     [
       data.sessions,
@@ -318,6 +326,7 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
       updateItemTotal,
       updateItemMemberAmount,
       replaceSessionData,
+      replaceAllSessions,
     ],
   );
 

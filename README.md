@@ -183,10 +183,17 @@ testable without rendering anything.
 
 ## Development notes
 
-In a dev build only, a **Dev only** bar appears at the top of Home for seeding
-demo data (12 members / 30 items, or a smaller 4-member set) and resetting. It is
-gated on `import.meta.env.DEV`, which is statically false in a production build,
-so the bar and its demo-data generator are dropped by the bundler.
+In a dev build only, two **Dev only** bars appear. The one on Home seeds a
+spread of sessions — three drafts (including an empty one) and four closed ones
+ranging from weeks to over a year old — so the launcher and History can be
+eyeballed without creating a dozen by hand; it can replace the current sessions
+or add to them, and clear everything. The one inside a session's Expenses tab
+seeds that one session's members and records (12 members / 30 items, or a
+smaller 4-member set) and resets it.
+
+Both are gated on `import.meta.env.DEV`, which is statically false in a
+production build, so the bars and the demo-data generators behind them are
+dropped by the bundler.
 
 To inspect PDF pagination without hand-entering data:
 

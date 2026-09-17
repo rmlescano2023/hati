@@ -1,8 +1,16 @@
-import { useMemo } from 'react';
+import { lazy, Suspense, useMemo } from 'react';
 import { SessionCard } from '../components/sessions/SessionCard';
 import { EmptyState } from '../components/shared/EmptyState';
 import { useSessionsStore } from '../context/SessionsStoreContext';
 import styles from './HomePage.module.css';
+
+// Dev-only: `import.meta.env.DEV` is statically false in a production build, so
+// this branch and everything it pulls in are dropped at build time.
+const DevSessionsBar = import.meta.env.DEV
+  ? lazy(() =>
+      import('../components/home/DevSessionsBar').then((m) => ({ default: m.DevSessionsBar })),
+    )
+  : null;
 
 type Props = {
   onOpenSession: (sessionId: string) => void;
@@ -25,17 +33,27 @@ export function HomePage({ onOpenSession }: Props) {
     [sessions],
   );
 
+  const devBar = DevSessionsBar && (
+    <Suspense fallback={null}>
+      <DevSessionsBar />
+    </Suspense>
+  );
+
   if (drafts.length === 0) {
     return (
-      <EmptyState
-        title="No sessions in progress"
-        description="Start one with “+ New Session” above to add members and log what everyone spent."
-      />
+      <>
+        {devBar}
+        <EmptyState
+          title="No sessions in progress"
+          description="Start one with “+ New Session” above to add members and log what everyone spent."
+        />
+      </>
     );
   }
 
   return (
     <>
+      {devBar}
       <h2 className={styles.heading}>In Progress</h2>
       <div className={styles.list}>
         {drafts.map((session) => (
