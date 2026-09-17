@@ -23,9 +23,7 @@ export function CloseSessionButton({ onClosed }: { onClosed: () => void }) {
       <Button size="lg" onClick={handleClick} disabled={records.length === 0}>
         Close Session
       </Button>
-      <p className={styles.hint}>
-        Files this session under History. You can still view it there, but it becomes read-only.
-      </p>
+      <p className={styles.hint}>Files this session under History.</p>
     </div>
   );
 }

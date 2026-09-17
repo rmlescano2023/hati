@@ -85,11 +85,12 @@ and stays readable on History for good.
 
 ### History — look back
 
-Every closed session, newest first, with a date-range filter across the top. The
-range defaults to the full span of archived purchases; narrow it to focus on a
-stretch of days.
+Every closed session, newest first, each under a **Closed \<date>** heading with
+its own **Download SOA** button on the right. That button exports just that
+session, and is never gated by the freeze rule — a session stays downloadable
+however old it gets.
 
-Each session is shown under a **Closed \<date>** heading, with the same
+Each session is shown with the same
 Breakdown cards you already know — read-only, and rendered against that
 session's own member roster. Because each session carries its own roster,
 nothing you do later can rewrite it.
@@ -104,8 +105,8 @@ single card.
 every line item — via `@react-pdf/renderer`. There are two entry points:
 
 - A session's **Summary** tab exports that session, named `Hati-SOA-<today>.pdf`.
-- **History** exports whatever the date range is showing, across sessions, named
-  `Hati-SOA-<start>_to_<end>.pdf`.
+- **History** exports one closed session, named for the date it was closed,
+  `Hati-SOA-<closed-date>.pdf`.
 
 Either way the statement's "Period" header is derived from the earliest and
 latest purchase date in the records it was given.

@@ -9,11 +9,22 @@ type Props = {
   records: PurchaseRecord[];
   /** Passed through to the filename; defaults to today's date. */
   fileNameSuffix?: string;
-  /** Overrides the caption under the button. */
+  /** Overrides the caption under the button. Ignored when `layout` is 'inline'. */
   hint?: string;
+  /**
+   * 'block' is the full-width page-footer action; 'inline' is the compact form
+   * History puts in each session's header, with no caption.
+   */
+  layout?: 'block' | 'inline';
 };
 
-export function ExportSoaButton({ members, records, fileNameSuffix, hint }: Props) {
+export function ExportSoaButton({
+  members,
+  records,
+  fileNameSuffix,
+  hint,
+  layout = 'block',
+}: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -29,14 +40,25 @@ export function ExportSoaButton({ members, records, fileNameSuffix, hint }: Prop
     }
   };
 
+  // Only ever gated on there being something to export — never on a record's
+  // age. The 7-day freeze rule governs Breakdown's edit affordances alone, so a
+  // session stays downloadable however old it gets.
+  const disabled = busy || records.length === 0;
+
+  if (layout === 'inline') {
+    return (
+      <div className={styles.inline}>
+        <Button size="sm" onClick={handleClick} disabled={disabled}>
+          {busy ? 'Preparing…' : '↓ Download SOA'}
+        </Button>
+        {error && <p className={styles.error}>{error}</p>}
+      </div>
+    );
+  }
+
   return (
     <div className={styles.wrap}>
-      <Button
-        variant="primary"
-        size="lg"
-        onClick={handleClick}
-        disabled={busy || records.length === 0}
-      >
+      <Button variant="primary" size="lg" onClick={handleClick} disabled={disabled}>
         {busy ? 'Preparing SOA…' : '↓ Download SOA'}
       </Button>
       <p className={styles.hint}>

@@ -24,6 +24,10 @@
   --radius-pill: 99px;
   --shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
   --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.45);
+
+  /* The stacked page-footer actions (Download SOA, Close Session) share a width
+     so they line up as one column rather than sizing to their own labels. */
+  --footer-action-width: 15rem;
   --font: 'DM Sans', system-ui, -apple-system, sans-serif;
   --mono: 'DM Mono', ui-monospace, monospace;
 }

@@ -5,7 +5,7 @@ import { SessionTabs, type SessionTabId } from './SessionTabs';
 import { ExpensesPage } from '../../pages/ExpensesPage';
 import { BreakdownPage } from '../../pages/BreakdownPage';
 import { SummaryPage } from '../../pages/SummaryPage';
-import { formatLongDate, joinNames } from '../../lib/format';
+import { formatLongDate } from '../../lib/format';
 import styles from './SessionWorkspace.module.css';
 
 type Props = {
@@ -32,14 +32,9 @@ export function SessionWorkspace({ sessionId, tab, onTabChange, onBack, onClosed
           ← All sessions
         </Button>
         {session && (
-          <div className={styles.meta}>
-            <span className={styles.started}>
-              Started {formatLongDate(session.createdAt.slice(0, 10))}
-            </span>
-            {session.members.length > 0 && (
-              <span className={styles.members}>{joinNames(session.members)}</span>
-            )}
-          </div>
+          <span className={styles.started}>
+            Started {formatLongDate(session.createdAt.slice(0, 10))}
+          </span>
         )}
       </div>
 

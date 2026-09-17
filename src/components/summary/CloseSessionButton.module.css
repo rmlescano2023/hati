@@ -12,3 +12,8 @@
   text-align: center;
   max-width: 34ch;
 }
+
+.wrap > button {
+  width: 100%;
+  max-width: var(--footer-action-width);
+}

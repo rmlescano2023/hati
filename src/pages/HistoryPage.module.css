@@ -5,11 +5,20 @@
   margin-bottom: 1.75rem;
 }
 
+.sessionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin: 0.25rem 0 0;
+}
+
 .sessionHeading {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  margin: 0.25rem 0 0;
+  margin: 0;
 }
 
 .closedLabel {
