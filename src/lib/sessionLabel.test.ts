@@ -42,17 +42,21 @@ describe('sessionTitle', () => {
     expect(sessionTitle(session())).toBe('Started September 17, 2026');
   });
 
-  it('names a closed session by the date it was filed', () => {
+  it('names a closed session by its expenses too, not the date it was filed', () => {
     const s = session({
       status: 'closed',
       closedAt: '2026-05-02T08:00:00.000Z',
-      records: [record('2026-04-28')],
+      records: [record('2026-04-24'), record('2026-04-28')],
     });
+    expect(sessionTitle(s)).toBe('April 24, 2026 — April 28, 2026');
+  });
+
+  it('falls back to the filed date for a closed session with no records', () => {
+    const s = session({ status: 'closed', closedAt: '2026-05-02T08:00:00.000Z', records: [] });
     expect(sessionTitle(s)).toBe('May 2, 2026');
   });
 
-  it('falls back to createdAt when a closed session has no closedAt', () => {
-    const s = session({ status: 'closed', closedAt: null, records: [record('2026-04-28')] });
-    expect(sessionTitle(s)).toBe('September 17, 2026');
+  it('falls back to createdAt when a closed session has neither records nor closedAt', () => {
+    expect(sessionTitle(session({ status: 'closed', closedAt: null }))).toBe('September 17, 2026');
   });
 });

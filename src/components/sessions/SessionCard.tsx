@@ -10,10 +10,10 @@ type Props = {
 };
 
 /**
- * One session as a scannable summary row — a draft on Home, a closed session on
- * History. Both lists lead somewhere, so the card is always a button. It leads
- * with whichever date matters for its state; the list's own heading ("In
- * Progress" / "Closed") says which, so the card doesn't repeat it.
+ * One session as a scannable summary row — a draft on Home, a finished session
+ * on History. Both lists lead somewhere, so the card is always a button, and
+ * both name the session by the days its expenses cover; the list's own heading
+ * says which kind of session you are looking at.
  */
 export function SessionCard({ session, onClick }: Props) {
   return (
