@@ -1,13 +1,14 @@
-import type { AppData, PurchaseItem, PurchaseRecord } from '../types';
+import type { AppData, ArchivedSession, PurchaseItem, PurchaseRecord } from '../types';
 import { roundMoney } from './money';
 
 export const STORAGE_KEY = 'hati:data:v1';
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export const EMPTY_DATA: AppData = {
   schemaVersion: SCHEMA_VERSION,
   members: [],
   records: [],
+  archivedSessions: [],
 };
 
 function isRecordObject(value: unknown): value is Record<string, unknown> {
@@ -68,9 +69,29 @@ function parseRecord(raw: unknown): PurchaseRecord | null {
   };
 }
 
+function parseArchivedSession(raw: unknown): ArchivedSession | null {
+  if (!isRecordObject(raw)) return null;
+  const id = typeof raw.id === 'string' ? raw.id : null;
+  const closedAt = typeof raw.closedAt === 'string' ? raw.closedAt : null;
+  if (!id || !closedAt) return null;
+
+  const members = Array.isArray(raw.members)
+    ? raw.members.filter((m): m is string => typeof m === 'string')
+    : [];
+  const records = Array.isArray(raw.records)
+    ? raw.records.map(parseRecord).filter((r): r is PurchaseRecord => r !== null)
+    : [];
+  if (records.length === 0) return null;
+
+  return { id, closedAt, members, records };
+}
+
 /**
  * Defensively parse whatever is in localStorage. Anything unrecognisable is
  * dropped rather than allowed to crash the app on boot.
+ *
+ * v1 blobs have no `archivedSessions`; they default to `[]`, which upgrades
+ * them to v2 with no data loss.
  */
 export function parseAppData(raw: string | null): AppData {
   if (!raw) return EMPTY_DATA;
@@ -89,7 +110,13 @@ export function parseAppData(raw: string | null): AppData {
     ? parsed.records.map(parseRecord).filter((r): r is PurchaseRecord => r !== null)
     : [];
 
-  return { schemaVersion: SCHEMA_VERSION, members, records };
+  const archivedSessions = Array.isArray(parsed.archivedSessions)
+    ? parsed.archivedSessions
+        .map(parseArchivedSession)
+        .filter((s): s is ArchivedSession => s !== null)
+    : [];
+
+  return { schemaVersion: SCHEMA_VERSION, members, records, archivedSessions };
 }
 
 export function serializeAppData(data: AppData): string {

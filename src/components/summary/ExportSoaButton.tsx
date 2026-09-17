@@ -7,9 +7,13 @@ import styles from './ExportSoaButton.module.css';
 type Props = {
   members: string[];
   records: PurchaseRecord[];
+  /** Passed through to the filename; defaults to today's date. */
+  fileNameSuffix?: string;
+  /** Overrides the caption under the button. */
+  hint?: string;
 };
 
-export function ExportSoaButton({ members, records }: Props) {
+export function ExportSoaButton({ members, records, fileNameSuffix, hint }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -17,7 +21,7 @@ export function ExportSoaButton({ members, records }: Props) {
     setBusy(true);
     setError('');
     try {
-      await downloadSoa({ members, records });
+      await downloadSoa({ members, records, fileNameSuffix });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not generate the PDF.');
     } finally {
@@ -36,7 +40,7 @@ export function ExportSoaButton({ members, records }: Props) {
         {busy ? 'Preparing SOA…' : '↓ Download SOA'}
       </Button>
       <p className={styles.hint}>
-        A paginated PDF statement — settlement, balances and every item.
+        {hint ?? 'A paginated PDF statement — settlement, balances and every item.'}
       </p>
       {error && <p className={styles.error}>{error}</p>}
     </div>

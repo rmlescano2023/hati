@@ -9,9 +9,11 @@ type Props = {
   group: BreakdownGroup;
   /** Alphabetical member columns. */
   members: string[];
+  /** Frozen groups render read-only cells and drop the remove-item column. */
+  editable?: boolean;
 };
 
-export function BreakdownTable({ group, members }: Props) {
+export function BreakdownTable({ group, members, editable = true }: Props) {
   const { updateItemName, updateItemTotal, updateItemMemberAmount, removeItem } = useAppData();
 
   return (
@@ -26,7 +28,7 @@ export function BreakdownTable({ group, members }: Props) {
                 {m}
               </th>
             ))}
-            <th className={styles.actionCol} aria-label="Actions" />
+            {editable && <th className={styles.actionCol} aria-label="Actions" />}
           </tr>
         </thead>
         <tbody>
@@ -37,6 +39,7 @@ export function BreakdownTable({ group, members }: Props) {
                   kind="text"
                   value={row.item.name}
                   ariaLabel={`Item name for ${row.item.name}`}
+                  disabled={!editable}
                   onCommit={(name) => updateItemName(row.recordId, row.item.id, name)}
                 />
               </td>
@@ -47,6 +50,7 @@ export function BreakdownTable({ group, members }: Props) {
                   format={formatMoney}
                   className={styles.priceInput}
                   ariaLabel={`Item total for ${row.item.name}`}
+                  disabled={!editable}
                   onCommit={(total) => updateItemTotal(row.recordId, row.item.id, total)}
                 />
               </td>
@@ -58,22 +62,25 @@ export function BreakdownTable({ group, members }: Props) {
                     format={formatMoney}
                     emptyDisplay="—"
                     ariaLabel={`${m}'s share of ${row.item.name}`}
+                    disabled={!editable}
                     onCommit={(amount) =>
                       updateItemMemberAmount(row.recordId, row.item.id, m, amount)
                     }
                   />
                 </td>
               ))}
-              <td className={styles.action}>
-                <Button
-                  variant="icon"
-                  title="Remove item"
-                  aria-label={`Remove ${row.item.name}`}
-                  onClick={() => removeItem(row.recordId, row.item.id)}
-                >
-                  ×
-                </Button>
-              </td>
+              {editable && (
+                <td className={styles.action}>
+                  <Button
+                    variant="icon"
+                    title="Remove item"
+                    aria-label={`Remove ${row.item.name}`}
+                    onClick={() => removeItem(row.recordId, row.item.id)}
+                  >
+                    ×
+                  </Button>
+                </td>
+              )}
             </tr>
           ))}
           <tr className={styles.totalRow}>
@@ -89,7 +96,7 @@ export function BreakdownTable({ group, members }: Props) {
                 {group.totals[m] > 0 ? formatMoney(group.totals[m]) : '—'}
               </td>
             ))}
-            <td />
+            {editable && <td />}
           </tr>
         </tbody>
       </table>

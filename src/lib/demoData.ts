@@ -140,5 +140,5 @@ export function buildDemoData(memberCount = 12, itemCount = 30): AppData {
     createdAt: new Date(created + 7_200_000).toISOString(),
   });
 
-  return { schemaVersion: SCHEMA_VERSION, members, records };
+  return { schemaVersion: SCHEMA_VERSION, members, records, archivedSessions: [] };
 }

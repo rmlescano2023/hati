@@ -45,10 +45,27 @@ export type PurchaseRecord = {
   createdAt: string;
 };
 
-export type AppData = {
-  schemaVersion: number;
+/**
+ * A batch of records closed off manually from the Summary page. Its member
+ * roster is a snapshot taken at close time, so editing the live group later
+ * never rewrites history.
+ */
+export type ArchivedSession = {
+  id: string;
+  /** ISO timestamp of when the session was closed. */
+  closedAt: string;
+  /** Roster snapshot at close time — frozen. */
   members: string[];
   records: PurchaseRecord[];
+};
+
+export type AppData = {
+  schemaVersion: number;
+  /** The current, live session's roster. */
+  members: string[];
+  /** The current, live session's records. Closed sessions live in `archivedSessions`. */
+  records: PurchaseRecord[];
+  archivedSessions: ArchivedSession[];
 };
 
 /** Input shape accepted by `addRecord` — ids and timestamps are filled in for you. */

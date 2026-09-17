@@ -1,11 +1,12 @@
 import styles from './NavTabs.module.css';
 
-export type TabId = 'home' | 'breakdown' | 'summary';
+export type TabId = 'home' | 'breakdown' | 'summary' | 'history';
 
 const TABS: { id: TabId; label: string }[] = [
   { id: 'home', label: 'Home' },
   { id: 'breakdown', label: 'Breakdown' },
   { id: 'summary', label: 'Summary' },
+  { id: 'history', label: 'History' },
 ];
 
 type Props = {

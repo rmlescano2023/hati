@@ -5,6 +5,7 @@ import { PageShell } from './components/layout/PageShell';
 import { HomePage } from './pages/HomePage';
 import { BreakdownPage } from './pages/BreakdownPage';
 import { SummaryPage } from './pages/SummaryPage';
+import { HistoryPage } from './pages/HistoryPage';
 
 export default function App() {
   const [tab, setTab] = useState<TabId>('home');
@@ -14,6 +15,7 @@ export default function App() {
       {tab === 'home' && <HomePage />}
       {tab === 'breakdown' && <BreakdownPage />}
       {tab === 'summary' && <SummaryPage />}
+      {tab === 'history' && <HistoryPage />}
     </PageShell>
   );
 }

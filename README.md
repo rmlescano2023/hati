@@ -13,7 +13,13 @@ its webfonts from Google Fonts; nothing else goes over the network.)
 
 ## How it works
 
-The app is three tabs.
+The app is four tabs.
+
+Expenses are organised into **sessions**. Everything you log goes into the
+current, open session, which is what Home, Breakdown and Summary show. When a
+trip or a hangout is settled up, you close the session from the Summary page:
+its records move to History and the working tabs reset, ready for the next
+round. Your member list is not cleared — the same group carries on.
 
 ### Home — log a purchase
 
@@ -41,6 +47,12 @@ editable in place: correct an item name, a price, or a single person's share
 without re-entering the purchase. The **Item Total** column is the item's full
 cost; the member columns are shares of it.
 
+Editing has a time limit. Once a purchase's own date is more than **7 days** in
+the past, its card is marked _Locked_ and becomes read-only — cells stop
+accepting input and the remove-item button disappears. This is keyed to the
+purchase date alone, so old expenses are protected even while their session is
+still open, and the rule is enforced in `AppDataContext` as well as in the UI.
+
 ### Summary — settle up
 
 Three views of the same data:
@@ -56,11 +68,36 @@ Three views of the same data:
 Net balances and the settlement always come from the netted matrix, whichever
 view the matrix itself is showing, so nothing is double-counted.
 
+At the bottom of the page, **Close Session** archives the current records to
+History and resets Home, Breakdown and Summary for a new session. It confirms
+first, and nothing is deleted — the records are moved, not discarded.
+
+### History — look back
+
+Every closed session, newest first, with a date-range filter across the top. The
+range defaults to the full span of archived purchases; narrow it to focus on a
+stretch of days.
+
+Each session is shown under a **Closed \<date>** heading, with the same
+Breakdown cards you already know — read-only, and rendered against the member
+roster as it stood when the session was closed. Removing someone from your group
+afterwards therefore never rewrites history.
+
+Sessions stay separate rather than being flattened into one list, so two
+unrelated sessions that happen to share a date and payor don't merge into a
+single card.
+
 ### SOA export
 
-**Download SOA** on the Summary page renders a Statement of Account PDF —
-settlement, balances, and every line item — via `@react-pdf/renderer`. The file
-is named `Hati-SOA-<date>.pdf`.
+**Download SOA** renders a Statement of Account PDF — settlement, balances, and
+every line item — via `@react-pdf/renderer`. There are two entry points:
+
+- **Summary** exports the current, open session, named `Hati-SOA-<today>.pdf`.
+- **History** exports whatever the date range is showing, across sessions, named
+  `Hati-SOA-<start>_to_<end>.pdf`.
+
+Either way the statement's "Period" header is derived from the earliest and
+latest purchase date in the records it was given.
 
 The renderer is imported dynamically, so its ~1 MB never lands in the initial
 page bundle. Statements with more than five members switch to landscape
@@ -108,19 +145,24 @@ PDF spells it `PHP` rather than `₱` because DM Sans has no glyph for U+20B1.
 
 ## Data and privacy
 
-All state is a single `localStorage` key, `hati:data:v1`. Nothing is uploaded, and
-clearing your browser data clears your expenses. The stored blob is parsed
+All state is a single `localStorage` key, `hati:data:v1`, holding the current
+session's members and records plus every archived session. Nothing is uploaded,
+and clearing your browser data clears your expenses. The stored blob is parsed
 defensively on boot — anything unrecognisable is dropped rather than allowed to
 crash the app.
+
+The blob is at schema version 2. Version 1 predates sessions and has no
+`archivedSessions`; it upgrades in place on first load, defaulting to an empty
+history, with no data loss.
 
 ## Project layout
 
 ```
 src/
-  components/   UI, grouped by page (home, breakdown, summary) plus shared/ and layout/
-  pages/        The three tabs
+  components/   UI, grouped by page (home, breakdown, summary, history) plus shared/ and layout/
+  pages/        The four tabs
   context/      AppDataContext — the single source of truth, persisted to localStorage
-  lib/          calculations, money, storage, formatting  (calculations.test.ts lives here)
+  lib/          calculations, money, storage, freeze rule, formatting  (the *.test.ts files live here)
   pdf/          The SOA document, its layout maths and font registration
   styles/       Design tokens and global CSS
 scripts/        Dev-only PDF render harness

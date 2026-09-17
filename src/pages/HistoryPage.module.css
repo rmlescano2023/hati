@@ -1,0 +1,28 @@
+.session {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-bottom: 1.75rem;
+}
+
+.sessionHeading {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0.25rem 0 0;
+}
+
+.closedLabel {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text3);
+}
+
+.closedDate {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text2);
+}

@@ -5,11 +5,19 @@ import { compareNames, toTitleCase } from '../lib/format';
 import { roundMoney } from '../lib/money';
 import { getItemShares } from '../lib/calculations';
 import { createId } from '../lib/id';
-import type { AppData, NewPurchaseRecord, PurchaseItem, PurchaseRecord } from '../types';
+import { isRecordEditable } from '../lib/freeze';
+import type {
+  AppData,
+  ArchivedSession,
+  NewPurchaseRecord,
+  PurchaseItem,
+  PurchaseRecord,
+} from '../types';
 
 type AppDataValue = {
   members: string[];
   records: PurchaseRecord[];
+  archivedSessions: ArchivedSession[];
   addMember: (rawName: string) => boolean;
   removeMember: (name: string) => void;
   clearMembers: () => void;
@@ -24,6 +32,7 @@ type AppDataValue = {
     member: string,
     amount: number,
   ) => void;
+  closeSession: () => void;
   replaceData: (data: AppData) => void;
   resetAll: () => void;
 };
@@ -52,6 +61,16 @@ function purgeMemberFromItem(item: PurchaseItem, member: string): PurchaseItem |
 function toCustomItem(item: PurchaseItem): PurchaseItem {
   if (item.mode === 'custom') return item;
   return { id: item.id, mode: 'custom', name: item.name, amounts: getItemShares(item) };
+}
+
+/**
+ * Records outside the edit window are read-only. The Breakdown UI already
+ * disables their cells; this is the matching guard on the data layer, so a
+ * stale render or a direct call can never mutate frozen history.
+ */
+function isEditable(records: PurchaseRecord[], recordId: string): boolean {
+  const record = records.find((r) => r.id === recordId);
+  return record !== undefined && isRecordEditable(record.date);
 }
 
 function mapRecordItem(
@@ -134,17 +153,22 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   const removeRecord = useCallback(
     (recordId: string) => {
-      setData((prev) => ({ ...prev, records: prev.records.filter((r) => r.id !== recordId) }));
+      setData((prev) =>
+        isEditable(prev.records, recordId)
+          ? { ...prev, records: prev.records.filter((r) => r.id !== recordId) }
+          : prev,
+      );
     },
     [setData],
   );
 
   const removeItem = useCallback(
     (recordId: string, itemId: string) => {
-      setData((prev) => ({
-        ...prev,
-        records: mapRecordItem(prev.records, recordId, itemId, () => null),
-      }));
+      setData((prev) =>
+        isEditable(prev.records, recordId)
+          ? { ...prev, records: mapRecordItem(prev.records, recordId, itemId, () => null) }
+          : prev,
+      );
     },
     [setData],
   );
@@ -153,13 +177,17 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     (recordId: string, itemId: string, name: string) => {
       const trimmed = name.trim();
       if (!trimmed) return;
-      setData((prev) => ({
-        ...prev,
-        records: mapRecordItem(prev.records, recordId, itemId, (item) => ({
-          ...item,
-          name: trimmed,
-        })),
-      }));
+      setData((prev) =>
+        isEditable(prev.records, recordId)
+          ? {
+              ...prev,
+              records: mapRecordItem(prev.records, recordId, itemId, (item) => ({
+                ...item,
+                name: trimmed,
+              })),
+            }
+          : prev,
+      );
     },
     [setData],
   );
@@ -167,21 +195,24 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const updateItemTotal = useCallback(
     (recordId: string, itemId: string, total: number) => {
       const next = roundMoney(Math.max(0, total));
-      setData((prev) => ({
-        ...prev,
-        records: mapRecordItem(prev.records, recordId, itemId, (item) => {
-          if (item.mode === 'equal') return { ...item, totalPrice: next };
-          // Custom amounts: scale every member's share to hit the new total.
-          const current = Object.values(item.amounts).reduce((a, b) => a + b, 0);
-          if (current <= 0) return item;
-          const factor = next / current;
-          const amounts: Record<string, number> = {};
-          for (const [member, amount] of Object.entries(item.amounts)) {
-            amounts[member] = roundMoney(amount * factor);
-          }
-          return { ...item, amounts };
-        }),
-      }));
+      setData((prev) => {
+        if (!isEditable(prev.records, recordId)) return prev;
+        return {
+          ...prev,
+          records: mapRecordItem(prev.records, recordId, itemId, (item) => {
+            if (item.mode === 'equal') return { ...item, totalPrice: next };
+            // Custom amounts: scale every member's share to hit the new total.
+            const current = Object.values(item.amounts).reduce((a, b) => a + b, 0);
+            if (current <= 0) return item;
+            const factor = next / current;
+            const amounts: Record<string, number> = {};
+            for (const [member, amount] of Object.entries(item.amounts)) {
+              amounts[member] = roundMoney(amount * factor);
+            }
+            return { ...item, amounts };
+          }),
+        };
+      });
     },
     [setData],
   );
@@ -189,22 +220,44 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const updateItemMemberAmount = useCallback(
     (recordId: string, itemId: string, member: string, amount: number) => {
       const next = roundMoney(Math.max(0, amount));
-      setData((prev) => ({
-        ...prev,
-        records: mapRecordItem(prev.records, recordId, itemId, (item) => {
-          // Editing one member's cell means the split is no longer equal, so the
-          // item becomes a custom-amount item carrying the shares it already had.
-          const custom = toCustomItem(item);
-          if (custom.mode !== 'custom') return custom;
-          const amounts = { ...custom.amounts };
-          if (next <= 0) delete amounts[member];
-          else amounts[member] = next;
-          return Object.keys(amounts).length > 0 ? { ...custom, amounts } : null;
-        }),
-      }));
+      setData((prev) => {
+        if (!isEditable(prev.records, recordId)) return prev;
+        return {
+          ...prev,
+          records: mapRecordItem(prev.records, recordId, itemId, (item) => {
+            // Editing one member's cell means the split is no longer equal, so the
+            // item becomes a custom-amount item carrying the shares it already had.
+            const custom = toCustomItem(item);
+            if (custom.mode !== 'custom') return custom;
+            const amounts = { ...custom.amounts };
+            if (next <= 0) delete amounts[member];
+            else amounts[member] = next;
+            return Object.keys(amounts).length > 0 ? { ...custom, amounts } : null;
+          }),
+        };
+      });
     },
     [setData],
   );
+
+  /**
+   * Archive the current session and start a fresh one. The member roster is
+   * deliberately left alone — the same group carries on into the next round of
+   * expenses — while the records move into `archivedSessions` with a frozen
+   * copy of the roster as it stood at close time.
+   */
+  const closeSession = useCallback(() => {
+    setData((prev) => {
+      if (prev.records.length === 0) return prev;
+      const session: ArchivedSession = {
+        id: createId('ses'),
+        closedAt: new Date().toISOString(),
+        members: [...prev.members],
+        records: prev.records,
+      };
+      return { ...prev, records: [], archivedSessions: [...prev.archivedSessions, session] };
+    });
+  }, [setData]);
 
   const replaceData = useCallback(
     (next: AppData) => {
@@ -219,6 +272,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     () => ({
       members: data.members,
       records: data.records,
+      archivedSessions: data.archivedSessions,
       addMember,
       removeMember,
       clearMembers,
@@ -228,12 +282,14 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       updateItemName,
       updateItemTotal,
       updateItemMemberAmount,
+      closeSession,
       replaceData,
       resetAll,
     }),
     [
       data.members,
       data.records,
+      data.archivedSessions,
       addMember,
       removeMember,
       clearMembers,
@@ -243,6 +299,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       updateItemName,
       updateItemTotal,
       updateItemMemberAmount,
+      closeSession,
       replaceData,
       resetAll,
     ],

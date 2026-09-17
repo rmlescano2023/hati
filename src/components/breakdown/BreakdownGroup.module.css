@@ -43,3 +43,18 @@
   letter-spacing: -0.02em;
   color: var(--text);
 }
+
+/* Shown instead of the editing affordances once a group is past the 7-day window. */
+.locked {
+  align-self: flex-start;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--surface2);
+  color: var(--text3);
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
