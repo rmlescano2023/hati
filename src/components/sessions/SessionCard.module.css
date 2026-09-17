@@ -1,8 +1,16 @@
+/* The card and its delete action side by side; the card takes the space. */
+.row {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+}
+
 .card {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   text-align: left;
   font: inherit;
   cursor: pointer;
@@ -52,4 +60,9 @@
   font-size: 11px;
   letter-spacing: 0.04em;
   color: var(--text3);
+}
+
+.delete {
+  align-self: center;
+  flex-shrink: 0;
 }

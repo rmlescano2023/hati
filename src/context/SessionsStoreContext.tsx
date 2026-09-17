@@ -13,6 +13,8 @@ type SessionsStoreValue = {
   /** Creates an empty draft and returns its id, for the caller to navigate into. */
   createSession: () => string;
   closeSession: (sessionId: string) => void;
+  /** Removes a session outright. Unlike closing, nothing is kept. */
+  deleteSession: (sessionId: string) => void;
   addMember: (sessionId: string, rawName: string) => boolean;
   removeMember: (sessionId: string, name: string) => void;
   clearMembers: (sessionId: string) => void;
@@ -154,6 +156,13 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
       );
     },
     [updateSession],
+  );
+
+  const deleteSession = useCallback(
+    (sessionId: string) => {
+      setData((prev) => ({ ...prev, sessions: prev.sessions.filter((s) => s.id !== sessionId) }));
+    },
+    [setData],
   );
 
   const addMember = useCallback(
@@ -300,6 +309,7 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
       sessions: data.sessions,
       createSession,
       closeSession,
+      deleteSession,
       addMember,
       removeMember,
       clearMembers,
@@ -316,6 +326,7 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
       data.sessions,
       createSession,
       closeSession,
+      deleteSession,
       addMember,
       removeMember,
       clearMembers,
