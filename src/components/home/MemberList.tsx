@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Card } from '../shared/Card';
 import { Button } from '../shared/Button';
+import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { useAppData } from '../../context/AppDataContext';
 import { toTitleCase } from '../../lib/format';
 import styles from './MemberList.module.css';
@@ -9,6 +10,10 @@ export function MemberList() {
   const { members, records, addMember, removeMember, clearMembers } = useAppData();
   const [draft, setDraft] = useState('');
   const [error, setError] = useState('');
+  /** Which destructive action is waiting on confirmation, if any. */
+  const [pending, setPending] = useState<
+    { kind: 'clear' } | { kind: 'remove'; name: string } | null
+  >(null);
 
   const submit = () => {
     const name = toTitleCase(draft);
@@ -24,23 +29,22 @@ export function MemberList() {
     setDraft('');
   };
 
-  const handleClearAll = () => {
-    if (records.length > 0) {
-      const ok = window.confirm('Clearing all members also clears every saved record. Continue?');
-      if (!ok) return;
-    }
+  const clearAll = () => {
     clearMembers();
     setError('');
   };
 
-  const handleRemove = (name: string) => {
-    if (records.length > 0) {
-      const ok = window.confirm(
-        `Remove ${name}? Their shares are taken out of every saved record.`,
-      );
-      if (!ok) return;
-    }
-    removeMember(name);
+  // With nothing saved yet there is nothing to lose, so these go straight
+  // through; the confirmation only appears once records exist.
+  const handleClearAll = () => (records.length > 0 ? setPending({ kind: 'clear' }) : clearAll());
+
+  const handleRemove = (name: string) =>
+    records.length > 0 ? setPending({ kind: 'remove', name }) : removeMember(name);
+
+  const confirmPending = () => {
+    if (pending?.kind === 'clear') clearAll();
+    else if (pending?.kind === 'remove') removeMember(pending.name);
+    setPending(null);
   };
 
   return (
@@ -93,6 +97,20 @@ export function MemberList() {
       )}
 
       {error && <p className={styles.error}>{error}</p>}
+
+      <ConfirmDialog
+        open={pending !== null}
+        title={pending?.kind === 'remove' ? `Remove ${pending.name}?` : 'Clear all members?'}
+        message={
+          pending?.kind === 'remove'
+            ? 'Their shares are taken out of every saved record.'
+            : 'This also clears every saved record in this session.'
+        }
+        confirmLabel={pending?.kind === 'remove' ? 'Remove' : 'Clear All'}
+        destructive
+        onCancel={() => setPending(null)}
+        onConfirm={confirmPending}
+      />
     </Card>
   );
 }

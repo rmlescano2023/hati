@@ -1,0 +1,45 @@
+.dialog {
+  /* The global reset zeroes margins, which kills the UA rule that centres a
+     modal dialog, so the centring is restored explicitly. */
+  inset: 0;
+  margin: auto;
+  padding: 0;
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-md);
+  width: min(26rem, calc(100vw - 2rem));
+}
+
+.dialog::backdrop {
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 20px 22px 18px;
+}
+
+.title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+.message {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text2);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 10px;
+}

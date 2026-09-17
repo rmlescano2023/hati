@@ -1,8 +1,8 @@
+import { useState } from 'react';
 import { Button } from '../shared/Button';
+import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { useAppData } from '../../context/AppDataContext';
 import styles from './CloseSessionButton.module.css';
-
-const CONFIRM_MESSAGE = 'Finish this session? It moves to History and can no longer be edited.';
 
 /**
  * Archives the current session. Deliberately not a `danger` button — nothing is
@@ -11,19 +11,27 @@ const CONFIRM_MESSAGE = 'Finish this session? It moves to History and can no lon
  */
 export function CloseSessionButton({ onClosed }: { onClosed: () => void }) {
   const { records, closeSession } = useAppData();
-
-  const handleClick = () => {
-    if (!window.confirm(CONFIRM_MESSAGE)) return;
-    closeSession();
-    onClosed();
-  };
+  const [confirming, setConfirming] = useState(false);
 
   return (
     <div className={styles.wrap}>
-      <Button size="lg" onClick={handleClick} disabled={records.length === 0}>
+      <Button size="lg" onClick={() => setConfirming(true)} disabled={records.length === 0}>
         Finish Session
       </Button>
       <p className={styles.hint}>Files this session under History.</p>
+
+      <ConfirmDialog
+        open={confirming}
+        title="Finish this session?"
+        message="It moves to History and can no longer be edited."
+        confirmLabel="Finish Session"
+        onCancel={() => setConfirming(false)}
+        onConfirm={() => {
+          setConfirming(false);
+          closeSession();
+          onClosed();
+        }}
+      />
     </div>
   );
 }
