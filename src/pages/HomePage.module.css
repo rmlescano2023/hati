@@ -1,3 +1,13 @@
+/* Matches the Card section-label convention used across the app. */
+.heading {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text3);
+  margin: 0 0 0.75rem;
+}
+
 .list {
   display: flex;
   flex-direction: column;
@@ -58,10 +68,4 @@
   font-size: 11px;
   letter-spacing: 0.04em;
   color: var(--text3);
-}
-
-.actions {
-  display: flex;
-  justify-content: center;
-  padding: 1.25rem 0;
 }

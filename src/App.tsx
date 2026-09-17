@@ -4,6 +4,8 @@ import { NavTabs, type TabId } from './components/layout/NavTabs';
 import { PageShell } from './components/layout/PageShell';
 import { SessionWorkspace } from './components/layout/SessionWorkspace';
 import type { SessionTabId } from './components/layout/SessionTabs';
+import { Button } from './components/shared/Button';
+import { useSessionsStore } from './context/SessionsStoreContext';
 import { HomePage } from './pages/HomePage';
 import { HistoryPage } from './pages/HistoryPage';
 
@@ -17,6 +19,7 @@ type Screen =
   | { kind: 'session'; sessionId: string; tab: SessionTabId };
 
 export default function App() {
+  const { createSession } = useSessionsStore();
   const [screen, setScreen] = useState<Screen>({ kind: 'home' });
 
   const openSession = (sessionId: string) =>
@@ -24,7 +27,15 @@ export default function App() {
 
   const nav =
     screen.kind === 'session' ? null : (
-      <NavTabs active={screen.kind as TabId} onChange={(tab) => setScreen({ kind: tab })} />
+      <NavTabs
+        active={screen.kind as TabId}
+        onChange={(tab) => setScreen({ kind: tab })}
+        actions={
+          <Button variant="primary" onClick={() => openSession(createSession())}>
+            + New Session
+          </Button>
+        }
+      />
     );
 
   return (

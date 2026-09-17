@@ -1,3 +1,13 @@
+/* Tabs on the left, the New Session action on the right of the same row. */
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 1.75rem;
+}
+
 .nav {
   display: flex;
   gap: 2px;
@@ -5,7 +15,6 @@
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 4px;
-  margin-bottom: 1.75rem;
   width: fit-content;
   max-width: 100%;
 }
@@ -38,6 +47,12 @@
 }
 
 @media (max-width: 480px) {
+  /* Too narrow for both on one line: the tabs take the row, the action sits
+     under them at full width rather than being squeezed. */
+  .row {
+    align-items: stretch;
+  }
+
   .nav {
     width: 100%;
   }
