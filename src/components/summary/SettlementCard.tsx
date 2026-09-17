@@ -3,7 +3,7 @@ import type { Settlement } from '../../types';
 import styles from './SettlementCard.module.css';
 
 export function SettlementCard({ settlement }: { settlement: Settlement }) {
-  const { debtor, lines, total } = settlement;
+  const { debtor, lines } = settlement;
 
   return (
     <div className={styles.block}>
@@ -20,12 +20,6 @@ export function SettlementCard({ settlement }: { settlement: Settlement }) {
           </li>
         ))}
       </ul>
-      {lines.length > 1 && (
-        <div className={styles.total}>
-          <span className={styles.totalLabel}>Total</span>
-          <span className={styles.totalAmount}>{formatMoney(total)}</span>
-        </div>
-      )}
     </div>
   );
 }

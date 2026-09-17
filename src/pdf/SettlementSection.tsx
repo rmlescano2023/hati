@@ -23,14 +23,6 @@ export function SettlementSection({ settlements }: { settlements: Settlement[] }
                 <Text style={styles.settlementAmount}>{formatPdfMoney(line.amount)}</Text>
               </View>
             ))}
-            {settlement.lines.length > 1 && (
-              <View style={styles.settlementTotal}>
-                <Text style={styles.headerLabel}>Total</Text>
-                <Text style={[styles.settlementAmount, { fontSize: 11 }]}>
-                  {formatPdfMoney(settlement.total)}
-                </Text>
-              </View>
-            )}
           </View>
         ))
       )}
