@@ -28,7 +28,7 @@ export function HistoryPage({ onOpenSession }: Props) {
     return (
       <EmptyState
         title="No archived sessions yet"
-        description="Close a session from its Summary tab and it will be filed here."
+        description="Finish a session from its Summary tab and it will be filed here."
       />
     );
   }

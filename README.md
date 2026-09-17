@@ -22,8 +22,8 @@ have in progress and starts new ones; History holds the ones you have closed.
 Opening a session drops you into its own workspace with three inner tabs —
 **Expenses**, **Breakdown** and **Summary**.
 
-A session is a _draft_ until you close it. Leaving the workspace changes
-nothing: the draft is already saved and waiting on Home. Closing it, from the
+A session is a _draft_ until you finish it. Leaving the workspace changes
+nothing: the draft is already saved and waiting on Home. Finishing it, from the
 Summary tab, files it into History and makes it read-only.
 
 ### Home — your sessions
@@ -79,7 +79,7 @@ Three views of the same data:
 Net balances and the settlement always come from the netted matrix, whichever
 view the matrix itself is showing, so nothing is double-counted.
 
-At the bottom of the page, **Close Session** files the session into History and
+At the bottom of the page, **Finish Session** files the session into History and
 takes you there. It confirms first, and nothing is deleted — the session moves,
 and stays readable on History for good.
 
