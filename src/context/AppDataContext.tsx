@@ -1,23 +1,17 @@
-import { createContext, useCallback, useContext, useMemo, type ReactNode } from 'react';
-import { useLocalStorageState } from '../hooks/useLocalStorageState';
-import { parseAppData, serializeAppData, STORAGE_KEY, EMPTY_DATA } from '../lib/storage';
-import { compareNames, toTitleCase } from '../lib/format';
-import { roundMoney } from '../lib/money';
-import { getItemShares } from '../lib/calculations';
-import { createId } from '../lib/id';
-import { isRecordEditable } from '../lib/freeze';
-import type {
-  AppData,
-  ArchivedSession,
-  NewPurchaseRecord,
-  PurchaseItem,
-  PurchaseRecord,
-} from '../types';
+import { createContext, useContext, useMemo, type ReactNode } from 'react';
+import { EmptyState } from '../components/shared/EmptyState';
+import { useSessionsStore } from './SessionsStoreContext';
+import type { NewPurchaseRecord, PurchaseRecord } from '../types';
 
+/**
+ * The shape every page and component inside a session workspace consumes. It is
+ * deliberately unchanged from when the app had a single global session, so
+ * `MemberList`, `PurchaseItemCard`, `DevDataBar`, Breakdown and Summary need to
+ * know nothing about sessions at all.
+ */
 type AppDataValue = {
   members: string[];
   records: PurchaseRecord[];
-  archivedSessions: ArchivedSession[];
   addMember: (rawName: string) => boolean;
   removeMember: (name: string) => void;
   clearMembers: () => void;
@@ -33,277 +27,57 @@ type AppDataValue = {
     amount: number,
   ) => void;
   closeSession: () => void;
-  replaceData: (data: AppData) => void;
+  replaceData: (data: { members: string[]; records: PurchaseRecord[] }) => void;
   resetAll: () => void;
 };
 
 const AppDataContext = createContext<AppDataValue | null>(null);
 
-/** Drop a member out of an item, keeping the remaining members' shares unchanged. */
-function purgeMemberFromItem(item: PurchaseItem, member: string): PurchaseItem | null {
-  if (item.mode === 'custom') {
-    if (!(member in item.amounts)) return item;
-    const amounts = { ...item.amounts };
-    delete amounts[member];
-    return Object.keys(amounts).length > 0 ? { ...item, amounts } : null;
-  }
-
-  if (!item.owners.includes(member)) return item;
-  const owners = item.owners.filter((o) => o !== member);
-  if (owners.length === 0) return null;
-  // Shrink the total by the departing member's share so nobody else's share moves.
-  const shares = getItemShares(item);
-  const totalPrice = roundMoney(item.totalPrice - (shares[member] ?? 0));
-  return { ...item, owners, totalPrice };
-}
-
-/** Convert an equal-split item into the custom-amount item with the same shares. */
-function toCustomItem(item: PurchaseItem): PurchaseItem {
-  if (item.mode === 'custom') return item;
-  return { id: item.id, mode: 'custom', name: item.name, amounts: getItemShares(item) };
-}
-
 /**
- * Records outside the edit window are read-only. The Breakdown UI already
- * disables their cells; this is the matching guard on the data layer, so a
- * stale render or a direct call can never mutate frozen history.
+ * Binds the sessions store to one open session. Mounted by the session
+ * workspace rather than at the app root, so which session `useAppData()` refers
+ * to is decided purely by which provider is wrapping the tree.
  */
-function isEditable(records: PurchaseRecord[], recordId: string): boolean {
-  const record = records.find((r) => r.id === recordId);
-  return record !== undefined && isRecordEditable(record.date);
-}
+export function AppDataProvider({
+  sessionId,
+  children,
+}: {
+  sessionId: string;
+  children: ReactNode;
+}) {
+  const store = useSessionsStore();
+  const session = store.sessions.find((s) => s.id === sessionId);
 
-function mapRecordItem(
-  records: PurchaseRecord[],
-  recordId: string,
-  itemId: string,
-  fn: (item: PurchaseItem) => PurchaseItem | null,
-): PurchaseRecord[] {
-  return records
-    .map((record) => {
-      if (record.id !== recordId) return record;
-      const items = record.items
-        .map((item) => (item.id === itemId ? fn(item) : item))
-        .filter((item): item is PurchaseItem => item !== null);
-      return { ...record, items };
-    })
-    .filter((record) => record.items.length > 0);
-}
+  const value = useMemo<AppDataValue | null>(() => {
+    if (!session) return null;
+    return {
+      members: session.members,
+      records: session.records,
+      addMember: (name) => store.addMember(sessionId, name),
+      removeMember: (name) => store.removeMember(sessionId, name),
+      clearMembers: () => store.clearMembers(sessionId),
+      addRecord: (input) => store.addRecord(sessionId, input),
+      removeRecord: (recordId) => store.removeRecord(sessionId, recordId),
+      removeItem: (recordId, itemId) => store.removeItem(sessionId, recordId, itemId),
+      updateItemName: (recordId, itemId, name) =>
+        store.updateItemName(sessionId, recordId, itemId, name),
+      updateItemTotal: (recordId, itemId, total) =>
+        store.updateItemTotal(sessionId, recordId, itemId, total),
+      updateItemMemberAmount: (recordId, itemId, member, amount) =>
+        store.updateItemMemberAmount(sessionId, recordId, itemId, member, amount),
+      closeSession: () => store.closeSession(sessionId),
+      replaceData: (data) => store.replaceSessionData(sessionId, data),
+      // Scoped to this session on purpose: the dev Reset button should not be
+      // able to wipe other drafts or anything already filed into History.
+      resetAll: () => store.replaceSessionData(sessionId, { members: [], records: [] }),
+    };
+  }, [session, store, sessionId]);
 
-export function AppDataProvider({ children }: { children: ReactNode }) {
-  const [data, setData] = useLocalStorageState<AppData>(STORAGE_KEY, {
-    deserialize: parseAppData,
-    serialize: serializeAppData,
-  });
-
-  const addMember = useCallback(
-    (rawName: string) => {
-      const name = toTitleCase(rawName);
-      if (!name) return false;
-      if (data.members.some((m) => compareNames(m, name) === 0)) return false;
-      setData((prev) =>
-        prev.members.some((m) => compareNames(m, name) === 0)
-          ? prev
-          : { ...prev, members: [...prev.members, name].sort(compareNames) },
-      );
-      return true;
-    },
-    [data.members, setData],
-  );
-
-  const removeMember = useCallback(
-    (name: string) => {
-      setData((prev) => ({
-        ...prev,
-        members: prev.members.filter((m) => m !== name),
-        records: prev.records
-          .map((record) => ({
-            ...record,
-            payors: record.payors.filter((p) => p.member !== name),
-            items: record.items
-              .map((item) => purgeMemberFromItem(item, name))
-              .filter((item): item is PurchaseItem => item !== null),
-          }))
-          .filter((record) => record.payors.length > 0 && record.items.length > 0),
-      }));
-    },
-    [setData],
-  );
-
-  const clearMembers = useCallback(() => {
-    setData((prev) => ({ ...prev, members: [], records: [] }));
-  }, [setData]);
-
-  const addRecord = useCallback(
-    (input: NewPurchaseRecord) => {
-      setData((prev) => ({
-        ...prev,
-        records: [
-          ...prev.records,
-          {
-            ...input,
-            id: createId('rec'),
-            createdAt: new Date().toISOString(),
-          },
-        ],
-      }));
-    },
-    [setData],
-  );
-
-  const removeRecord = useCallback(
-    (recordId: string) => {
-      setData((prev) =>
-        isEditable(prev.records, recordId)
-          ? { ...prev, records: prev.records.filter((r) => r.id !== recordId) }
-          : prev,
-      );
-    },
-    [setData],
-  );
-
-  const removeItem = useCallback(
-    (recordId: string, itemId: string) => {
-      setData((prev) =>
-        isEditable(prev.records, recordId)
-          ? { ...prev, records: mapRecordItem(prev.records, recordId, itemId, () => null) }
-          : prev,
-      );
-    },
-    [setData],
-  );
-
-  const updateItemName = useCallback(
-    (recordId: string, itemId: string, name: string) => {
-      const trimmed = name.trim();
-      if (!trimmed) return;
-      setData((prev) =>
-        isEditable(prev.records, recordId)
-          ? {
-              ...prev,
-              records: mapRecordItem(prev.records, recordId, itemId, (item) => ({
-                ...item,
-                name: trimmed,
-              })),
-            }
-          : prev,
-      );
-    },
-    [setData],
-  );
-
-  const updateItemTotal = useCallback(
-    (recordId: string, itemId: string, total: number) => {
-      const next = roundMoney(Math.max(0, total));
-      setData((prev) => {
-        if (!isEditable(prev.records, recordId)) return prev;
-        return {
-          ...prev,
-          records: mapRecordItem(prev.records, recordId, itemId, (item) => {
-            if (item.mode === 'equal') return { ...item, totalPrice: next };
-            // Custom amounts: scale every member's share to hit the new total.
-            const current = Object.values(item.amounts).reduce((a, b) => a + b, 0);
-            if (current <= 0) return item;
-            const factor = next / current;
-            const amounts: Record<string, number> = {};
-            for (const [member, amount] of Object.entries(item.amounts)) {
-              amounts[member] = roundMoney(amount * factor);
-            }
-            return { ...item, amounts };
-          }),
-        };
-      });
-    },
-    [setData],
-  );
-
-  const updateItemMemberAmount = useCallback(
-    (recordId: string, itemId: string, member: string, amount: number) => {
-      const next = roundMoney(Math.max(0, amount));
-      setData((prev) => {
-        if (!isEditable(prev.records, recordId)) return prev;
-        return {
-          ...prev,
-          records: mapRecordItem(prev.records, recordId, itemId, (item) => {
-            // Editing one member's cell means the split is no longer equal, so the
-            // item becomes a custom-amount item carrying the shares it already had.
-            const custom = toCustomItem(item);
-            if (custom.mode !== 'custom') return custom;
-            const amounts = { ...custom.amounts };
-            if (next <= 0) delete amounts[member];
-            else amounts[member] = next;
-            return Object.keys(amounts).length > 0 ? { ...custom, amounts } : null;
-          }),
-        };
-      });
-    },
-    [setData],
-  );
-
-  /**
-   * Archive the current session and start a fresh one. The member roster is
-   * deliberately left alone — the same group carries on into the next round of
-   * expenses — while the records move into `archivedSessions` with a frozen
-   * copy of the roster as it stood at close time.
-   */
-  const closeSession = useCallback(() => {
-    setData((prev) => {
-      if (prev.records.length === 0) return prev;
-      const session: ArchivedSession = {
-        id: createId('ses'),
-        closedAt: new Date().toISOString(),
-        members: [...prev.members],
-        records: prev.records,
-      };
-      return { ...prev, records: [], archivedSessions: [...prev.archivedSessions, session] };
-    });
-  }, [setData]);
-
-  const replaceData = useCallback(
-    (next: AppData) => {
-      setData({ ...next, members: [...next.members].sort(compareNames) });
-    },
-    [setData],
-  );
-
-  const resetAll = useCallback(() => setData(EMPTY_DATA), [setData]);
-
-  const value = useMemo<AppDataValue>(
-    () => ({
-      members: data.members,
-      records: data.records,
-      archivedSessions: data.archivedSessions,
-      addMember,
-      removeMember,
-      clearMembers,
-      addRecord,
-      removeRecord,
-      removeItem,
-      updateItemName,
-      updateItemTotal,
-      updateItemMemberAmount,
-      closeSession,
-      replaceData,
-      resetAll,
-    }),
-    [
-      data.members,
-      data.records,
-      data.archivedSessions,
-      addMember,
-      removeMember,
-      clearMembers,
-      addRecord,
-      removeRecord,
-      removeItem,
-      updateItemName,
-      updateItemTotal,
-      updateItemMemberAmount,
-      closeSession,
-      replaceData,
-      resetAll,
-    ],
-  );
+  if (!value) {
+    return (
+      <EmptyState title="Session not found" description="It may have been closed elsewhere." />
+    );
+  }
 
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>;
 }
@@ -313,4 +87,15 @@ export function useAppData(): AppDataValue {
   const ctx = useContext(AppDataContext);
   if (!ctx) throw new Error('useAppData must be used inside <AppDataProvider>');
   return ctx;
+}
+
+/**
+ * The same context, but tolerant of there being no open session. History
+ * renders the read-only Breakdown cards outside any session workspace, so the
+ * components behind them must be able to render without a provider — their
+ * editing callbacks are unreachable there anyway.
+ */
+// eslint-disable-next-line react-refresh/only-export-components
+export function useAppDataOptional(): AppDataValue | null {
+  return useContext(AppDataContext);
 }

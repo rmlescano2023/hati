@@ -45,27 +45,28 @@ export type PurchaseRecord = {
   createdAt: string;
 };
 
+export type SessionStatus = 'draft' | 'closed';
+
 /**
- * A batch of records closed off manually from the Summary page. Its member
- * roster is a snapshot taken at close time, so editing the live group later
- * never rewrites history.
+ * One batch of expenses — a trip, a hangout, a night out. A session is a
+ * `draft` while you are still adding to it and `closed` once it has been
+ * settled up and filed into History. Each session owns its own roster, so two
+ * groups running in parallel never share members.
  */
-export type ArchivedSession = {
+export type Session = {
   id: string;
-  /** ISO timestamp of when the session was closed. */
-  closedAt: string;
-  /** Roster snapshot at close time — frozen. */
+  status: SessionStatus;
+  /** ISO timestamp, set at creation. */
+  createdAt: string;
+  /** ISO timestamp, set when the session is closed; null while it is a draft. */
+  closedAt: string | null;
   members: string[];
   records: PurchaseRecord[];
 };
 
 export type AppData = {
   schemaVersion: number;
-  /** The current, live session's roster. */
-  members: string[];
-  /** The current, live session's records. Closed sessions live in `archivedSessions`. */
-  records: PurchaseRecord[];
-  archivedSessions: ArchivedSession[];
+  sessions: Session[];
 };
 
 /** Input shape accepted by `addRecord` — ids and timestamps are filled in for you. */

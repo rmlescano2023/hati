@@ -13,17 +13,28 @@ its webfonts from Google Fonts; nothing else goes over the network.)
 
 ## How it works
 
-The app is four tabs.
+Expenses are organised into **sessions** — one per trip, hangout or night out.
+Several can be in progress at once, and each owns its own member roster, so two
+unrelated groups never share names.
 
-Expenses are organised into **sessions**. Everything you log goes into the
-current, open session, which is what Home, Breakdown and Summary show. When a
-trip or a hangout is settled up, you close the session from the Summary page:
-its records move to History and the working tabs reset, ready for the next
-round. Your member list is not cleared — the same group carries on.
+The top level is two tabs, **Home** and **History**. Home lists the sessions you
+have in progress and starts new ones; History holds the ones you have closed.
+Opening a session drops you into its own workspace with three inner tabs —
+**Expenses**, **Breakdown** and **Summary**.
 
-### Home — log a purchase
+A session is a _draft_ until you close it. Leaving the workspace changes
+nothing: the draft is already saved and waiting on Home. Closing it, from the
+Summary tab, files it into History and makes it read-only.
 
-Add your group members once, then record purchases against them. A purchase is a
+### Home — your sessions
+
+One card per draft, newest first, showing when it was started, who is in it, how
+many purchases it holds and the running total. Click one to resume exactly where
+you left off, or start a fresh one with **New Session**.
+
+### Expenses — log a purchase
+
+Add the session's members, then record purchases against them. A purchase is a
 date, one or more payors, and a list of items. Each item is split one of two ways:
 
 | Mode               | What it means                                                                                  |
@@ -68,9 +79,9 @@ Three views of the same data:
 Net balances and the settlement always come from the netted matrix, whichever
 view the matrix itself is showing, so nothing is double-counted.
 
-At the bottom of the page, **Close Session** archives the current records to
-History and resets Home, Breakdown and Summary for a new session. It confirms
-first, and nothing is deleted — the records are moved, not discarded.
+At the bottom of the page, **Close Session** files the session into History and
+takes you there. It confirms first, and nothing is deleted — the session moves,
+and stays readable on History for good.
 
 ### History — look back
 
@@ -79,9 +90,9 @@ range defaults to the full span of archived purchases; narrow it to focus on a
 stretch of days.
 
 Each session is shown under a **Closed \<date>** heading, with the same
-Breakdown cards you already know — read-only, and rendered against the member
-roster as it stood when the session was closed. Removing someone from your group
-afterwards therefore never rewrites history.
+Breakdown cards you already know — read-only, and rendered against that
+session's own member roster. Because each session carries its own roster,
+nothing you do later can rewrite it.
 
 Sessions stay separate rather than being flattened into one list, so two
 unrelated sessions that happen to share a date and payor don't merge into a
@@ -92,7 +103,7 @@ single card.
 **Download SOA** renders a Statement of Account PDF — settlement, balances, and
 every line item — via `@react-pdf/renderer`. There are two entry points:
 
-- **Summary** exports the current, open session, named `Hati-SOA-<today>.pdf`.
+- A session's **Summary** tab exports that session, named `Hati-SOA-<today>.pdf`.
 - **History** exports whatever the date range is showing, across sessions, named
   `Hati-SOA-<start>_to_<end>.pdf`.
 
@@ -145,23 +156,24 @@ PDF spells it `PHP` rather than `₱` because DM Sans has no glyph for U+20B1.
 
 ## Data and privacy
 
-All state is a single `localStorage` key, `hati:data:v1`, holding the current
-session's members and records plus every archived session. Nothing is uploaded,
-and clearing your browser data clears your expenses. The stored blob is parsed
-defensively on boot — anything unrecognisable is dropped rather than allowed to
-crash the app.
+All state is a single `localStorage` key, `hati:data:v1`, holding one `sessions`
+array — drafts and closed sessions alike, each with its own members and records.
+Nothing is uploaded, and clearing your browser data clears your expenses. The
+stored blob is parsed defensively on boot — anything unrecognisable is dropped
+rather than allowed to crash the app.
 
-The blob is at schema version 2. Version 1 predates sessions and has no
-`archivedSessions`; it upgrades in place on first load, defaulting to an empty
-history, with no data loss.
+The blob is at schema version 2. Version 1 predates sessions and stored one flat
+`{members, records}` pair; it upgrades in place on first load, becoming a single
+draft session holding exactly what was there, with no data loss.
 
 ## Project layout
 
 ```
 src/
   components/   UI, grouped by page (home, breakdown, summary, history) plus shared/ and layout/
-  pages/        The four tabs
-  context/      AppDataContext — the single source of truth, persisted to localStorage
+  pages/        Home and History, plus the three pages inside a session workspace
+  context/      SessionsStoreContext — every session, persisted to localStorage
+                AppDataContext — a thin adapter scoping that store to the open session
   lib/          calculations, money, storage, freeze rule, formatting  (the *.test.ts files live here)
   pdf/          The SOA document, its layout maths and font registration
   styles/       Design tokens and global CSS

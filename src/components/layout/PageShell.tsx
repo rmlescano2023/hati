@@ -3,7 +3,7 @@ import styles from './PageShell.module.css';
 
 type Props = {
   header: ReactNode;
-  nav: ReactNode;
+  nav?: ReactNode;
   children: ReactNode;
 };
 

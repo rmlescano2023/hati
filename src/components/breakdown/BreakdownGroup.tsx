@@ -13,9 +13,19 @@ type Props = {
    * in a group shares one date, so editability is a single flag for the card.
    */
   editable?: boolean;
+  /**
+   * Why the card is read-only, which is not always its age: History renders
+   * closed sessions read-only whatever the dates on them.
+   */
+  lockedReason?: 'age' | 'closed';
 };
 
-export function BreakdownGroup({ group, members, editable = true }: Props) {
+const LOCK_TITLE: Record<'age' | 'closed', string> = {
+  age: 'Records older than 7 days are read-only',
+  closed: 'This session is closed and can no longer be edited',
+};
+
+export function BreakdownGroup({ group, members, editable = true, lockedReason = 'age' }: Props) {
   return (
     <Card>
       <div className={styles.header}>
@@ -23,7 +33,7 @@ export function BreakdownGroup({ group, members, editable = true }: Props) {
           <span className={styles.date}>{formatLongDate(group.date)}</span>
           <PayorBadge payors={group.payors} payorMode={group.payorMode} />
           {!editable && (
-            <span className={styles.locked} title="Records older than 7 days are read-only">
+            <span className={styles.locked} title={LOCK_TITLE[lockedReason]}>
               Locked
             </span>
           )}

@@ -1,6 +1,6 @@
 import { EditableCell } from '../shared/EditableCell';
 import { Button } from '../shared/Button';
-import { useAppData } from '../../context/AppDataContext';
+import { useAppDataOptional } from '../../context/AppDataContext';
 import { formatMoney } from '../../lib/format';
 import type { BreakdownGroup } from '../../types';
 import styles from './BreakdownTable.module.css';
@@ -14,7 +14,9 @@ type Props = {
 };
 
 export function BreakdownTable({ group, members, editable = true }: Props) {
-  const { updateItemName, updateItemTotal, updateItemMemberAmount, removeItem } = useAppData();
+  // Null on the History page, which renders these cards read-only and outside
+  // any session; every call below is gated on `editable` regardless.
+  const data = useAppDataOptional();
 
   return (
     <div className={styles.scroll}>
@@ -40,7 +42,7 @@ export function BreakdownTable({ group, members, editable = true }: Props) {
                   value={row.item.name}
                   ariaLabel={`Item name for ${row.item.name}`}
                   disabled={!editable}
-                  onCommit={(name) => updateItemName(row.recordId, row.item.id, name)}
+                  onCommit={(name) => data?.updateItemName(row.recordId, row.item.id, name)}
                 />
               </td>
               <td>
@@ -51,7 +53,7 @@ export function BreakdownTable({ group, members, editable = true }: Props) {
                   className={styles.priceInput}
                   ariaLabel={`Item total for ${row.item.name}`}
                   disabled={!editable}
-                  onCommit={(total) => updateItemTotal(row.recordId, row.item.id, total)}
+                  onCommit={(total) => data?.updateItemTotal(row.recordId, row.item.id, total)}
                 />
               </td>
               {members.map((m) => (
@@ -64,7 +66,7 @@ export function BreakdownTable({ group, members, editable = true }: Props) {
                     ariaLabel={`${m}'s share of ${row.item.name}`}
                     disabled={!editable}
                     onCommit={(amount) =>
-                      updateItemMemberAmount(row.recordId, row.item.id, m, amount)
+                      data?.updateItemMemberAmount(row.recordId, row.item.id, m, amount)
                     }
                   />
                 </td>
@@ -75,7 +77,7 @@ export function BreakdownTable({ group, members, editable = true }: Props) {
                     variant="icon"
                     title="Remove item"
                     aria-label={`Remove ${row.item.name}`}
-                    onClick={() => removeItem(row.recordId, row.item.id)}
+                    onClick={() => data?.removeItem(row.recordId, row.item.id)}
                   >
                     ×
                   </Button>

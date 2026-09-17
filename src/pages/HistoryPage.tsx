@@ -4,21 +4,23 @@ import { DateRangeFilter } from '../components/history/DateRangeFilter';
 import { Card } from '../components/shared/Card';
 import { EmptyState } from '../components/shared/EmptyState';
 import { ExportSoaButton } from '../components/summary/ExportSoaButton';
-import { useAppData } from '../context/AppDataContext';
+import { useSessionsStore } from '../context/SessionsStoreContext';
 import { groupRecordsForBreakdown } from '../lib/calculations';
 import { compareNames, formatLongDate, sortNames } from '../lib/format';
-import type { ArchivedSession, PurchaseRecord } from '../types';
+import type { PurchaseRecord, Session } from '../types';
 import styles from './HistoryPage.module.css';
 
 /** Earliest and latest purchase date across every archived record. */
-function dateSpan(sessions: ArchivedSession[]): { min: string; max: string } | null {
+function dateSpan(sessions: Session[]): { min: string; max: string } | null {
   const dates = sessions.flatMap((s) => s.records.map((r) => r.date)).sort();
   if (dates.length === 0) return null;
   return { min: dates[0], max: dates[dates.length - 1] };
 }
 
 export function HistoryPage() {
-  const { archivedSessions } = useAppData();
+  const { sessions } = useSessionsStore();
+
+  const archivedSessions = useMemo(() => sessions.filter((s) => s.status === 'closed'), [sessions]);
 
   const span = useMemo(() => dateSpan(archivedSessions), [archivedSessions]);
   const [range, setRange] = useState<{ start: string; end: string } | null>(null);
@@ -37,7 +39,7 @@ export function HistoryPage() {
         }))
         .filter(({ records }) => records.length > 0)
         // Most recently closed first.
-        .sort((a, b) => b.session.closedAt.localeCompare(a.session.closedAt))
+        .sort((a, b) => (b.session.closedAt ?? '').localeCompare(a.session.closedAt ?? ''))
     );
   }, [archivedSessions, start, end]);
 
@@ -91,7 +93,7 @@ export function HistoryPage() {
             <h2 className={styles.sessionHeading}>
               <span className={styles.closedLabel}>Closed</span>
               <span className={styles.closedDate}>
-                {formatLongDate(session.closedAt.slice(0, 10))}
+                {formatLongDate((session.closedAt ?? session.createdAt).slice(0, 10))}
               </span>
             </h2>
             {groupRecordsForBreakdown(records, sortNames(session.members)).map((group) => (
@@ -100,6 +102,7 @@ export function HistoryPage() {
                 group={group}
                 members={[...session.members].sort(compareNames)}
                 editable={false}
+                lockedReason="closed"
               />
             ))}
           </section>

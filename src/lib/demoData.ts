@@ -1,7 +1,6 @@
 import { roundMoney } from './money';
 import { compareNames } from './format';
-import type { AppData, PurchaseItem, PurchaseRecord } from '../types';
-import { SCHEMA_VERSION } from './storage';
+import type { PurchaseItem, PurchaseRecord } from '../types';
 
 const NAMES = [
   'Renmar',
@@ -59,7 +58,10 @@ function mulberry32(seed: number) {
  * A realistic data set for eyeballing responsive layout and PDF pagination
  * without typing thirty items by hand. Dev-only.
  */
-export function buildDemoData(memberCount = 12, itemCount = 30): AppData {
+export function buildDemoData(
+  memberCount = 12,
+  itemCount = 30,
+): { members: string[]; records: PurchaseRecord[] } {
   const rand = mulberry32(20260427);
   const members = NAMES.slice(0, Math.min(memberCount, NAMES.length)).sort(compareNames);
 
@@ -140,5 +142,5 @@ export function buildDemoData(memberCount = 12, itemCount = 30): AppData {
     createdAt: new Date(created + 7_200_000).toISOString(),
   });
 
-  return { schemaVersion: SCHEMA_VERSION, members, records, archivedSessions: [] };
+  return { members, records };
 }

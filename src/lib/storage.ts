@@ -1,14 +1,13 @@
-import type { AppData, ArchivedSession, PurchaseItem, PurchaseRecord } from '../types';
+import type { AppData, PurchaseItem, PurchaseRecord, Session } from '../types';
 import { roundMoney } from './money';
+import { createId } from './id';
 
 export const STORAGE_KEY = 'hati:data:v1';
 export const SCHEMA_VERSION = 2;
 
 export const EMPTY_DATA: AppData = {
   schemaVersion: SCHEMA_VERSION,
-  members: [],
-  records: [],
-  archivedSessions: [],
+  sessions: [],
 };
 
 function isRecordObject(value: unknown): value is Record<string, unknown> {
@@ -69,11 +68,10 @@ function parseRecord(raw: unknown): PurchaseRecord | null {
   };
 }
 
-function parseArchivedSession(raw: unknown): ArchivedSession | null {
+function parseSession(raw: unknown): Session | null {
   if (!isRecordObject(raw)) return null;
   const id = typeof raw.id === 'string' ? raw.id : null;
-  const closedAt = typeof raw.closedAt === 'string' ? raw.closedAt : null;
-  if (!id || !closedAt) return null;
+  if (!id) return null;
 
   const members = Array.isArray(raw.members)
     ? raw.members.filter((m): m is string => typeof m === 'string')
@@ -81,17 +79,59 @@ function parseArchivedSession(raw: unknown): ArchivedSession | null {
   const records = Array.isArray(raw.records)
     ? raw.records.map(parseRecord).filter((r): r is PurchaseRecord => r !== null)
     : [];
-  if (records.length === 0) return null;
 
-  return { id, closedAt, members, records };
+  const status = raw.status === 'closed' ? 'closed' : 'draft';
+  return {
+    id,
+    status,
+    createdAt: typeof raw.createdAt === 'string' ? raw.createdAt : new Date(0).toISOString(),
+    // A closed session with a missing timestamp still needs one to sort and
+    // label by, so it falls back to its creation time rather than null.
+    closedAt:
+      typeof raw.closedAt === 'string'
+        ? raw.closedAt
+        : status === 'closed'
+          ? typeof raw.createdAt === 'string'
+            ? raw.createdAt
+            : new Date(0).toISOString()
+          : null,
+    members,
+    records,
+  };
+}
+
+/**
+ * The one-time v1 -> v2 step. A v1 blob is a single flat `{members, records}`
+ * with no sessions; it becomes one draft session holding exactly that, so
+ * whatever the user had open is still open after the upgrade.
+ */
+function migrateV1(parsed: Record<string, unknown>): Session[] {
+  const members = Array.isArray(parsed.members)
+    ? parsed.members.filter((m): m is string => typeof m === 'string')
+    : [];
+  const records = Array.isArray(parsed.records)
+    ? parsed.records.map(parseRecord).filter((r): r is PurchaseRecord => r !== null)
+    : [];
+  if (members.length === 0 && records.length === 0) return [];
+
+  return [
+    {
+      id: createId('session'),
+      status: 'draft',
+      createdAt: new Date().toISOString(),
+      closedAt: null,
+      members,
+      records,
+    },
+  ];
 }
 
 /**
  * Defensively parse whatever is in localStorage. Anything unrecognisable is
  * dropped rather than allowed to crash the app on boot.
  *
- * v1 blobs have no `archivedSessions`; they default to `[]`, which upgrades
- * them to v2 with no data loss.
+ * A blob with no `sessions` array predates sessions entirely and is migrated
+ * through `migrateV1`.
  */
 export function parseAppData(raw: string | null): AppData {
   if (!raw) return EMPTY_DATA;
@@ -103,20 +143,11 @@ export function parseAppData(raw: string | null): AppData {
   }
   if (!isRecordObject(parsed)) return EMPTY_DATA;
 
-  const members = Array.isArray(parsed.members)
-    ? parsed.members.filter((m): m is string => typeof m === 'string')
-    : [];
-  const records = Array.isArray(parsed.records)
-    ? parsed.records.map(parseRecord).filter((r): r is PurchaseRecord => r !== null)
-    : [];
+  const sessions = Array.isArray(parsed.sessions)
+    ? parsed.sessions.map(parseSession).filter((s): s is Session => s !== null)
+    : migrateV1(parsed);
 
-  const archivedSessions = Array.isArray(parsed.archivedSessions)
-    ? parsed.archivedSessions
-        .map(parseArchivedSession)
-        .filter((s): s is ArchivedSession => s !== null)
-    : [];
-
-  return { schemaVersion: SCHEMA_VERSION, members, records, archivedSessions };
+  return { schemaVersion: SCHEMA_VERSION, sessions };
 }
 
 export function serializeAppData(data: AppData): string {

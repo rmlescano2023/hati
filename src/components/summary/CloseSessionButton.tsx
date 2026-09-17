@@ -2,19 +2,20 @@ import { Button } from '../shared/Button';
 import { useAppData } from '../../context/AppDataContext';
 import styles from './CloseSessionButton.module.css';
 
-const CONFIRM_MESSAGE =
-  'Close this session? Its records will move to History, and Home, Breakdown and Summary will reset for a new session.';
+const CONFIRM_MESSAGE = 'Close this session? It moves to History and can no longer be edited.';
 
 /**
  * Archives the current session. Deliberately not a `danger` button — nothing is
  * deleted, the records just move to History — but it still confirms first,
  * since it clears the three working tabs.
  */
-export function CloseSessionButton() {
+export function CloseSessionButton({ onClosed }: { onClosed: () => void }) {
   const { records, closeSession } = useAppData();
 
   const handleClick = () => {
-    if (window.confirm(CONFIRM_MESSAGE)) closeSession();
+    if (!window.confirm(CONFIRM_MESSAGE)) return;
+    closeSession();
+    onClosed();
   };
 
   return (
@@ -23,7 +24,7 @@ export function CloseSessionButton() {
         Close Session
       </Button>
       <p className={styles.hint}>
-        Files these records under History and starts a fresh session. Your members stay.
+        Files this session under History. You can still view it there, but it becomes read-only.
       </p>
     </div>
   );
