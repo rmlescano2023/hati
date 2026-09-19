@@ -3,12 +3,14 @@ import { Header } from './components/layout/Header';
 import { NavTabs, type TabId } from './components/layout/NavTabs';
 import { PageShell } from './components/layout/PageShell';
 import { SessionWorkspace } from './components/layout/SessionWorkspace';
+import { SyncBanner } from './components/layout/SyncBanner';
 import type { SessionTabId } from './components/layout/SessionTabs';
 import { Button } from './components/shared/Button';
 import { useSessionsStore } from './context/SessionsStoreContext';
 import { HomePage } from './pages/HomePage';
 import { HistoryPage } from './pages/HistoryPage';
 import { HistoryDetailPage } from './pages/HistoryDetailPage';
+import styles from './App.module.css';
 
 /**
  * Top level is just Home and History; opening a session swaps the whole shell
@@ -24,7 +26,7 @@ type Screen =
 const TOP_LEVEL = new Set<Screen['kind']>(['home', 'history']);
 
 export default function App() {
-  const { sessions, createSession } = useSessionsStore();
+  const { sessions, createSession, sync } = useSessionsStore();
   const [screen, setScreen] = useState<Screen>({ kind: 'home' });
 
   const openSession = (sessionId: string) =>
@@ -50,8 +52,19 @@ export default function App() {
     />
   );
 
+  // Nothing can be shown until the first load lands; an empty app would read
+  // as lost data rather than as data still on its way.
+  if (sync.status === 'loading') {
+    return (
+      <PageShell header={<Header />}>
+        <p className={styles.loading}>Loading your sessions…</p>
+      </PageShell>
+    );
+  }
+
   return (
     <PageShell header={<Header />} nav={nav}>
+      <SyncBanner />
       {screen.kind === 'home' && <HomePage onOpenSession={openSession} onNewSession={newSession} />}
       {screen.kind === 'history' && (
         <HistoryPage

@@ -4,5 +4,8 @@ dist
 dist-ssr
 .vite
 *.local
+.env
+.env.*
+!.env.example
 .vercel
 *.log
