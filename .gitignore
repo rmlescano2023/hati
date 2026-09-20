@@ -4,8 +4,11 @@ dist
 dist-ssr
 .vite
 *.local
-.env
-.env.*
+
+# Secrets pulled by `vercel env pull`. The example is intentionally tracked,
+# so the negation must come after the catch-all to survive it.
+.env*
 !.env.example
+
 .vercel
 *.log
