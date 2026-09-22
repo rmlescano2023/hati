@@ -1,0 +1,45 @@
+name: CI
+
+# Every pull request, whatever it targets, plus the pipeline branches
+# themselves so a promotion is checked as well as the PR that proposed it.
+on:
+  pull_request:
+  push:
+    branches: [sit, qat, uat, stg, main]
+
+# A second push to the same branch makes the first run irrelevant.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: build, lint and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # The floor package.json claims to support, so CI tests the claim.
+          # Vercel builds on 24.x, which is strictly newer.
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run lint
+
+      - run: npm test
+
+      # `vite build` fails without a publishable key rather than silently
+      # emitting a bundle with the app tree stripped out, so CI supplies one.
+      # The key is public by design; a placeholder is enough to compile, since
+      # nothing here signs in. Set the repository variable to build with the
+      # real one instead.
+      - run: npm run build
+        env:
+          VITE_CLERK_PUBLISHABLE_KEY: ${{ vars.VITE_CLERK_PUBLISHABLE_KEY || 'pk_test_ci_placeholder' }}
