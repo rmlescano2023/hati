@@ -92,6 +92,9 @@ export function OnboardingTour({ run, screen, onDone }: Props) {
     <Joyride
       steps={steps}
       stepIndex={index}
+      // Without this the component mounts and sits idle: the tour never
+      // starts, with nothing logged to say why.
+      run={run}
       continuous
       onEvent={handleEvent}
       options={{

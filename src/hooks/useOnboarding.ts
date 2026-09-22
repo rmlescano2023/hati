@@ -34,8 +34,11 @@ export function useOnboarding(): Result {
         if (!res.ok) return;
         const body = (await res.json()) as { onboardedAt: string | null };
         if (!cancelled) setShouldRun(body.onboardedAt === null);
-      } catch {
-        // Quietly leave the tour off.
+      } catch (err) {
+        // Not knowing whether someone has seen the tour is no reason to
+        // interrupt them, so the tour stays off — but say so in development,
+        // because a silent failure here looks identical to a broken tour.
+        if (import.meta.env.DEV) console.warn('onboarding: could not read user state', err);
       }
     })();
 
@@ -55,8 +58,9 @@ export function useOnboarding(): Result {
           method: 'PUT',
           headers: { Authorization: `Bearer ${token}` },
         });
-      } catch {
+      } catch (err) {
         // Worst case it runs once more next time.
+        if (import.meta.env.DEV) console.warn('onboarding: could not save user state', err);
       }
     })();
   }, [getToken]);
