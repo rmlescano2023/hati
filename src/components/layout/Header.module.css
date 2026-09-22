@@ -19,6 +19,8 @@
   flex-direction: column;
   justify-content: center;
   min-width: 0;
+  /* Pushes the account menu to the far end of the header. */
+  margin-right: auto;
 }
 
 .title {

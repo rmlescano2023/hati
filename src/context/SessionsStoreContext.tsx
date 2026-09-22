@@ -1,12 +1,11 @@
 import { createContext, useCallback, useContext, useMemo, type ReactNode } from 'react';
-import { useLocalStorageState } from '../hooks/useLocalStorageState';
-import { parseAppData, serializeAppData, STORAGE_KEY } from '../lib/storage';
+import { useServerAppData, type SyncStatus } from '../hooks/useServerAppData';
 import { compareNames, toTitleCase } from '../lib/format';
 import { roundMoney } from '../lib/money';
 import { getItemShares } from '../lib/calculations';
 import { createId } from '../lib/id';
 import { isRecordEditable } from '../lib/freeze';
-import type { AppData, NewPurchaseRecord, PurchaseItem, PurchaseRecord, Session } from '../types';
+import type { NewPurchaseRecord, PurchaseItem, PurchaseRecord, Session } from '../types';
 
 type SessionsStoreValue = {
   sessions: Session[];
@@ -36,6 +35,8 @@ type SessionsStoreValue = {
   ) => void;
   /** Dev-only seeding: swap the whole session list. */
   replaceAllSessions: (sessions: Session[]) => void;
+  /** Where the current data stands with the server. */
+  sync: { status: SyncStatus; error: string | null; retry: () => void };
 };
 
 const SessionsStoreContext = createContext<SessionsStoreValue | null>(null);
@@ -92,10 +93,7 @@ function mapRecordItem(
 }
 
 export function SessionsStoreProvider({ children }: { children: ReactNode }) {
-  const [data, setData] = useLocalStorageState<AppData>(STORAGE_KEY, {
-    deserialize: parseAppData,
-    serialize: serializeAppData,
-  });
+  const { data, setData, status, error, retry } = useServerAppData();
 
   /**
    * Apply `fn` to one session, leaving every other session untouched. Returning
@@ -321,8 +319,12 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
       updateItemMemberAmount,
       replaceSessionData,
       replaceAllSessions,
+      sync: { status, error, retry },
     }),
     [
+      status,
+      error,
+      retry,
       data.sessions,
       createSession,
       closeSession,
