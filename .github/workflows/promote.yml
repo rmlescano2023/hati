@@ -17,11 +17,12 @@ on:
   workflow_dispatch:
     inputs:
       to:
+        # sit is absent on purpose: main reaches it automatically once CI
+        # passes, so offering it here would only invite a redundant run.
         description: Promote into which environment
         required: true
         type: choice
         options:
-          - sit
           - qat
           - uat
           - stg
