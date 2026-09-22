@@ -185,28 +185,67 @@ the arithmetic is deliberate and covered by tests:
 Amounts are Philippine pesos throughout; the currency is not configurable. The
 PDF spells it `PHP` rather than `₱` because DM Sans has no glyph for U+20B1.
 
+### First run
+
+A new account gets a guided walkthrough the first time it signs in: Home, into
+a session, through Expenses, Breakdown and Summary, back out, and finally
+History. It follows what you actually do — a step that asks you to open a tab
+waits until you open it, rather than clicking through on its own — and
+wandering off it ends the tour rather than trapping you in it.
+
+Whether you have seen it is a real column, `users.onboarded_at`, rather than
+something inferred from having no sessions, so it follows the account across
+devices and cannot be re-triggered by clearing data. Finishing and skipping
+count the same.
+
+The tour asks you to create a session in its first step. That session is
+removed when the tour ends, so onboarding does not leave one behind — unless
+you put members or purchases in it, in which case it is yours and stays.
+
 ## Data and privacy
 
-Your data is one JSON document per account — the same `AppData` shape the app
-has always used, `{ schemaVersion, sessions }` — stored in a single `jsonb`
-column keyed by your Clerk user id:
+Your data lives in three tables, keyed to your Clerk user id:
 
 ```sql
-create table app_data (
-  user_id    text primary key,
-  data       jsonb not null,
-  updated_at timestamptz not null default now()
+create table users (
+  id           text primary key,     -- Clerk user id
+  created_at   timestamptz not null default now(),
+  onboarded_at timestamptz           -- null until the first-run tour is done
+);
+
+create table expense_sessions (
+  id         text primary key,
+  user_id    text not null references users (id) on delete cascade,
+  status     text not null check (status in ('draft', 'closed')),
+  created_at timestamptz not null default now(),
+  closed_at  timestamptz,
+  members    jsonb not null default '[]'
+);
+
+create table purchase_records (
+  id         text primary key,
+  session_id text not null references expense_sessions (id) on delete cascade,
+  date       date not null,
+  payor_mode text not null check (payor_mode in ('single', 'multiple')),
+  payors     jsonb not null,
+  items      jsonb not null,
+  created_at timestamptz not null default now()
 );
 ```
 
-Storing the whole document rather than a table per entity keeps the server
-thin: it never needs to understand sessions, records or splits, so all of that
-logic stays in one place, in the browser, where it is already tested.
+Sessions and records are real rows; items and payors stay as JSON on the
+record. Nothing in the app queries an item independently of the purchase it
+belongs to, so splitting those out further would add tables, and move
+knowledge of how splits work onto the server, for no query it would serve.
 
-Every write goes through `parseAppData` **on the server** as well as in the
-browser, so a hostile or malformed request cannot put something in the database
-that the app would later choke on. The same function still handles the v1
-upgrade, for blobs that predate sessions.
+The point of rows rather than one document per account is write size. Editing
+one item's price used to rewrite an account's entire history; now it touches
+only the session it belongs to.
+
+Every write goes through the app's own parser **on the server** as well as in
+the browser, so a hostile or malformed request cannot put something in the
+database that the app would later choke on. A write names one session, so that
+check is scoped to that session rather than run over everything you own.
 
 Writes are optimistic: the screen updates immediately and the save follows. If
 a save fails you get a banner saying so, rather than finding out when the data

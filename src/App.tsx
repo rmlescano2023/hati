@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Header } from './components/layout/Header';
 import { NavTabs, type TabId } from './components/layout/NavTabs';
 import { PageShell } from './components/layout/PageShell';
@@ -10,6 +10,9 @@ import { useSessionsStore } from './context/SessionsStoreContext';
 import { HomePage } from './pages/HomePage';
 import { HistoryPage } from './pages/HistoryPage';
 import { HistoryDetailPage } from './pages/HistoryDetailPage';
+import { OnboardingTour } from './components/onboarding/OnboardingTour';
+import type { ScreenShape } from './components/onboarding/steps';
+import { useOnboarding } from './hooks/useOnboarding';
 import styles from './App.module.css';
 
 /**
@@ -26,12 +29,41 @@ type Screen =
 const TOP_LEVEL = new Set<Screen['kind']>(['home', 'history']);
 
 export default function App() {
-  const { sessions, createSession, sync } = useSessionsStore();
+  const { sessions, createSession, deleteSession, sync } = useSessionsStore();
   const [screen, setScreen] = useState<Screen>({ kind: 'home' });
+  const { shouldRun: runTour, markSeen } = useOnboarding();
+
+  /**
+   * The session the tour asked the user to create, so it can be cleared up
+   * afterwards — onboarding should not leave a session nobody meant to make.
+   */
+  const tourSession = useRef<string | null>(null);
 
   const openSession = (sessionId: string) =>
     setScreen({ kind: 'session', sessionId, tab: 'expenses' });
-  const newSession = () => openSession(createSession());
+  const newSession = () => {
+    const id = createSession();
+    if (runTour && tourSession.current === null) tourSession.current = id;
+    openSession(id);
+  };
+
+  const endTour = useCallback(() => {
+    const id = tourSession.current;
+    tourSession.current = null;
+    markSeen();
+
+    if (id === null) return;
+    // Keep it if they actually put something in it — silently deleting what
+    // someone typed is worse than leaving a session behind.
+    const created = sessions.find((s) => s.id === id);
+    const untouched = created && created.members.length === 0 && created.records.length === 0;
+    if (untouched) {
+      deleteSession(id);
+      setScreen((current) =>
+        current.kind === 'session' && current.sessionId === id ? { kind: 'home' } : current,
+      );
+    }
+  }, [deleteSession, markSeen, sessions]);
 
   // An empty Home carries the action in its own empty state, so the nav row
   // drops it there rather than offering the same button twice.
@@ -44,7 +76,7 @@ export default function App() {
       onChange={(tab) => setScreen({ kind: tab })}
       actions={
         showNewSession && (
-          <Button variant="primary" onClick={newSession}>
+          <Button variant="primary" data-tour="new-session" onClick={newSession}>
             + New Session
           </Button>
         )
@@ -62,8 +94,15 @@ export default function App() {
     );
   }
 
+  // The tour only needs the shape of the screen, not which session is open.
+  const tourScreen: ScreenShape =
+    screen.kind === 'session'
+      ? { kind: 'session', tab: screen.tab }
+      : { kind: screen.kind === 'historyDetail' ? 'history' : screen.kind };
+
   return (
     <PageShell header={<Header />} nav={nav}>
+      <OnboardingTour run={runTour} screen={tourScreen} onDone={endTour} />
       <SyncBanner />
       {screen.kind === 'home' && <HomePage onOpenSession={openSession} onNewSession={newSession} />}
       {screen.kind === 'history' && (
