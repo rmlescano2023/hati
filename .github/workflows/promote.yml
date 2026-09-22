@@ -11,10 +11,11 @@ on:
         required: true
         type: choice
         options:
+          - sit
           - qat
           - uat
           - stg
-          - main
+          - prod
       merge:
         description: Merge the pull request immediately instead of leaving it open for review
         type: boolean
@@ -42,10 +43,11 @@ jobs:
         run: |
           to="${{ inputs.to }}"
           case "$to" in
+            sit)  from=main ;;
             qat)  from=sit ;;
             uat)  from=qat ;;
             stg)  from=uat ;;
-            main) from=stg ;;
+            prod) from=stg ;;
             *)    echo "::error::$to is not a promotion target"; exit 1 ;;
           esac
           echo "from=$from" >> "$GITHUB_OUTPUT"
