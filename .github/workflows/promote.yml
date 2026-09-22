@@ -1,9 +1,19 @@
 name: Promote
 
-# Promotion is deliberate: it moves the commits that are already on one
-# environment branch to the next one, unchanged. Nothing is rebuilt, and the
-# steps are fixed so a stage cannot be skipped.
+# Promotion moves the commits that are already on one environment branch to
+# the next one, unchanged. Nothing is rebuilt, and the steps are fixed so a
+# stage cannot be skipped.
+#
+# The first hop, main -> sit, runs by itself; every later one is deliberate.
 on:
+  # Not `push` to main: that fires while CI is still running on the commit
+  # that was just merged, so the promotion would race the very check it needs
+  # to pass. Waiting for CI to finish means a red main never reaches SIT.
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
   workflow_dispatch:
     inputs:
       to:
@@ -27,8 +37,11 @@ permissions:
 
 jobs:
   promote:
-    name: promote to ${{ inputs.to }}
     runs-on: ubuntu-latest
+    # A failed or cancelled CI run must not promote anything.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
@@ -36,12 +49,27 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Resolved in a step rather than in a YAML expression, because a
+      # `merge` of false and an unset `merge` are not the same thing and the
+      # usual `||` fallback cannot tell them apart.
+      - name: Resolve what to promote
+        id: inputs
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "to=${{ inputs.to }}"       >> "$GITHUB_OUTPUT"
+            echo "merge=${{ inputs.merge }}" >> "$GITHUB_OUTPUT"
+          else
+            # Automatic: CI passed on main, so SIT follows it.
+            echo "to=sit"    >> "$GITHUB_OUTPUT"
+            echo "merge=true" >> "$GITHUB_OUTPUT"
+          fi
+
       # The pipeline order is fixed, so naming the destination is enough to
       # know where it comes from — and makes skipping a stage impossible.
       - name: Work out the source branch
         id: branches
         run: |
-          to="${{ inputs.to }}"
+          to="${{ steps.inputs.outputs.to }}"
           case "$to" in
             sit)  from=main ;;
             qat)  from=sit ;;
@@ -90,7 +118,7 @@ jobs:
           echo "url=$(gh pr view "$number" --json url --jq .url)" >> "$GITHUB_OUTPUT"
 
       - name: Merge it
-        if: steps.diff.outputs.ahead != '0' && inputs.merge
+        if: steps.diff.outputs.ahead != '0' && steps.inputs.outputs.merge == 'true'
         run: gh pr merge "${{ steps.pr.outputs.number }}" --merge
 
       - name: Summary
@@ -101,7 +129,7 @@ jobs:
             if [ "${{ steps.diff.outputs.ahead }}" = "0" ]; then
               echo "### Nothing to promote"
               echo "\`$to\` already contains everything on \`$from\`."
-            elif [ "${{ inputs.merge }}" = "true" ]; then
+            elif [ "${{ steps.inputs.outputs.merge }}" = "true" ]; then
               echo "### Promoted \`$from\` to \`$to\`"
               echo "${{ steps.pr.outputs.url }} — merged."
             else
