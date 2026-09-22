@@ -1,0 +1,102 @@
+name: Promote
+
+# Promotion is deliberate: it moves the commits that are already on one
+# environment branch to the next one, unchanged. Nothing is rebuilt, and the
+# steps are fixed so a stage cannot be skipped.
+on:
+  workflow_dispatch:
+    inputs:
+      step:
+        description: Which promotion to run
+        required: true
+        type: choice
+        options:
+          - sit to qat
+          - qat to uat
+          - uat to stg
+          - stg to main
+      merge:
+        description: Merge the pull request immediately instead of leaving it open for review
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  promote:
+    name: ${{ inputs.step }}
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Work out the branches
+        id: branches
+        run: |
+          step="${{ inputs.step }}"
+          from="${step%% to *}"
+          to="${step##* to }"
+          echo "from=$from" >> "$GITHUB_OUTPUT"
+          echo "to=$to"     >> "$GITHUB_OUTPUT"
+          echo "Promoting $from to $to"
+
+      - name: Check there is something to promote
+        id: diff
+        run: |
+          from="${{ steps.branches.outputs.from }}"
+          to="${{ steps.branches.outputs.to }}"
+          ahead=$(git rev-list --count "origin/$to..origin/$from")
+          echo "ahead=$ahead" >> "$GITHUB_OUTPUT"
+          if [ "$ahead" -eq 0 ]; then
+            echo "::notice::$to already contains everything on $from — nothing to promote."
+          else
+            echo "$from is $ahead commit(s) ahead of $to:"
+            git log --oneline "origin/$to..origin/$from"
+          fi
+
+      - name: Open or reuse the promotion pull request
+        if: steps.diff.outputs.ahead != '0'
+        id: pr
+        run: |
+          from="${{ steps.branches.outputs.from }}"
+          to="${{ steps.branches.outputs.to }}"
+
+          existing=$(gh pr list --base "$to" --head "$from" --state open --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            echo "Reusing open pull request #$existing"
+            number="$existing"
+          else
+            body=$(printf '%s\n\n%s' \
+              "Moves the commits already on \`$from\` forward to \`$to\`, unchanged." \
+              "Opened by the **Promote** workflow. Merge with a merge commit so both branches keep identical history — squashing or rebasing here would make \`$from\` and \`$to\` diverge permanently.")
+            gh pr create --base "$to" --head "$from" --title "Promote $from to $to" --body "$body"
+            number=$(gh pr list --base "$to" --head "$from" --state open --json number --jq '.[0].number')
+          fi
+          echo "number=$number" >> "$GITHUB_OUTPUT"
+          echo "url=$(gh pr view "$number" --json url --jq .url)" >> "$GITHUB_OUTPUT"
+
+      - name: Merge it
+        if: steps.diff.outputs.ahead != '0' && inputs.merge
+        run: gh pr merge "${{ steps.pr.outputs.number }}" --merge
+
+      - name: Summary
+        run: |
+          from="${{ steps.branches.outputs.from }}"
+          to="${{ steps.branches.outputs.to }}"
+          {
+            if [ "${{ steps.diff.outputs.ahead }}" = "0" ]; then
+              echo "### Nothing to promote"
+              echo "\`$to\` already contains everything on \`$from\`."
+            elif [ "${{ inputs.merge }}" = "true" ]; then
+              echo "### Promoted \`$from\` to \`$to\`"
+              echo "${{ steps.pr.outputs.url }} — merged."
+            else
+              echo "### Pull request ready"
+              echo "${{ steps.pr.outputs.url }} — review and merge it to finish the promotion."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
