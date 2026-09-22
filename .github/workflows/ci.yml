@@ -1,11 +1,20 @@
 name: CI
 
-# Every pull request, whatever it targets, plus the pipeline branches
-# themselves so a deployment is checked as well as the PR that proposed it.
 on:
+  # Only pull requests into main — those are the ones proposing new code.
+  #
+  # A deployment pull request moves commits that main has already tested, and
+  # it is opened by github-actions[bot], whose runs sit awaiting approval and
+  # expire as failures. Skipping them removes a permanently red check that
+  # gated nothing: the required check comes from the push run below, which
+  # attaches to the same commit.
   pull_request:
+    branches: [main]
+
+  # Every pipeline branch, so a deployment is checked once it lands as well as
+  # when it was proposed.
   push:
-    branches: [sit, qat, uat, stg, main]
+    branches: [main, sit, qat, uat, stg, prod]
 
 # A second push to the same branch makes the first run irrelevant.
 concurrency:
