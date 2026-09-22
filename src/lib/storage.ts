@@ -68,7 +68,8 @@ function parseRecord(raw: unknown): PurchaseRecord | null {
   };
 }
 
-function parseSession(raw: unknown): Session | null {
+/** Exported so the API can validate one session without parsing a whole document. */
+export function parseSession(raw: unknown): Session | null {
   if (!isRecordObject(raw)) return null;
   const id = typeof raw.id === 'string' ? raw.id : null;
   if (!id) return null;

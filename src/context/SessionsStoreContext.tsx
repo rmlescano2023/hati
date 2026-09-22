@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useMemo, type ReactNode } from 'react';
-import { useServerAppData, type SyncStatus } from '../hooks/useServerAppData';
+import { useServerSessions, type SyncStatus } from '../hooks/useServerSessions';
 import { compareNames, toTitleCase } from '../lib/format';
 import { roundMoney } from '../lib/money';
 import { getItemShares } from '../lib/calculations';
@@ -93,25 +93,24 @@ function mapRecordItem(
 }
 
 export function SessionsStoreProvider({ children }: { children: ReactNode }) {
-  const { data, setData, status, error, retry } = useServerAppData();
+  const { sessions, mutateSession, addSession, removeSession, replaceAll, status, error, retry } =
+    useServerSessions();
 
   /**
    * Apply `fn` to one session, leaving every other session untouched. Returning
    * the session unchanged (or the same object) makes the whole update a no-op.
    */
+  /**
+   * Apply `fn` to one session, leaving every other session untouched.
+   * Returning the session unchanged (or the same object) makes the whole
+   * update a no-op — including the write, which now names this session alone
+   * rather than rewriting the account.
+   */
   const updateSession = useCallback(
     (sessionId: string, fn: (session: Session) => Session) => {
-      setData((prev) => {
-        const index = prev.sessions.findIndex((s) => s.id === sessionId);
-        if (index === -1) return prev;
-        const next = fn(prev.sessions[index]);
-        if (next === prev.sessions[index]) return prev;
-        const sessions = [...prev.sessions];
-        sessions[index] = next;
-        return { ...prev, sessions };
-      });
+      mutateSession(sessionId, fn);
     },
-    [setData],
+    [mutateSession],
   );
 
   /** The common case: rewrite one session's records, guarded by the freeze rule. */
@@ -128,22 +127,18 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
 
   const createSession = useCallback((): string => {
     const id = createId('session');
-    setData((prev) => ({
-      ...prev,
-      sessions: [
-        ...prev.sessions,
-        {
-          id,
-          status: 'draft',
-          createdAt: new Date().toISOString(),
-          closedAt: null,
-          members: [],
-          records: [],
-        },
-      ],
-    }));
+    // The caller navigates into the session immediately, so the id is minted
+    // here and the server catches up rather than being awaited.
+    addSession({
+      id,
+      status: 'draft',
+      createdAt: new Date().toISOString(),
+      closedAt: null,
+      members: [],
+      records: [],
+    });
     return id;
-  }, [setData]);
+  }, [addSession]);
 
   const closeSession = useCallback(
     (sessionId: string) => {
@@ -158,16 +153,16 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
 
   const deleteSession = useCallback(
     (sessionId: string) => {
-      setData((prev) => ({ ...prev, sessions: prev.sessions.filter((s) => s.id !== sessionId) }));
+      removeSession(sessionId);
     },
-    [setData],
+    [removeSession],
   );
 
   const addMember = useCallback(
     (sessionId: string, rawName: string): boolean => {
       const name = toTitleCase(rawName);
       if (!name) return false;
-      const session = data.sessions.find((s) => s.id === sessionId);
+      const session = sessions.find((s) => s.id === sessionId);
       if (session?.members.some((m) => compareNames(m, name) === 0)) return false;
 
       updateSession(sessionId, (s) =>
@@ -177,7 +172,7 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
       );
       return true;
     },
-    [data.sessions, updateSession],
+    [sessions, updateSession],
   );
 
   const removeMember = useCallback(
@@ -297,14 +292,11 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
     [updateSession],
   );
 
-  const replaceAllSessions = useCallback(
-    (sessions: Session[]) => setData((prev) => ({ ...prev, sessions })),
-    [setData],
-  );
+  const replaceAllSessions = useCallback((next: Session[]) => replaceAll(next), [replaceAll]);
 
   const value = useMemo<SessionsStoreValue>(
     () => ({
-      sessions: data.sessions,
+      sessions,
       createSession,
       closeSession,
       deleteSession,
@@ -325,7 +317,7 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
       status,
       error,
       retry,
-      data.sessions,
+      sessions,
       createSession,
       closeSession,
       deleteSession,

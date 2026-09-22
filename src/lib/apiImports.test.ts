@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 
 /**
@@ -34,10 +34,17 @@ function walk(entry: string, seen = new Set<string>()): string[] {
   return found;
 }
 
+/** Every .ts under api/, at any depth — endpoints live in subdirectories. */
+function endpoints(dir: string): string[] {
+  return readdirSync(dir).flatMap((name) => {
+    const full = join(dir, name);
+    if (statSync(full).isDirectory()) return endpoints(full);
+    return full.endsWith('.ts') ? [full] : [];
+  });
+}
+
 describe('api runtime imports', () => {
-  const entries = readdirSync(join(ROOT, 'api'))
-    .filter((f) => f.endsWith('.ts'))
-    .map((f) => join(ROOT, 'api', f));
+  const entries = endpoints(join(ROOT, 'api'));
 
   it('has at least one endpoint to check', () => {
     expect(entries.length).toBeGreaterThan(0);
