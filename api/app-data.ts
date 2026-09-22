@@ -13,11 +13,15 @@ import { EMPTY_DATA, parseAppData, serializeAppData } from '../src/lib/storage';
  */
 
 /**
- * The connection variable Vercel created for this project is prefixed, so the
- * zero-config `POSTGRES_URL` the client looks for by default is absent — the
- * pooled URL is passed explicitly instead.
+ * `POSTGRES_DATABASE_URL` is managed by the Vercel-Neon integration and applies
+ * to every environment, so it cannot be pointed at a different database per
+ * stage. `HATI_DATABASE_URL` is ours to scope per preview branch, which is how
+ * SIT and QAT get their own Neon branch; it wins where it is set, and the
+ * integration's own variable remains the default everywhere else.
  */
-const pool = createPool({ connectionString: process.env.POSTGRES_DATABASE_URL });
+const pool = createPool({
+  connectionString: process.env.HATI_DATABASE_URL ?? process.env.POSTGRES_DATABASE_URL,
+});
 
 /** The Clerk user id behind this request, or null if it isn't authenticated. */
 async function getUserId(req: VercelRequest): Promise<string | null> {
