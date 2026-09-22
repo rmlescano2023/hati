@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createPool } from '@vercel/postgres';
 import { verifyToken } from '@clerk/backend';
-import { EMPTY_DATA, parseAppData, serializeAppData } from '../src/lib/storage';
+import { EMPTY_DATA, parseAppData, serializeAppData } from '../src/lib/storage.js';
 
 /**
  * One row per account holding that account's whole `AppData` blob.

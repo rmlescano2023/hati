@@ -1,6 +1,6 @@
 import type { AppData, PurchaseItem, PurchaseRecord, Session } from '../types';
-import { roundMoney } from './money';
-import { createId } from './id';
+import { roundMoney } from './money.js';
+import { createId } from './id.js';
 
 export const STORAGE_KEY = 'hati:data:v1';
 export const SCHEMA_VERSION = 2;
