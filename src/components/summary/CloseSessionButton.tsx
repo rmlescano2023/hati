@@ -15,7 +15,12 @@ export function CloseSessionButton({ onClosed }: { onClosed: () => void }) {
 
   return (
     <div className={styles.wrap}>
-      <Button size="lg" onClick={() => setConfirming(true)} disabled={records.length === 0}>
+      <Button
+        size="lg"
+        data-tour="finish-session"
+        onClick={() => setConfirming(true)}
+        disabled={records.length === 0}
+      >
         Finish Session
       </Button>
       <p className={styles.hint}>Files this session under History.</p>

@@ -8,6 +8,11 @@ create table if not exists users (
   created_at timestamptz not null default now()
 );
 
+-- Null means the onboarding tour has not been finished or skipped yet. A real
+-- column rather than an inferred proxy like "has no sessions", so it follows
+-- the account across devices and cannot be re-triggered by deleting data.
+alter table users add column if not exists onboarded_at timestamptz;
+
 create table if not exists expense_sessions (
   id         text primary key,          -- keeps the existing "session_xxx" ids
   user_id    text not null references users (id) on delete cascade,

@@ -28,7 +28,7 @@ export function SessionWorkspace({ sessionId, tab, onTabChange, onBack, onClosed
   return (
     <AppDataProvider sessionId={sessionId}>
       <div className={styles.bar}>
-        <Button variant="ghost" size="sm" onClick={onBack}>
+        <Button variant="ghost" size="sm" data-tour="workspace-back" onClick={onBack}>
           ← All sessions
         </Button>
         {session && <span className={styles.started}>{sessionTitle(session)}</span>}
