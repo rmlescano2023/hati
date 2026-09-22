@@ -1,7 +1,7 @@
 /**
  * Applies schema.sql to whichever database HATI_DATABASE_URL points at.
  * Idempotent — every statement is `if not exists` — so it is safe to re-run,
- * and safe to point at `prod` when that branch is first promoted to.
+ * and safe to point at `prod` when that branch is first deployed to.
  */
 import { readFileSync } from 'node:fs';
 import { createPool } from '@vercel/postgres';

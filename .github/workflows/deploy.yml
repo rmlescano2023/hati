@@ -1,13 +1,13 @@
-name: Promote
+name: Deploy
 
-# Promotion moves the commits that are already on one environment branch to
+# Deploying moves the commits that are already on one environment branch to
 # the next one, unchanged. Nothing is rebuilt, and the steps are fixed so a
 # stage cannot be skipped.
 #
 # The first hop, main -> sit, runs by itself; every later one is deliberate.
 on:
   # Not `push` to main: that fires while CI is still running on the commit
-  # that was just merged, so the promotion would race the very check it needs
+  # that was just merged, so the deployment would race the very check it needs
   # to pass. Waiting for CI to finish means a red main never reaches SIT.
   workflow_run:
     workflows: [CI]
@@ -19,7 +19,7 @@ on:
       to:
         # sit is absent on purpose: main reaches it automatically once CI
         # passes, so offering it here would only invite a redundant run.
-        description: Promote into which environment
+        description: Deploy into which environment
         required: true
         type: choice
         options:
@@ -37,9 +37,9 @@ permissions:
   pull-requests: write
 
 jobs:
-  promote:
+  deploy:
     runs-on: ubuntu-latest
-    # A failed or cancelled CI run must not promote anything.
+    # A failed or cancelled CI run must not deploy anything.
     if: >-
       github.event_name == 'workflow_dispatch' ||
       github.event.workflow_run.conclusion == 'success'
@@ -53,7 +53,7 @@ jobs:
       # Resolved in a step rather than in a YAML expression, because a
       # `merge` of false and an unset `merge` are not the same thing and the
       # usual `||` fallback cannot tell them apart.
-      - name: Resolve what to promote
+      - name: Resolve what to deploy
         id: inputs
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
@@ -77,13 +77,13 @@ jobs:
             uat)  from=qat ;;
             stg)  from=uat ;;
             prod) from=stg ;;
-            *)    echo "::error::$to is not a promotion target"; exit 1 ;;
+            *)    echo "::error::$to is not a deployment target"; exit 1 ;;
           esac
           echo "from=$from" >> "$GITHUB_OUTPUT"
           echo "to=$to"     >> "$GITHUB_OUTPUT"
-          echo "Promoting $from to $to"
+          echo "Deploying $from to $to"
 
-      - name: Check there is something to promote
+      - name: Check there is something to deploy
         id: diff
         run: |
           from="${{ steps.branches.outputs.from }}"
@@ -91,13 +91,13 @@ jobs:
           ahead=$(git rev-list --count "origin/$to..origin/$from")
           echo "ahead=$ahead" >> "$GITHUB_OUTPUT"
           if [ "$ahead" -eq 0 ]; then
-            echo "::notice::$to already contains everything on $from — nothing to promote."
+            echo "::notice::$to already contains everything on $from — nothing to deploy."
           else
             echo "$from is $ahead commit(s) ahead of $to:"
             git log --oneline "origin/$to..origin/$from"
           fi
 
-      - name: Open or reuse the promotion pull request
+      - name: Open or reuse the deployment pull request
         if: steps.diff.outputs.ahead != '0'
         id: pr
         run: |
@@ -111,8 +111,8 @@ jobs:
           else
             body=$(printf '%s\n\n%s' \
               "Moves the commits already on \`$from\` forward to \`$to\`, unchanged." \
-              "Opened by the **Promote** workflow. Merge with a merge commit so both branches keep identical history — squashing or rebasing here would make \`$from\` and \`$to\` diverge permanently.")
-            gh pr create --base "$to" --head "$from" --title "Promote $from to $to" --body "$body"
+              "Opened by the **Deploy** workflow. Merge with a merge commit so both branches keep identical history — squashing or rebasing here would make \`$from\` and \`$to\` diverge permanently.")
+            gh pr create --base "$to" --head "$from" --title "Deploy $from to $to" --body "$body"
             number=$(gh pr list --base "$to" --head "$from" --state open --json number --jq '.[0].number')
           fi
           echo "number=$number" >> "$GITHUB_OUTPUT"
@@ -128,13 +128,13 @@ jobs:
           to="${{ steps.branches.outputs.to }}"
           {
             if [ "${{ steps.diff.outputs.ahead }}" = "0" ]; then
-              echo "### Nothing to promote"
+              echo "### Nothing to deploy"
               echo "\`$to\` already contains everything on \`$from\`."
             elif [ "${{ steps.inputs.outputs.merge }}" = "true" ]; then
-              echo "### Promoted \`$from\` to \`$to\`"
+              echo "### Deployed \`$from\` to \`$to\`"
               echo "${{ steps.pr.outputs.url }} — merged."
             else
               echo "### Pull request ready"
-              echo "${{ steps.pr.outputs.url }} — review and merge it to finish the promotion."
+              echo "${{ steps.pr.outputs.url }} — review and merge it to finish the deployment."
             fi
           } >> "$GITHUB_STEP_SUMMARY"

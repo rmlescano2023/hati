@@ -1,7 +1,7 @@
 name: CI
 
 # Every pull request, whatever it targets, plus the pipeline branches
-# themselves so a promotion is checked as well as the PR that proposed it.
+# themselves so a deployment is checked as well as the PR that proposed it.
 on:
   pull_request:
   push:
