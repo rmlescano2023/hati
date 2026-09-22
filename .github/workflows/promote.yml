@@ -6,15 +6,15 @@ name: Promote
 on:
   workflow_dispatch:
     inputs:
-      step:
-        description: Which promotion to run
+      to:
+        description: Promote into which environment
         required: true
         type: choice
         options:
-          - sit to qat
-          - qat to uat
-          - uat to stg
-          - stg to main
+          - qat
+          - uat
+          - stg
+          - main
       merge:
         description: Merge the pull request immediately instead of leaving it open for review
         type: boolean
@@ -26,7 +26,7 @@ permissions:
 
 jobs:
   promote:
-    name: ${{ inputs.step }}
+    name: promote to ${{ inputs.to }}
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -35,12 +35,19 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Work out the branches
+      # The pipeline order is fixed, so naming the destination is enough to
+      # know where it comes from — and makes skipping a stage impossible.
+      - name: Work out the source branch
         id: branches
         run: |
-          step="${{ inputs.step }}"
-          from="${step%% to *}"
-          to="${step##* to }"
+          to="${{ inputs.to }}"
+          case "$to" in
+            qat)  from=sit ;;
+            uat)  from=qat ;;
+            stg)  from=uat ;;
+            main) from=stg ;;
+            *)    echo "::error::$to is not a promotion target"; exit 1 ;;
+          esac
           echo "from=$from" >> "$GITHUB_OUTPUT"
           echo "to=$to"     >> "$GITHUB_OUTPUT"
           echo "Promoting $from to $to"
