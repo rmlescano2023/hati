@@ -42,6 +42,9 @@ export function OnboardingTour({ run, screen, onDone }: Props) {
         // is the Next/Finish button in this library's vocabulary.
         buttons: (s.waitsForAction ? ['skip'] : ['skip', 'primary']) as ButtonType[],
         blockTargetInteraction: false,
+        // Otherwise each step waits behind a small pulsing dot that has to be
+        // found and clicked first. A walkthrough should speak up on its own.
+        skipBeacon: true,
       })),
     [],
   );
