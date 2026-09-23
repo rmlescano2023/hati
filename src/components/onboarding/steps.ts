@@ -14,29 +14,24 @@ export type TourStep = {
    * screen is not mounted.
    */
   screen: ScreenShape;
-  /**
-   * An action step waits for the user to do the thing and advances when the
-   * screen changes to what the next step needs. An explanation step advances
-   * on its own Next button.
-   */
-  waitsForAction: boolean;
 };
 
 /**
  * The walkthrough follows the app's real shape: start on Home, open a session,
  * move through its three tabs, come back out, finish on History.
  *
- * Steps that move between screens wait for the user rather than navigating for
- * them — the tour narrates what they do instead of driving the app itself.
+ * Next carries the reader through it. Each step names the screen it needs, and
+ * pressing Next takes them there — so someone can read the whole thing without
+ * having to work out which control to press, and without a half-finished
+ * session if they stop early.
  */
 export const TOUR_STEPS: TourStep[] = [
   {
     target: 'new-session',
     title: 'Start a session',
     content:
-      'A session is one trip or night out. Everything spent together goes in one, and you settle it up at the end. Open one to see how it works.',
+      'A session is one trip or night out. Everything spent together goes in one, and you settle it up at the end.',
     screen: { kind: 'home' },
-    waitsForAction: true,
   },
   {
     target: 'tab-expenses',
@@ -44,14 +39,12 @@ export const TOUR_STEPS: TourStep[] = [
     content:
       'Add the people sharing the cost, then record each purchase. Split evenly or give each person an exact amount — one purchase can mix both.',
     screen: { kind: 'session', tab: 'expenses' },
-    waitsForAction: false,
   },
   {
     target: 'tab-breakdown',
     title: 'Check the numbers',
-    content: 'Open Breakdown to see every purchase, item by item.',
+    content: 'Breakdown lists every purchase, item by item.',
     screen: { kind: 'session', tab: 'expenses' },
-    waitsForAction: true,
   },
   {
     target: 'tab-breakdown',
@@ -59,36 +52,35 @@ export const TOUR_STEPS: TourStep[] = [
     content:
       'One row per item, one column per person, and every cell edits in place. Purchases older than seven days lock, so old records stay put.',
     screen: { kind: 'session', tab: 'breakdown' },
-    waitsForAction: false,
   },
   {
     target: 'tab-summary',
     title: 'See who owes whom',
-    content: 'Open Summary for the part everyone actually wants.',
+    content: 'Summary has the part everyone actually wants.',
     screen: { kind: 'session', tab: 'breakdown' },
-    waitsForAction: true,
   },
   {
-    target: 'finish-session',
+    // Deliberately the tab and not the Finish Session button: the tour's
+    // session is empty, and Summary shows an empty state instead of its
+    // controls until something has been logged. A step can only point at
+    // what is on screen for a brand-new account.
+    target: 'tab-summary',
     title: 'Settle up and finish',
     content:
-      'Summary works out who pays whom, cancelling debts that run both ways. Download it as a PDF, and once everyone has paid, finish the session to file it away.',
+      'Summary works out who pays whom, cancelling debts that run both ways. You can download it as a PDF, and once everyone has paid, finish the session to file it away.',
     screen: { kind: 'session', tab: 'summary' },
-    waitsForAction: false,
   },
   {
     target: 'workspace-back',
     title: 'Leave it for later',
-    content: 'Leaving loses nothing — the session stays open and waiting. Head back out.',
+    content: 'Leaving loses nothing — the session stays open and waiting for you on Home.',
     screen: { kind: 'session', tab: 'summary' },
-    waitsForAction: true,
   },
   {
     target: 'nav-history',
     title: 'Look back at old sessions',
-    content: 'Finished sessions move to History. Open it to see what lives there.',
+    content: 'Finished sessions move to History.',
     screen: { kind: 'home' },
-    waitsForAction: true,
   },
   {
     target: 'nav-history',
@@ -96,7 +88,6 @@ export const TOUR_STEPS: TourStep[] = [
     content:
       'Every session you finish ends up here, read-only, with its own statement to download. That is the whole app — go and add a real one.',
     screen: { kind: 'history' },
-    waitsForAction: false,
   },
 ];
 

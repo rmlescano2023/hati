@@ -27,30 +27,36 @@ describe('the tour sequence', () => {
     expect(TOUR_STEPS[TOUR_STEPS.length - 1].screen).toEqual({ kind: 'history' });
   });
 
-  it('never asks the user to act on the last step', () => {
-    // There would be nothing to advance to.
-    expect(TOUR_STEPS[TOUR_STEPS.length - 1].waitsForAction).toBe(false);
+  it('visits every part of the app', () => {
+    const seen = new Set(
+      TOUR_STEPS.map((s) =>
+        s.screen.kind === 'session' ? `session:${s.screen.tab}` : s.screen.kind,
+      ),
+    );
+    expect([...seen].sort()).toEqual([
+      'history',
+      'home',
+      'session:breakdown',
+      'session:expenses',
+      'session:summary',
+    ]);
   });
 
-  it('makes every screen change an action step', () => {
-    // A step that needs a different screen from the one before it can only be
-    // reached by the user navigating, so the step before it must wait.
-    for (let i = 1; i < TOUR_STEPS.length; i += 1) {
-      const prev = TOUR_STEPS[i - 1];
-      const changesScreen = !screenMatches(TOUR_STEPS[i].screen, prev.screen);
-      if (changesScreen) {
-        expect(prev.waitsForAction, `step ${i - 1} precedes a screen change`).toBe(true);
-      }
-    }
+  it('enters and leaves the session workspace exactly once', () => {
+    // Home appears twice on purpose — the tour goes in, then comes back out to
+    // show that leaving keeps the session. But bouncing in and out of the
+    // workspace would read as the app navigating at random.
+    const inSession = TOUR_STEPS.map((s) => s.screen.kind === 'session');
+    const entries = inSession.filter((v, i) => v && !inSession[i - 1]).length;
+    expect(entries).toBe(1);
   });
 
-  it('never waits for an action that does not change the screen', () => {
-    // Such a step could never advance: nothing would signal completion.
-    for (let i = 0; i < TOUR_STEPS.length - 1; i += 1) {
-      if (!TOUR_STEPS[i].waitsForAction) continue;
-      const changesScreen = !screenMatches(TOUR_STEPS[i + 1].screen, TOUR_STEPS[i].screen);
-      expect(changesScreen, `step ${i} waits but the screen never changes`).toBe(true);
-    }
+  it('moves through the session tabs in the order the app presents them', () => {
+    const tabs = TOUR_STEPS.flatMap((s) => (s.screen.kind === 'session' ? [s.screen.tab] : []));
+    const order = ['expenses', 'breakdown', 'summary'] as const;
+    const firstSeen = order.map((t) => tabs.indexOf(t));
+    expect(firstSeen.every((n) => n >= 0)).toBe(true);
+    expect([...firstSeen].sort((a, b) => a - b)).toEqual(firstSeen);
   });
 
   it('gives every step a target and some words', () => {
