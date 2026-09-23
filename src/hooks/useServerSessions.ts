@@ -24,6 +24,24 @@ type Result = {
 const ENDPOINT = '/api/sessions';
 
 /**
+ * Plain `vite` does not serve `/api`, so a request for it is answered with the
+ * endpoint's own TypeScript source. Parsing that as JSON fails deep inside
+ * with "Unexpected token 'i'", which says nothing about the actual problem —
+ * that the API is not running.
+ */
+async function readJson(res: Response): Promise<unknown> {
+  const type = res.headers.get('content-type') ?? '';
+  if (!type.includes('application/json')) {
+    throw new Error(
+      import.meta.env.DEV
+        ? 'The API is not running. Start it with `npm run dev:full` rather than `npm run dev`.'
+        : 'The server sent something unexpected.',
+    );
+  }
+  return res.json();
+}
+
+/**
  * The store's persistence seam, scoped to one session per write.
  *
  * The blob version rewrote an account's entire history on every keystroke that
@@ -71,7 +89,7 @@ export function useServerSessions(): Result {
       try {
         const res = await authedFetch(ENDPOINT, { method: 'GET' });
         if (!res.ok) throw new Error(`Could not load your data (${res.status}).`);
-        const body = (await res.json()) as Session[];
+        const body = (await readJson(res)) as Session[];
         if (cancelled) return;
         setSessions(Array.isArray(body) ? body : []);
         setStatus('ready');

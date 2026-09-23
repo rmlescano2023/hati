@@ -7,7 +7,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "dev": "vite",
+    "dev": "node scripts/dev-warning.mjs && vite",
     "dev:full": "vercel dev",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
