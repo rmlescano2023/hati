@@ -32,7 +32,7 @@ export function SummaryPage({ onClosed }: { onClosed: () => void }) {
   );
 
   if (records.length === 0) {
-    return <EmptyState title="No records yet" description="Add expenses from the Home page." />;
+    return <EmptyState title="No records yet" description="Add expenses from the Expenses tab." />;
   }
 
   return (
