@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Header } from './components/layout/Header';
 import { NavTabs, type TabId } from './components/layout/NavTabs';
 import { PageShell } from './components/layout/PageShell';
@@ -11,6 +11,7 @@ import { HomePage } from './pages/HomePage';
 import { HistoryPage } from './pages/HistoryPage';
 import { HistoryDetailPage } from './pages/HistoryDetailPage';
 import { OnboardingTour } from './components/onboarding/OnboardingTour';
+import { OnboardingDialog } from './components/onboarding/OnboardingDialog';
 import type { ScreenShape } from './components/onboarding/steps';
 import { useOnboarding } from './hooks/useOnboarding';
 import styles from './App.module.css';
@@ -31,7 +32,19 @@ const TOP_LEVEL = new Set<Screen['kind']>(['home', 'history']);
 export default function App() {
   const { sessions, createSession, deleteSession, sync } = useSessionsStore();
   const [screen, setScreen] = useState<Screen>({ kind: 'home' });
-  const { shouldRun: runTour, markSeen } = useOnboarding();
+  const { shouldRun: firstLogin, markSeen } = useOnboarding();
+
+  /**
+   * Onboarding is a small sequence rather than a flag: the offer, the tour
+   * itself, then the sign-off. Only 'running' puts the tour on screen.
+   */
+  const [phase, setPhase] = useState<'off' | 'intro' | 'running' | 'done'>('off');
+
+  // The offer opens as soon as we know this is a first login, and only then —
+  // the guard keeps a later state change from reopening a finished sequence.
+  useEffect(() => {
+    if (firstLogin) setPhase((current) => (current === 'off' ? 'intro' : current));
+  }, [firstLogin]);
 
   /**
    * The session the tour asked the user to create, so it can be cleared up
@@ -43,27 +56,52 @@ export default function App() {
     setScreen({ kind: 'session', sessionId, tab: 'expenses' });
   const newSession = () => {
     const id = createSession();
-    if (runTour && tourSession.current === null) tourSession.current = id;
+    if (phase === 'running' && tourSession.current === null) tourSession.current = id;
     openSession(id);
   };
 
-  const endTour = useCallback(() => {
-    const id = tourSession.current;
-    tourSession.current = null;
-    markSeen();
+  const endTour = useCallback(
+    (completed: boolean) => {
+      const id = tourSession.current;
+      tourSession.current = null;
+      markSeen();
 
-    if (id === null) return;
-    // Keep it if they actually put something in it — silently deleting what
-    // someone typed is worse than leaving a session behind.
-    const created = sessions.find((s) => s.id === id);
-    const untouched = created && created.members.length === 0 && created.records.length === 0;
-    if (untouched) {
-      deleteSession(id);
-      setScreen((current) =>
-        current.kind === 'session' && current.sessionId === id ? { kind: 'home' } : current,
-      );
-    }
-  }, [deleteSession, markSeen, sessions]);
+      if (id !== null) {
+        // Keep it if they actually put something in it — silently deleting
+        // what someone typed is worse than leaving a session behind.
+        const created = sessions.find((s) => s.id === id);
+        const untouched = created && created.members.length === 0 && created.records.length === 0;
+        if (untouched) deleteSession(id);
+      }
+
+      // Whichever way it ended, do not leave them inside a session the tour
+      // opened — and finishing it earns a welcome.
+      setScreen({ kind: 'home' });
+      setPhase(completed ? 'done' : 'off');
+    },
+    [deleteSession, markSeen, sessions],
+  );
+
+  /**
+   * Where the tour sends the app when Next is pressed. A session step needs a
+   * session to exist, so the first one creates it — the same session the tour
+   * clears up when it ends.
+   */
+  const tourNavigate = useCallback(
+    (shape: ScreenShape) => {
+      if (shape.kind !== 'session') {
+        setScreen({ kind: shape.kind });
+        return;
+      }
+      setScreen((current) => {
+        if (current.kind === 'session') return { ...current, tab: shape.tab };
+        const id = createSession();
+        if (tourSession.current === null) tourSession.current = id;
+        return { kind: 'session', sessionId: id, tab: shape.tab };
+      });
+    },
+    [createSession],
+  );
 
   // An empty Home carries the action in its own empty state, so the nav row
   // drops it there rather than offering the same button twice.
@@ -102,7 +140,44 @@ export default function App() {
 
   return (
     <PageShell header={<Header />} nav={nav}>
-      <OnboardingTour run={runTour} screen={tourScreen} onDone={endTour} />
+      <OnboardingDialog
+        open={phase === 'intro'}
+        title="Welcome to Hati"
+        message="Hati splits a group's spending and works out who owes whom. Here's a quick walk through it — it takes about a minute."
+        onDismiss={() => {
+          markSeen();
+          setPhase('off');
+        }}
+      >
+        <Button
+          variant="ghost"
+          onClick={() => {
+            markSeen();
+            setPhase('off');
+          }}
+        >
+          Skip tutorial
+        </Button>
+        <Button variant="primary" onClick={() => setPhase('running')} autoFocus>
+          Take the tour
+        </Button>
+      </OnboardingDialog>
+      <OnboardingTour
+        run={phase === 'running'}
+        screen={tourScreen}
+        onNavigate={tourNavigate}
+        onDone={endTour}
+      />
+      <OnboardingDialog
+        open={phase === 'done'}
+        title="You're all set"
+        message="That's the whole app. Start a session whenever your group spends something together, and Hati will keep track of the rest."
+        onDismiss={() => setPhase('off')}
+      >
+        <Button variant="primary" onClick={() => setPhase('off')} autoFocus>
+          Get started
+        </Button>
+      </OnboardingDialog>
       <SyncBanner />
       {screen.kind === 'home' && <HomePage onOpenSession={openSession} onNewSession={newSession} />}
       {screen.kind === 'history' && (
