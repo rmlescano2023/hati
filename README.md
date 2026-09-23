@@ -137,9 +137,11 @@ vercel env pull .env.local
 npm run dev
 ```
 
-`npm run dev` runs `vercel dev`, not plain Vite, because the app now needs the
-`/api/app-data` endpoint that Vite alone does not serve. `npm run dev:ui` still
-runs Vite by itself if you are only working on UI that does not read data.
+`npm run dev:full` is the one you usually want: it runs `vercel dev`, which
+serves the `/api` endpoints alongside the frontend. `npm run dev` is plain Vite
+and cannot load any data — it says so on startup, and the app will tell you
+again if you try. It has to stay plain Vite because `vercel dev` runs it to
+serve the frontend.
 
 Three environment variables are needed, all of them pulled by the command
 above rather than written by hand — see `.env.example`:
