@@ -4,7 +4,6 @@ import { compareNames, toTitleCase } from '../lib/format';
 import { roundMoney } from '../lib/money';
 import { getItemShares } from '../lib/calculations';
 import { createId } from '../lib/id';
-import { isRecordEditable } from '../lib/freeze';
 import type { NewPurchaseRecord, PurchaseItem, PurchaseRecord, Session } from '../types';
 
 type SessionsStoreValue = {
@@ -65,16 +64,6 @@ function toCustomItem(item: PurchaseItem): PurchaseItem {
   return { id: item.id, mode: 'custom', name: item.name, amounts: getItemShares(item) };
 }
 
-/**
- * Records outside the edit window are read-only. The Breakdown UI already
- * disables their cells; this is the matching guard on the data layer, so a
- * stale render or a direct call can never mutate frozen history.
- */
-function isEditable(records: PurchaseRecord[], recordId: string): boolean {
-  const record = records.find((r) => r.id === recordId);
-  return record !== undefined && isRecordEditable(record.date);
-}
-
 function mapRecordItem(
   records: PurchaseRecord[],
   recordId: string,
@@ -113,14 +102,17 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
     [mutateSession],
   );
 
-  /** The common case: rewrite one session's records, guarded by the freeze rule. */
+  /**
+   * The common case: rewrite one session's records. No age check — a record
+   * stays editable for as long as its session is open, and a closed session
+   * is read-only by its status rather than by the dates inside it.
+   *
+   * `recordId` is still taken so callers read the same way, and so the record
+   * being edited stays named at this seam.
+   */
   const updateRecords = useCallback(
-    (sessionId: string, recordId: string, fn: (records: PurchaseRecord[]) => PurchaseRecord[]) => {
-      updateSession(sessionId, (session) =>
-        isEditable(session.records, recordId)
-          ? { ...session, records: fn(session.records) }
-          : session,
-      );
+    (sessionId: string, _recordId: string, fn: (records: PurchaseRecord[]) => PurchaseRecord[]) => {
+      updateSession(sessionId, (session) => ({ ...session, records: fn(session.records) }));
     },
     [updateSession],
   );

@@ -42,8 +42,7 @@ export function ExportSoaButton({
   };
 
   // Only ever gated on there being something to export — never on a record's
-  // age. The 7-day freeze rule governs Breakdown's edit affordances alone, so a
-  // session stays downloadable however old it gets.
+  // age, and never on whether the session is still open.
   const disabled = busy || records.length === 0;
 
   if (layout === 'inline') {
