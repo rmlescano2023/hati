@@ -34,7 +34,7 @@
      shade is mixed to sit under dark label text so it reads heavy as type.
      Mixed from the two tokens rather than hard-coded, so the palette stays
      the one place the greens are defined. */
-  color: color-mix(in srgb, var(--accent-text) 75%, var(--accent));
+  color: color-mix(in srgb, var(--accent-text) 55%, var(--accent));
 }
 
 .message {
