@@ -24,6 +24,12 @@ export type TourStep = {
  * pressing Next takes them there — so someone can read the whole thing without
  * having to work out which control to press, and without a half-finished
  * session if they stop early.
+ *
+ * Every step points at something on the screen it is shown on. Earlier there
+ * were steps that pointed ahead — highlighting the Breakdown tab while still
+ * on Expenses — which made sense when the reader had to click that tab to go
+ * on. Now that Next navigates, pointing at a tab you are not on yet just
+ * describes a page that isn't in front of you.
  */
 export const TOUR_STEPS: TourStep[] = [
   {
@@ -43,29 +49,17 @@ export const TOUR_STEPS: TourStep[] = [
   {
     target: 'tab-breakdown',
     title: 'Check the numbers',
-    content: 'Breakdown lists every purchase, item by item.',
-    screen: { kind: 'session', tab: 'expenses' },
-  },
-  {
-    target: 'tab-breakdown',
-    title: 'Fix anything wrong',
     content:
-      'One row per item, one column per person, and every cell edits in place. Purchases older than seven days lock, so old records stay put.',
+      'Breakdown lists every purchase, item by item: one row per item, one column per person, and every cell edits in place. Purchases older than seven days lock, so old records stay put.',
     screen: { kind: 'session', tab: 'breakdown' },
   },
   {
+    // The tab rather than the Finish Session button: the tour's session is
+    // empty, and Summary shows an empty state instead of its controls until
+    // something has been logged. A step can only point at what is on screen
+    // for a brand-new account.
     target: 'tab-summary',
     title: 'See who owes whom',
-    content: 'Summary has the part everyone actually wants.',
-    screen: { kind: 'session', tab: 'breakdown' },
-  },
-  {
-    // Deliberately the tab and not the Finish Session button: the tour's
-    // session is empty, and Summary shows an empty state instead of its
-    // controls until something has been logged. A step can only point at
-    // what is on screen for a brand-new account.
-    target: 'tab-summary',
-    title: 'Settle up and finish',
     content:
       'Summary works out who pays whom, cancelling debts that run both ways. You can download it as a PDF, and once everyone has paid, finish the session to file it away.',
     screen: { kind: 'session', tab: 'summary' },
@@ -75,12 +69,6 @@ export const TOUR_STEPS: TourStep[] = [
     title: 'Leave it for later',
     content: 'Leaving loses nothing — the session stays open and waiting for you on Home.',
     screen: { kind: 'session', tab: 'summary' },
-  },
-  {
-    target: 'nav-history',
-    title: 'Look back at old sessions',
-    content: 'Finished sessions move to History.',
-    screen: { kind: 'home' },
   },
   {
     target: 'nav-history',

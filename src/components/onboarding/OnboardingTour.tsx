@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Joyride, EVENTS, STATUS, type ButtonType, type EventData, type Step } from 'react-joyride';
+import {
+  Joyride,
+  ACTIONS,
+  EVENTS,
+  STATUS,
+  type ButtonType,
+  type EventData,
+  type Step,
+} from 'react-joyride';
 import { TOUR_STEPS, screenMatches, type ScreenShape } from './steps';
 
 type Props = {
@@ -44,12 +52,16 @@ export function OnboardingTour({ run, screen, onNavigate, onDone }: Props) {
 
   const steps = useMemo<Step[]>(
     () =>
-      TOUR_STEPS.map((s) => ({
+      TOUR_STEPS.map((s, i) => ({
         target: `[data-tour="${s.target}"]`,
         title: s.title,
         content: s.content,
-        // Every step offers Next; 'primary' is its name in this library.
-        buttons: ['skip', 'primary'] as ButtonType[],
+        // Every step offers Next ('primary' is its name in this library) and,
+        // from the second onwards, Back — a tutorial you can only go forwards
+        // through punishes anyone who reads a step too quickly.
+        buttons: (i === 0
+          ? ['skip', 'primary']
+          : ['back', 'skip', 'primary']) as ButtonType[],
         blockTargetInteraction: false,
         // A stray click on the dimmed area used to end the tour, and left the
         // overlay behind so the page appeared frozen. Leaving is deliberate
@@ -103,14 +115,20 @@ export function OnboardingTour({ run, screen, onNavigate, onDone }: Props) {
     }
 
     if (data.type === EVENTS.STEP_AFTER) {
-      const next = data.index + 1;
+      // Back and Next arrive as the same event; only the action separates them.
+      const step = data.action === ACTIONS.PREV ? -1 : 1;
+      const next = data.index + step;
+
       if (next >= TOUR_STEPS.length) {
         if (done.current) return;
         done.current = true;
         finish.current(true);
         return;
       }
-      // Take the app where the next step lives, then move to it. Doing the
+      // Back is not offered on the first step, so this should not come up.
+      if (next < 0) return;
+
+      // Take the app where that step lives, then move to it. Doing the
       // navigation first means the target exists by the time the step shows.
       navigate.current(TOUR_STEPS[next].screen);
       setIndex(next);
@@ -140,6 +158,7 @@ export function OnboardingTour({ run, screen, onNavigate, onDone }: Props) {
         // Skip is the way out, not the way forward: it should be findable
         // without competing with the button that continues.
         buttonSkip: { color: '#6c727d', fontSize: 13 },
+        buttonBack: { color: '#a8adb7', fontSize: 13, marginRight: 4 },
         buttonPrimary: { fontWeight: 600 },
       }}
     />
