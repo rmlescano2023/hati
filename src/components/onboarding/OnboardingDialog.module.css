@@ -29,7 +29,9 @@
   font-size: 19px;
   font-weight: 600;
   letter-spacing: -0.02em;
-  color: var(--text);
+  /* The accent the primary button carries. Accenting one word inside the
+     sentence broke it up; the whole greeting reads as one thing. */
+  color: var(--accent);
 }
 
 .message {
