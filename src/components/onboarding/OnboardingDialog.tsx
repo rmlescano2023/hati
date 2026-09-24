@@ -3,7 +3,8 @@ import styles from './OnboardingDialog.module.css';
 
 type Props = {
   open: boolean;
-  title: string;
+  /** A node, not a string, so a word inside it can carry its own colour. */
+  title: ReactNode;
   message: string;
   /** The buttons, in reading order. The primary one goes last. */
   children: ReactNode;

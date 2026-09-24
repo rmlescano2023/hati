@@ -146,7 +146,7 @@ export default function App() {
     <PageShell header={<Header />} nav={nav}>
       <OnboardingDialog
         open={phase === 'intro'}
-        title="Welcome to Hati!"
+        title={<>Welcome to <span className={styles.brand}>Hati</span>!</>}
         message="Hati splits a group's spending and works out who owes whom. Here's a quick tutorial through it — it takes about a minute."
         onDismiss={() => {
           markSeen();
