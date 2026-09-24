@@ -59,6 +59,23 @@ describe('the tour sequence', () => {
     expect([...firstSeen].sort((a, b) => a - b)).toEqual(firstSeen);
   });
 
+  it('never points at a screen the reader is not on yet', () => {
+    // The targets named after navigation say which screen they belong to:
+    // `tab-summary` is the Summary tab, `nav-history` the History tab. A step
+    // highlighting one of those while the reader is somewhere else describes a
+    // page that is not in front of them — which is what pointing at the
+    // Breakdown tab from the Expenses page used to do.
+    for (const step of TOUR_STEPS) {
+      const tab = /^tab-(.+)$/.exec(step.target)?.[1];
+      if (tab) {
+        expect(step.screen).toEqual({ kind: 'session', tab });
+        continue;
+      }
+      const nav = /^nav-(.+)$/.exec(step.target)?.[1];
+      if (nav) expect(step.screen).toEqual({ kind: nav });
+    }
+  });
+
   it('gives every step a target and some words', () => {
     for (const step of TOUR_STEPS) {
       expect(step.target).toMatch(/^[a-z-]+$/);

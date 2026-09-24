@@ -83,9 +83,10 @@ export default function App() {
   );
 
   /**
-   * Where the tour sends the app when Next is pressed. A session step needs a
-   * session to exist, so the first one creates it — the same session the tour
-   * clears up when it ends.
+   * Where the tour sends the app when Next or Back is pressed. A session step
+   * needs a session to exist, so the first one creates it — and every later
+   * one reuses it, including on the way back in, so stepping backwards over
+   * the workspace boundary cannot leave a second session behind.
    */
   const tourNavigate = useCallback(
     (shape: ScreenShape) => {
@@ -93,14 +94,17 @@ export default function App() {
         setScreen({ kind: shape.kind });
         return;
       }
-      setScreen((current) => {
-        if (current.kind === 'session') return { ...current, tab: shape.tab };
-        const id = createSession();
-        if (tourSession.current === null) tourSession.current = id;
-        return { kind: 'session', sessionId: id, tab: shape.tab };
-      });
+      if (screen.kind === 'session') {
+        setScreen({ ...screen, tab: shape.tab });
+        return;
+      }
+      // Kept out of the state updater: creating a session is a real write, and
+      // React is free to run an updater more than once.
+      const id = tourSession.current ?? createSession();
+      tourSession.current = id;
+      setScreen({ kind: 'session', sessionId: id, tab: shape.tab });
     },
-    [createSession],
+    [createSession, screen],
   );
 
   // An empty Home carries the action in its own empty state, so the nav row

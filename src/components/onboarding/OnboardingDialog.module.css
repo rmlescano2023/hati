@@ -29,7 +29,12 @@
   font-size: 19px;
   font-weight: 600;
   letter-spacing: -0.02em;
-  color: var(--text);
+  /* The accent's text variant, pulled a little back towards the button's own
+     shade: the text variant alone washes out at this size, and the button
+     shade is mixed to sit under dark label text so it reads heavy as type.
+     Mixed from the two tokens rather than hard-coded, so the palette stays
+     the one place the greens are defined. */
+  color: color-mix(in srgb, var(--accent-text) 55%, var(--accent));
 }
 
 .message {
