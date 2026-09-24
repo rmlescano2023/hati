@@ -174,7 +174,7 @@ export default function App() {
       />
       <OnboardingDialog
         open={phase === 'done'}
-        title="You're all set"
+        title="You're all set!"
         message="That's the whole app. Start a session whenever your group spends something together, and Hati will keep track of the rest."
         onDismiss={() => setPhase('off')}
       >
