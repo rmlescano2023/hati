@@ -61,7 +61,6 @@ export function HistoryDetailPage({ sessionId, onBack }: Props) {
           group={group}
           members={members}
           editable={false}
-          lockedReason="closed"
         />
       ))}
     </>

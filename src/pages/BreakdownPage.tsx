@@ -4,7 +4,6 @@ import { EmptyState } from '../components/shared/EmptyState';
 import { useAppData } from '../context/AppDataContext';
 import { groupRecordsForBreakdown } from '../lib/calculations';
 import { sortNames } from '../lib/format';
-import { isRecordEditable } from '../lib/freeze';
 
 export function BreakdownPage() {
   const { members, records } = useAppData();
@@ -22,12 +21,9 @@ export function BreakdownPage() {
   return (
     <>
       {groups.map((group) => (
-        <BreakdownGroup
-          key={group.key}
-          group={group}
-          members={sortedMembers}
-          editable={isRecordEditable(group.date)}
-        />
+        // Always editable: this page only renders inside an open session, and
+        // a session's records stay editable for as long as it is open.
+        <BreakdownGroup key={group.key} group={group} members={sortedMembers} />
       ))}
     </>
   );

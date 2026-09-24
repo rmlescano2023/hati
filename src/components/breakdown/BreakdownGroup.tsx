@@ -9,23 +9,15 @@ type Props = {
   group: Group;
   members: string[];
   /**
-   * Whether this group's records are still inside the edit window. Every record
-   * in a group shares one date, so editability is a single flag for the card.
+   * Read-only means one thing now: the session is closed. Open sessions stay
+   * editable however old their purchases are.
    */
   editable?: boolean;
-  /**
-   * Why the card is read-only, which is not always its age: History renders
-   * closed sessions read-only whatever the dates on them.
-   */
-  lockedReason?: 'age' | 'closed';
 };
 
-const LOCK_TITLE: Record<'age' | 'closed', string> = {
-  age: 'Records older than 7 days are read-only',
-  closed: 'This session is closed and can no longer be edited',
-};
+const LOCKED_TITLE = 'This session is closed and can no longer be edited';
 
-export function BreakdownGroup({ group, members, editable = true, lockedReason = 'age' }: Props) {
+export function BreakdownGroup({ group, members, editable = true }: Props) {
   return (
     <Card>
       <div className={styles.header}>
@@ -33,7 +25,7 @@ export function BreakdownGroup({ group, members, editable = true, lockedReason =
           <span className={styles.date}>{formatLongDate(group.date)}</span>
           <PayorBadge payors={group.payors} payorMode={group.payorMode} />
           {!editable && (
-            <span className={styles.locked} title={LOCK_TITLE[lockedReason]}>
+            <span className={styles.locked} title={LOCKED_TITLE}>
               Locked
             </span>
           )}
