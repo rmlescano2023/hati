@@ -29,9 +29,9 @@
   font-size: 19px;
   font-weight: 600;
   letter-spacing: -0.02em;
-  /* The accent the primary button carries. Accenting one word inside the
-     sentence broke it up; the whole greeting reads as one thing. */
-  color: var(--accent);
+  /* The accent's text variant rather than the button's own shade, which is
+     mixed to sit under dark label text and reads heavy as type. */
+  color: var(--accent-text);
 }
 
 .message {
