@@ -27,6 +27,7 @@ export function SessionTabs({ active, onChange }: Props) {
             type="button"
             role="tab"
             aria-selected={active === id}
+            data-tour={`tab-${id}`}
             className={`${styles.tab} ${active === id ? styles.active : ''}`}
             onClick={() => onChange(id)}
           >

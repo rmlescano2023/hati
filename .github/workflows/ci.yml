@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  # Only pull requests into main — those are the ones proposing new code.
+  # A deployment pull request moves commits main has already tested, unchanged,
+  # so re-running the suite on identical code proves nothing.
+  pull_request:
+    branches: [main]
+
+  # Every pipeline branch. Be aware of what this does NOT cover: the Deploy
+  # workflow merges with GITHUB_TOKEN, and GitHub deliberately raises no
+  # workflow-triggering event for anything that token does. So a deployment
+  # landing on sit or qat produces no run here, and none of the five downstream
+  # branches has ever had one — only main, whose merges come from a human's
+  # credentials.
+  #
+  # That is why "build, lint and test" is required on main alone. It was once
+  # required on all six, which made every deployment after the first hop
+  # unmergeable: the check could not exist on those commits, so the rule could
+  # never be satisfied. Requiring it here again would recreate that deadlock.
+  push:
+    branches: [main, sit, qat, uat, stg, prod]
+
+# A second push to the same branch makes the first run irrelevant.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: build, lint and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          # The floor package.json claims to support, so CI tests the claim.
+          # Vercel builds on 24.x, which is strictly newer.
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run lint
+
+      - run: npm test
+
+      # `vite build` fails without a publishable key rather than silently
+      # emitting a bundle with the app tree stripped out, so CI supplies one.
+      # The key is public by design; a placeholder is enough to compile, since
+      # nothing here signs in. Set the repository variable to build with the
+      # real one instead.
+      - run: npm run build
+        env:
+          VITE_CLERK_PUBLISHABLE_KEY: ${{ vars.VITE_CLERK_PUBLISHABLE_KEY || 'pk_test_ci_placeholder' }}

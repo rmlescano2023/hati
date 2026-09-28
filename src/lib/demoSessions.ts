@@ -58,8 +58,8 @@ const SPECS: Spec[] = [
   { status: 'draft', members: 6, purchases: 5, endDaysAgo: 9 },
   { status: 'draft', members: 3, purchases: 0, endDaysAgo: 0 },
 
-  // Closed: recent through to a year old, which is also the case that proves
-  // the 7-day freeze never gates the SOA export.
+  // Closed: recent through to a year old, which proves a session's age never
+  // gates the SOA export.
   { status: 'closed', members: 3, purchases: 4, endDaysAgo: 18, closedAfterDays: 4 },
   { status: 'closed', members: 5, purchases: 2, endDaysAgo: 44, closedAfterDays: 6 },
   { status: 'closed', members: 2, purchases: 5, endDaysAgo: 78, closedAfterDays: 4 },

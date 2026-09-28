@@ -55,7 +55,7 @@ export function HomePage({ onOpenSession, onNewSession }: Props) {
           title="No sessions in progress"
           description="Start one to add members and log what everyone spent."
         >
-          <Button variant="primary" size="lg" onClick={onNewSession}>
+          <Button variant="primary" size="lg" data-tour="new-session" onClick={onNewSession}>
             + New Session
           </Button>
         </EmptyState>
@@ -67,7 +67,7 @@ export function HomePage({ onOpenSession, onNewSession }: Props) {
     <>
       {devBar}
       <h2 className={styles.heading}>In Progress</h2>
-      <div className={styles.list}>
+      <div className={styles.list} data-tour="session-list">
         {drafts.map((session) => (
           <SessionCard
             key={session.id}

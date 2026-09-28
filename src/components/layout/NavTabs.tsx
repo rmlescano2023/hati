@@ -25,6 +25,7 @@ export function NavTabs({ active, onChange, actions }: Props) {
             type="button"
             role="tab"
             aria-selected={active === id}
+            data-tour={`nav-${id}`}
             className={`${styles.tab} ${active === id ? styles.active : ''}`}
             onClick={() => onChange(id)}
           >
