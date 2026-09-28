@@ -1,6 +1,6 @@
 import type { AppData, PurchaseItem, PurchaseRecord, Session } from '../types';
-import { roundMoney } from './money';
-import { createId } from './id';
+import { roundMoney } from './money.js';
+import { createId } from './id.js';
 
 export const STORAGE_KEY = 'hati:data:v1';
 export const SCHEMA_VERSION = 2;
@@ -68,7 +68,8 @@ function parseRecord(raw: unknown): PurchaseRecord | null {
   };
 }
 
-function parseSession(raw: unknown): Session | null {
+/** Exported so the API can validate one session without parsing a whole document. */
+export function parseSession(raw: unknown): Session | null {
   if (!isRecordObject(raw)) return null;
   const id = typeof raw.id === 'string' ? raw.id : null;
   if (!id) return null;

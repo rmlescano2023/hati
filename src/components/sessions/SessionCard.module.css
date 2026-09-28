@@ -1,15 +1,14 @@
-/* The card and its delete action side by side; the card takes the space. */
+/* The delete action sits inside the card's bottom corner, laid over it rather
+   than nested in it — a button cannot contain another button. */
 .row {
-  display: flex;
-  align-items: stretch;
-  gap: 6px;
+  position: relative;
 }
 
 .card {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  flex: 1;
+  width: 100%;
   min-width: 0;
   text-align: left;
   font: inherit;
@@ -60,9 +59,42 @@
   font-size: 11px;
   letter-spacing: 0.04em;
   color: var(--text3);
+  /* Room for the delete action sharing this line's corner. */
+  padding-right: 32px;
 }
 
 .delete {
-  align-self: center;
-  flex-shrink: 0;
+  position: absolute;
+  right: 12px;
+  bottom: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  cursor: pointer;
+  /* Visible without competing with the card: a destructive action should be
+     findable, but never the thing the eye lands on first. Not hidden until
+     hover, which would leave it unreachable on touch. */
+  color: var(--text3);
+  opacity: 0.7;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.delete:hover,
+.delete:focus-visible {
+  opacity: 1;
+  color: var(--danger-text);
+  background: var(--danger-bg);
+}
+
+.icon {
+  width: 15px;
+  height: 15px;
+  display: block;
 }

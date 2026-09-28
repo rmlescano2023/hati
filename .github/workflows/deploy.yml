@@ -1,0 +1,140 @@
+name: Deploy
+
+# Deploying moves the commits that are already on one environment branch to
+# the next one, unchanged. Nothing is rebuilt, and the steps are fixed so a
+# stage cannot be skipped.
+#
+# The first hop, main -> sit, runs by itself; every later one is deliberate.
+on:
+  # Not `push` to main: that fires while CI is still running on the commit
+  # that was just merged, so the deployment would race the very check it needs
+  # to pass. Waiting for CI to finish means a red main never reaches SIT.
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+  workflow_dispatch:
+    inputs:
+      to:
+        # sit is absent on purpose: main reaches it automatically once CI
+        # passes, so offering it here would only invite a redundant run.
+        description: Deploy into which environment
+        required: true
+        type: choice
+        options:
+          - qat
+          - uat
+          - stg
+          - prod
+      merge:
+        description: Merge the pull request immediately instead of leaving it open for review
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # A failed or cancelled CI run must not deploy anything.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      # Resolved in a step rather than in a YAML expression, because a
+      # `merge` of false and an unset `merge` are not the same thing and the
+      # usual `||` fallback cannot tell them apart.
+      - name: Resolve what to deploy
+        id: inputs
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "to=${{ inputs.to }}"       >> "$GITHUB_OUTPUT"
+            echo "merge=${{ inputs.merge }}" >> "$GITHUB_OUTPUT"
+          else
+            # Automatic: CI passed on main, so SIT follows it.
+            echo "to=sit"    >> "$GITHUB_OUTPUT"
+            echo "merge=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # The pipeline order is fixed, so naming the destination is enough to
+      # know where it comes from — and makes skipping a stage impossible.
+      - name: Work out the source branch
+        id: branches
+        run: |
+          to="${{ steps.inputs.outputs.to }}"
+          case "$to" in
+            sit)  from=main ;;
+            qat)  from=sit ;;
+            uat)  from=qat ;;
+            stg)  from=uat ;;
+            prod) from=stg ;;
+            *)    echo "::error::$to is not a deployment target"; exit 1 ;;
+          esac
+          echo "from=$from" >> "$GITHUB_OUTPUT"
+          echo "to=$to"     >> "$GITHUB_OUTPUT"
+          echo "Deploying $from to $to"
+
+      - name: Check there is something to deploy
+        id: diff
+        run: |
+          from="${{ steps.branches.outputs.from }}"
+          to="${{ steps.branches.outputs.to }}"
+          ahead=$(git rev-list --count "origin/$to..origin/$from")
+          echo "ahead=$ahead" >> "$GITHUB_OUTPUT"
+          if [ "$ahead" -eq 0 ]; then
+            echo "::notice::$to already contains everything on $from — nothing to deploy."
+          else
+            echo "$from is $ahead commit(s) ahead of $to:"
+            git log --oneline "origin/$to..origin/$from"
+          fi
+
+      - name: Open or reuse the deployment pull request
+        if: steps.diff.outputs.ahead != '0'
+        id: pr
+        run: |
+          from="${{ steps.branches.outputs.from }}"
+          to="${{ steps.branches.outputs.to }}"
+
+          existing=$(gh pr list --base "$to" --head "$from" --state open --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            echo "Reusing open pull request #$existing"
+            number="$existing"
+          else
+            body=$(printf '%s\n\n%s' \
+              "Moves the commits already on \`$from\` forward to \`$to\`, unchanged." \
+              "Opened by the **Deploy** workflow. Merge with a merge commit so both branches keep identical history — squashing or rebasing here would make \`$from\` and \`$to\` diverge permanently.")
+            gh pr create --base "$to" --head "$from" --title "Deploy $from to $to" --body "$body"
+            number=$(gh pr list --base "$to" --head "$from" --state open --json number --jq '.[0].number')
+          fi
+          echo "number=$number" >> "$GITHUB_OUTPUT"
+          echo "url=$(gh pr view "$number" --json url --jq .url)" >> "$GITHUB_OUTPUT"
+
+      - name: Merge it
+        if: steps.diff.outputs.ahead != '0' && steps.inputs.outputs.merge == 'true'
+        run: gh pr merge "${{ steps.pr.outputs.number }}" --merge
+
+      - name: Summary
+        run: |
+          from="${{ steps.branches.outputs.from }}"
+          to="${{ steps.branches.outputs.to }}"
+          {
+            if [ "${{ steps.diff.outputs.ahead }}" = "0" ]; then
+              echo "### Nothing to deploy"
+              echo "\`$to\` already contains everything on \`$from\`."
+            elif [ "${{ steps.inputs.outputs.merge }}" = "true" ]; then
+              echo "### Deployed \`$from\` to \`$to\`"
+              echo "${{ steps.pr.outputs.url }} — merged."
+            else
+              echo "### Pull request ready"
+              echo "${{ steps.pr.outputs.url }} — review and merge it to finish the deployment."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

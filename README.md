@@ -7,9 +7,20 @@ your group, log each purchase as a set of items, and Hati works out who needs to
 pay whom — cancelling mutual debts so nobody pays in both directions. It can then
 export the whole thing as a paginated PDF statement.
 
-There is no account and no backend — everything lives in your browser's
-`localStorage`, and your expenses never leave the machine. (The page does fetch
-its webfonts from Google Fonts; nothing else goes over the network.)
+You sign in with an account, and your sessions are stored on a server so they
+follow you between devices and browsers. Each account's data is private to that
+account — there is no sharing between accounts.
+
+This is a change from how Hati used to work. It was previously local-first:
+no account, no backend, everything in your browser's `localStorage`, and the
+claim that your expenses never left the machine. That is no longer true. Your
+expenses are sent to a server and stored in a database, and the app needs a
+network connection to load or save anything — it no longer works offline.
+
+If you used the local-first version, that data is still in your browser's
+`localStorage`, but the app no longer reads it: there is no way to reach it
+from the UI, and signing in gives you a fresh, empty account. Nothing is
+migrated.
 
 ## How it works
 
@@ -114,12 +125,37 @@ font URLs are unreliable at PDF-build time.
 
 ## Getting started
 
-Requires **Node 22+**.
+Requires **Node 22+**, plus access to the Vercel project (for the Clerk keys and
+the database connection).
 
 ```bash
 npm install
+npm i -g vercel        # once, if you don't have it
+vercel login
+vercel link            # associates this directory with the Hati project
+vercel env pull .env.local
 npm run dev
 ```
+
+`npm run dev:full` is the one you usually want: it runs `vercel dev`, which
+serves the `/api` endpoints alongside the frontend. `npm run dev` is plain Vite
+and cannot load any data — it says so on startup, and the app will tell you
+again if you try. It has to stay plain Vite because `vercel dev` runs it to
+serve the frontend.
+
+Three environment variables are needed, all of them pulled by the command
+above rather than written by hand — see `.env.example`:
+
+| Variable                     | Where it is used                                       |
+| ---------------------------- | ------------------------------------------------------ |
+| `VITE_CLERK_PUBLISHABLE_KEY` | Browser. Public by design; ships in the bundle.        |
+| `CLERK_SECRET_KEY`           | Server only. Verifies session tokens. Never expose it. |
+| `POSTGRES_DATABASE_URL`      | Server only. The pooled connection string.             |
+
+A production build **fails** if the publishable key is missing rather than
+building without it — Vite inlines `VITE_*` variables as literals, so an absent
+key would make the signed-in branch statically dead and silently strip the
+entire app from the bundle.
 
 ### Scripts
 
@@ -151,26 +187,87 @@ the arithmetic is deliberate and covered by tests:
 Amounts are Philippine pesos throughout; the currency is not configurable. The
 PDF spells it `PHP` rather than `₱` because DM Sans has no glyph for U+20B1.
 
+### First run
+
+A new account gets a guided walkthrough the first time it signs in: Home, into
+a session, through Expenses, Breakdown and Summary, back out, and finally
+History. It follows what you actually do — a step that asks you to open a tab
+waits until you open it, rather than clicking through on its own — and
+wandering off it ends the tour rather than trapping you in it.
+
+Whether you have seen it is a real column, `users.onboarded_at`, rather than
+something inferred from having no sessions, so it follows the account across
+devices and cannot be re-triggered by clearing data. Finishing and skipping
+count the same.
+
+The tour asks you to create a session in its first step. That session is
+removed when the tour ends, so onboarding does not leave one behind — unless
+you put members or purchases in it, in which case it is yours and stays.
+
 ## Data and privacy
 
-All state is a single `localStorage` key, `hati:data:v1`, holding one `sessions`
-array — drafts and closed sessions alike, each with its own members and records.
-Nothing is uploaded, and clearing your browser data clears your expenses. The
-stored blob is parsed defensively on boot — anything unrecognisable is dropped
-rather than allowed to crash the app.
+Your data lives in three tables, keyed to your Clerk user id:
 
-The blob is at schema version 2. Version 1 predates sessions and stored one flat
-`{members, records}` pair; it upgrades in place on first load, becoming a single
-draft session holding exactly what was there, with no data loss.
+```sql
+create table users (
+  id           text primary key,     -- Clerk user id
+  created_at   timestamptz not null default now(),
+  onboarded_at timestamptz           -- null until the first-run tour is done
+);
+
+create table expense_sessions (
+  id         text primary key,
+  user_id    text not null references users (id) on delete cascade,
+  status     text not null check (status in ('draft', 'closed')),
+  created_at timestamptz not null default now(),
+  closed_at  timestamptz,
+  members    jsonb not null default '[]'
+);
+
+create table purchase_records (
+  id         text primary key,
+  session_id text not null references expense_sessions (id) on delete cascade,
+  date       date not null,
+  payor_mode text not null check (payor_mode in ('single', 'multiple')),
+  payors     jsonb not null,
+  items      jsonb not null,
+  created_at timestamptz not null default now()
+);
+```
+
+Sessions and records are real rows; items and payors stay as JSON on the
+record. Nothing in the app queries an item independently of the purchase it
+belongs to, so splitting those out further would add tables, and move
+knowledge of how splits work onto the server, for no query it would serve.
+
+The point of rows rather than one document per account is write size. Editing
+one item's price used to rewrite an account's entire history; now it touches
+only the session it belongs to.
+
+Every write goes through the app's own parser **on the server** as well as in
+the browser, so a hostile or malformed request cannot put something in the
+database that the app would later choke on. A write names one session, so that
+check is scoped to that session rather than run over everything you own.
+
+Writes are optimistic: the screen updates immediately and the save follows. If
+a save fails you get a banner saying so, rather than finding out when the data
+is missing on the next load.
+
+What this means for your privacy: your expenses leave your machine. They are
+sent to the server and stored in the database above. Only your account can read
+them back, but they are no longer yours alone in the way they were when
+everything lived in `localStorage`.
 
 ## Project layout
 
 ```
+api/            The serverless endpoint backing the app (GET/PUT one blob per account)
 src/
   components/   UI, grouped by page (home, breakdown, summary, history) plus shared/ and layout/
   pages/        Home and History, plus the three pages inside a session workspace
-  context/      SessionsStoreContext — every session, persisted to localStorage
+  context/      SessionsStoreContext — every session, synced to the server
                 AppDataContext — a thin adapter scoping that store to the open session
+  hooks/        useServerAppData — the [data, setData] seam the store is built on
   lib/          calculations, money, storage, freeze rule, formatting  (the *.test.ts files live here)
   pdf/          The SOA document, its layout maths and font registration
   styles/       Design tokens and global CSS
