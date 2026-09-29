@@ -65,3 +65,17 @@
   color: var(--text3);
   padding-top: 5px;
 }
+
+/* Mobile shell: the total takes whatever the Fill Remainder button leaves,
+   so the row spans the card instead of stopping at a fixed 220px. */
+@media (max-width: 640px) {
+  .topRow {
+    flex-wrap: nowrap;
+  }
+
+  .totalField {
+    flex: 1;
+    width: auto;
+    min-width: 0;
+  }
+}
