@@ -82,6 +82,24 @@ input[type='date']::-webkit-calendar-picker-indicator {
   cursor: pointer;
 }
 
+/* iOS Safari gives a date input a native minimum width that ignores
+   width: 100%, so on a phone it spills past its card, and it centres the
+   value. Scoped to iOS (only it supports -webkit-touch-callout) so desktop
+   browsers keep their own date control untouched. */
+@supports (-webkit-touch-callout: none) {
+  input[type='date'] {
+    -webkit-appearance: none;
+    appearance: none;
+    min-width: 0;
+    display: block;
+  }
+
+  input[type='date']::-webkit-date-and-time-value {
+    text-align: left;
+    margin: 0;
+  }
+}
+
 select {
   appearance: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%239ba1ac' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
