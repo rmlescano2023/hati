@@ -34,3 +34,54 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Desktop keeps the native date input as it is; the formatted text is for
+   phones only. */
+.dateDisplay {
+  display: none;
+}
+
+/* Mobile shell: a box styled like the other fields shows the full date,
+   centred, with the real input stretched invisibly over it to take the tap. */
+@media (max-width: 640px) {
+  .dateBox {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 38px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface2);
+    overflow: hidden;
+    transition:
+      border-color 0.15s,
+      box-shadow 0.15s;
+  }
+
+  .dateBox:focus-within {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(78, 168, 124, 0.18);
+  }
+
+  .dateDisplay {
+    display: block;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--text);
+    white-space: nowrap;
+    pointer-events: none;
+  }
+
+  .dateBox input[type='date'] {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    margin: 0;
+    border: none;
+    opacity: 0;
+    cursor: pointer;
+  }
+}
