@@ -3,7 +3,14 @@ type Props = {
   title?: string;
 };
 
-/** The Hati mark: a circle split in two — one half solid, one half outlined. */
+/**
+ * The Hati mark: a circle split down the middle, one half dark and one half
+ * green, ringed in green the whole way round.
+ *
+ * The dark half is the page's own background rather than a colour of its own,
+ * so the mark sits on the page instead of on a plate — the ring is what keeps
+ * the circle readable where the fill and the background meet.
+ */
 export function HatiLogo({ className, title = 'Hati' }: Props) {
   return (
     <svg
@@ -13,15 +20,9 @@ export function HatiLogo({ className, title = 'Hati' }: Props) {
       aria-label={title}
       xmlns="http://www.w3.org/2000/svg"
     >
-      <rect width="64" height="64" rx="14" fill="var(--surface2)" />
-      <path d="M32 10a22 22 0 0 0 0 44Z" fill="var(--accent)" />
-      <path
-        d="M32 10a22 22 0 0 1 0 44"
-        fill="none"
-        stroke="var(--accent)"
-        strokeWidth="4.5"
-        strokeLinecap="round"
-      />
+      <path d="M32 5a27 27 0 0 0 0 54Z" fill="var(--bg)" />
+      <path d="M32 5a27 27 0 0 1 0 54Z" fill="var(--accent)" />
+      <circle cx="32" cy="32" r="27" fill="none" stroke="var(--accent)" strokeWidth="2.5" />
     </svg>
   );
 }
