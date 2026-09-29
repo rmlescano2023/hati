@@ -6,6 +6,7 @@ import { SessionWorkspace } from './components/layout/SessionWorkspace';
 import { SyncBanner } from './components/layout/SyncBanner';
 import type { SessionTabId } from './components/layout/SessionTabs';
 import { Button } from './components/shared/Button';
+import { PlusIcon } from './components/shared/icons';
 import { useSessionsStore } from './context/SessionsStoreContext';
 import { HomePage } from './pages/HomePage';
 import { HistoryPage } from './pages/HistoryPage';
@@ -52,6 +53,21 @@ export default function App() {
    */
   const tourSession = useRef<string | null>(null);
 
+  /**
+   * Dev-only: a tour started from the Preview Tour button rather than from the
+   * account flag. It skips the offer, and its ending is not written back to
+   * the account, so an already-onboarded developer can rerun it freely. The
+   * key remounts the tour, which otherwise keeps its step from the last run.
+   */
+  const previewing = useRef(false);
+  const [tourKey, setTourKey] = useState(0);
+  const previewTour = () => {
+    previewing.current = true;
+    setTourKey((k) => k + 1);
+    setScreen({ kind: 'home' });
+    setPhase('running');
+  };
+
   const openSession = (sessionId: string) =>
     setScreen({ kind: 'session', sessionId, tab: 'expenses' });
   const newSession = () => {
@@ -64,7 +80,8 @@ export default function App() {
     (completed: boolean) => {
       const id = tourSession.current;
       tourSession.current = null;
-      markSeen();
+      if (previewing.current) previewing.current = false;
+      else markSeen();
 
       if (id !== null) {
         // Keep it if they actually put something in it — silently deleting
@@ -118,8 +135,15 @@ export default function App() {
       onChange={(tab) => setScreen({ kind: tab })}
       actions={
         showNewSession && (
-          <Button variant="primary" data-tour="new-session" onClick={newSession}>
-            + New Session
+          <Button
+            variant="primary"
+            fab
+            aria-label="New Session"
+            data-tour="new-session"
+            onClick={newSession}
+          >
+            <PlusIcon />
+            <span>+ New Session</span>
           </Button>
         )
       }
@@ -167,6 +191,7 @@ export default function App() {
         </Button>
       </OnboardingDialog>
       <OnboardingTour
+        key={tourKey}
         run={phase === 'running'}
         screen={tourScreen}
         onNavigate={tourNavigate}
@@ -183,7 +208,13 @@ export default function App() {
         </Button>
       </OnboardingDialog>
       <SyncBanner />
-      {screen.kind === 'home' && <HomePage onOpenSession={openSession} onNewSession={newSession} />}
+      {screen.kind === 'home' && (
+        <HomePage
+          onOpenSession={openSession}
+          onNewSession={newSession}
+          onPreviewTour={import.meta.env.DEV ? previewTour : undefined}
+        />
+      )}
       {screen.kind === 'history' && (
         <HistoryPage
           onOpenSession={(sessionId) => setScreen({ kind: 'historyDetail', sessionId })}

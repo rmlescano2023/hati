@@ -8,6 +8,8 @@ type Props = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: Variant;
   size?: Size;
   block?: boolean;
+  /** Floats as a round icon button on mobile; see Button.module.css. */
+  fab?: boolean;
 };
 
 const VARIANT_CLASS: Record<Variant, string> = {
@@ -28,6 +30,7 @@ export function Button({
   variant = 'default',
   size = 'md',
   block = false,
+  fab = false,
   className,
   type = 'button',
   ...rest
@@ -37,6 +40,7 @@ export function Button({
     VARIANT_CLASS[variant],
     SIZE_CLASS[size],
     block ? styles.block : '',
+    fab ? styles.fab : '',
     className ?? '',
   ]
     .filter(Boolean)

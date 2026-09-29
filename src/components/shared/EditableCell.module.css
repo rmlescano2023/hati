@@ -43,3 +43,12 @@ input.cell.invalid:focus {
   border-color: var(--danger);
   box-shadow: 0 0 0 2px rgba(229, 103, 90, 0.18);
 }
+
+/* Mobile shell: ~44px touch target. The table cells around it loosen to match
+   (BreakdownTable.module.css). */
+@media (max-width: 640px) {
+  input.cell {
+    min-height: 44px;
+    padding: 10px 6px;
+  }
+}

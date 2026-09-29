@@ -35,3 +35,10 @@
   color: #0d1512;
   font-weight: 600;
 }
+
+/* Mobile shell: 34px options, so the whole toggle is ~42px. */
+@media (max-width: 640px) {
+  .option {
+    min-height: 34px;
+  }
+}
