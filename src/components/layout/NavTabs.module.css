@@ -65,3 +65,69 @@
     padding: 7px 10px;
   }
 }
+
+/* Tab icons are a mobile-only addition; desktop keeps text-only tabs. */
+@media (min-width: 641px) {
+  .tabIcon {
+    display: none;
+  }
+}
+
+/* Mobile shell (see docs/mobile-breakpoints.md): the same .nav element becomes a
+   floating pill above the bottom edge, icons over labels. Repositioned rather
+   than duplicated, so every data-tour target stays the one mounted button the
+   onboarding tour expects. Left-anchored, leaving the right for the New
+   Session button; .rowCentered centres it where there is no such button. */
+@media (max-width: 640px) {
+  .nav {
+    position: fixed;
+    bottom: calc(env(safe-area-inset-bottom) + 16px);
+    left: calc(env(safe-area-inset-left) + 16px);
+    z-index: 20;
+    width: auto;
+    max-width: calc(100% - 32px);
+    border-radius: var(--radius-pill);
+    padding: 6px;
+    box-shadow: var(--shadow-md);
+  }
+
+  .tab {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    flex: 1;
+    min-height: 44px;
+    padding: 8px 14px;
+    border-radius: var(--radius-pill);
+  }
+
+  .tabIcon {
+    width: 20px;
+    height: 20px;
+  }
+
+  .tabLabel {
+    font-size: 10px;
+  }
+
+  .active {
+    color: var(--accent);
+    background: var(--accent-bg);
+  }
+
+  .row {
+    margin-bottom: 0;
+  }
+
+  /* Both insets plus auto margins, not left: 50% with a transform: a
+     left: 50% box can only shrink-wrap into the right half of the screen,
+     which squeezes three tabs on a phone. */
+  .rowCentered .nav {
+    left: calc(env(safe-area-inset-left) + 16px);
+    right: calc(env(safe-area-inset-right) + 16px);
+    width: fit-content;
+    margin: 0 auto;
+  }
+}

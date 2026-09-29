@@ -5,8 +5,8 @@ import styles from './EqualSplitFields.module.css';
 
 type Props = {
   members: string[];
+  /** The item's total price, owned by ItemModeFields; used for the per-head share. */
   price: string;
-  onPriceChange: (raw: string) => void;
   owners: Record<string, boolean>;
   allSelected: boolean;
   onToggleAll: () => void;
@@ -17,7 +17,6 @@ type Props = {
 export function EqualSplitFields({
   members,
   price,
-  onPriceChange,
   owners,
   allSelected,
   onToggleAll,
@@ -32,19 +31,6 @@ export function EqualSplitFields({
 
   return (
     <div className={styles.wrap}>
-      <div className={`${styles.field} ${styles.priceField}`}>
-        <label htmlFor="item-price">Total Price (₱)</label>
-        <input
-          id="item-price"
-          type="number"
-          min="0"
-          step="0.01"
-          placeholder="0.00"
-          value={price}
-          onChange={(e) => onPriceChange(e.target.value)}
-        />
-      </div>
-
       <div className={styles.field}>
         <label>
           Owner(s) — Split Equally Among{' '}

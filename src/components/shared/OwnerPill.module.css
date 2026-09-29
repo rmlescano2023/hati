@@ -47,3 +47,12 @@
 .checked .dot {
   background: currentColor;
 }
+
+/* Mobile shell: a slightly larger touch target. */
+@media (max-width: 640px) {
+  .pill {
+    min-height: 38px;
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}
