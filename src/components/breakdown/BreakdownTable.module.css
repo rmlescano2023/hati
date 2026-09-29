@@ -130,3 +130,17 @@
   background: var(--border2);
   border-radius: var(--radius-pill);
 }
+
+/* Mobile shell: room for the taller EditableCell inputs, and momentum scrolling
+   on iOS. Vertical longhands only, so the .r / .totalValue horizontal padding
+   is left alone. */
+@media (max-width: 640px) {
+  .table td {
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+
+  .scroll {
+    -webkit-overflow-scrolling: touch;
+  }
+}

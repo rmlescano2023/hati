@@ -1,11 +1,13 @@
+import type { ComponentType } from 'react';
+import { BreakdownIcon, ExpensesIcon, SummaryIcon } from '../shared/icons';
 import styles from './NavTabs.module.css';
 
 export type SessionTabId = 'expenses' | 'breakdown' | 'summary';
 
-const TABS: { id: SessionTabId; label: string }[] = [
-  { id: 'expenses', label: 'Expenses' },
-  { id: 'breakdown', label: 'Breakdown' },
-  { id: 'summary', label: 'Summary' },
+const TABS: { id: SessionTabId; label: string; Icon: ComponentType<{ className?: string }> }[] = [
+  { id: 'expenses', label: 'Expenses', Icon: ExpensesIcon },
+  { id: 'breakdown', label: 'Breakdown', Icon: BreakdownIcon },
+  { id: 'summary', label: 'Summary', Icon: SummaryIcon },
 ];
 
 type Props = {
@@ -19,9 +21,9 @@ type Props = {
  */
 export function SessionTabs({ active, onChange }: Props) {
   return (
-    <div className={styles.row}>
+    <div className={`${styles.row} ${styles.rowCentered}`}>
       <nav className={styles.nav} role="tablist" aria-label="Session">
-        {TABS.map(({ id, label }) => (
+        {TABS.map(({ id, label, Icon }) => (
           <button
             key={id}
             type="button"
@@ -31,7 +33,8 @@ export function SessionTabs({ active, onChange }: Props) {
             className={`${styles.tab} ${active === id ? styles.active : ''}`}
             onClick={() => onChange(id)}
           >
-            {label}
+            <Icon className={styles.tabIcon} />
+            <span className={styles.tabLabel}>{label}</span>
           </button>
         ))}
       </nav>

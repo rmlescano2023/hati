@@ -42,22 +42,39 @@ type Props = {
 export function ItemModeFields({ members, draft, handlers, derived }: Props) {
   return (
     <div className={styles.wrap}>
-      <div className={styles.field}>
-        <label htmlFor="item-name">Item Name</label>
-        <input
-          id="item-name"
-          type="text"
-          placeholder="e.g. Dinner, Groceries, Taxi"
-          value={draft.name}
-          onChange={(e) => handlers.setName(e.target.value)}
-        />
+      {/* Equal Split's price sits beside the name: a full-width name box
+          and a lone short price box underneath it both read as misfits. */}
+      <div className={styles.nameRow}>
+        <div className={`${styles.field} ${styles.nameField}`}>
+          <label htmlFor="item-name">Item Name</label>
+          <input
+            id="item-name"
+            type="text"
+            placeholder="e.g. Dinner, Groceries, Taxi"
+            value={draft.name}
+            onChange={(e) => handlers.setName(e.target.value)}
+          />
+        </div>
+        {draft.mode === 'equal' && (
+          <div className={`${styles.field} ${styles.priceField}`}>
+            <label htmlFor="item-price">Total Price (₱)</label>
+            <input
+              id="item-price"
+              type="number"
+              min="0"
+              step="0.01"
+              placeholder="0.00"
+              value={draft.price}
+              onChange={(e) => handlers.setPrice(e.target.value)}
+            />
+          </div>
+        )}
       </div>
 
       {draft.mode === 'equal' ? (
         <EqualSplitFields
           members={members}
           price={draft.price}
-          onPriceChange={handlers.setPrice}
           owners={draft.owners}
           allSelected={draft.allSelected}
           onToggleAll={handlers.toggleAll}
