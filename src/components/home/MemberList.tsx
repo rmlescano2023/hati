@@ -51,7 +51,13 @@ export function MemberList() {
     <Card
       label="Group Members"
       actions={
-        <Button variant="danger" size="sm" disabled={members.length === 0} onClick={handleClearAll}>
+        <Button
+          variant="danger"
+          size="sm"
+          className={styles.action}
+          disabled={members.length === 0}
+          onClick={handleClearAll}
+        >
           Clear All
         </Button>
       }
@@ -73,7 +79,9 @@ export function MemberList() {
             }
           }}
         />
-        <Button onClick={submit}>+ Add</Button>
+        <Button className={styles.action} onClick={submit}>
+          + Add
+        </Button>
       </div>
 
       {members.length === 0 ? (
