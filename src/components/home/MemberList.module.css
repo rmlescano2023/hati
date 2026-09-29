@@ -14,6 +14,13 @@
   flex-shrink: 0;
 }
 
+/* Clear All and + Add sit one above the other at the card's right edge, so
+   they share a width: Clear All's own, rounded up. A minimum rather than a
+   fixed width, so a wider font grows the button instead of clipping it. */
+.action {
+  min-width: 70px;
+}
+
 .chips {
   display: flex;
   flex-wrap: wrap;
