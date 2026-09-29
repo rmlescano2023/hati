@@ -42,14 +42,15 @@
 }
 
 /* Mobile shell: a box styled like the other fields shows the full date,
-   centred, with the real input stretched invisibly over it to take the tap. */
+   left-aligned like their text, with the real input stretched invisibly over
+   it to take the tap. */
 @media (max-width: 640px) {
   .dateBox {
     position: relative;
     display: flex;
     align-items: center;
-    justify-content: center;
     height: 38px;
+    padding: 0 11px;
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     background: var(--surface2);
