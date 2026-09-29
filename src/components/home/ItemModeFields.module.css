@@ -15,3 +15,27 @@
   font-weight: 500;
   color: var(--text2);
 }
+
+.nameRow {
+  display: flex;
+  gap: 12px;
+}
+
+/* Name takes two parts to the price's one; alone (Custom Amounts), it takes the row. */
+.nameField {
+  flex: 2;
+  min-width: 0;
+}
+
+.priceField {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Mobile shell: too narrow for two fields side by side, so each takes the row. */
+@media (max-width: 640px) {
+  .nameRow {
+    flex-direction: column;
+    gap: 14px;
+  }
+}

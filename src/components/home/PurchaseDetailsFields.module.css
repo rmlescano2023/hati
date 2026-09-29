@@ -7,7 +7,7 @@
      (which is taller, since it carries the One Payor/Multiple Payors
      ModeToggle) line up — keeps the Date input and Paid By field on the
      same baseline instead of the toggle pushing Paid By's field down. */
-  --field-head-h: 32px;
+  --field-head-h: 34px;
 }
 
 .dateField {
