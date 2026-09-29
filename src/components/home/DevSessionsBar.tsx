@@ -3,13 +3,18 @@ import { useSessionsStore } from '../../context/SessionsStoreContext';
 import { buildDemoSessions } from '../../lib/demoSessions';
 import styles from './DevDataBar.module.css';
 
+type Props = {
+  /** Runs the onboarding tour regardless of whether this account has seen it. */
+  onPreviewTour?: () => void;
+};
+
 /**
  * Dev-only seeding for the launcher and History: a spread of drafts and closed
  * sessions, so both lists can be eyeballed without creating a dozen by hand.
  * Never rendered in a production build — `import.meta.env.DEV` is statically
  * false there, so this component and `demoSessions` are dropped by the bundler.
  */
-export function DevSessionsBar() {
+export function DevSessionsBar({ onPreviewTour }: Props) {
   const { sessions, replaceAllSessions } = useSessionsStore();
 
   const seed = (append: boolean) => {
@@ -26,6 +31,11 @@ export function DevSessionsBar() {
       <Button size="sm" onClick={() => seed(true)}>
         Seed Sessions (add)
       </Button>
+      {onPreviewTour && (
+        <Button size="sm" onClick={onPreviewTour}>
+          Preview Tour
+        </Button>
+      )}
       <Button
         size="sm"
         variant="danger"

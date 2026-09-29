@@ -21,6 +21,8 @@ type Props = {
   onOpenSession: (sessionId: string) => void;
   /** Starts a session and opens it — the same action the nav row offers. */
   onNewSession: () => void;
+  /** Dev-only: starts the onboarding tour without touching the account flag. */
+  onPreviewTour?: () => void;
 };
 
 /**
@@ -28,7 +30,7 @@ type Props = {
  * parallel; closed sessions live on the History tab. New sessions are started
  * from the action in the nav row.
  */
-export function HomePage({ onOpenSession, onNewSession }: Props) {
+export function HomePage({ onOpenSession, onNewSession, onPreviewTour }: Props) {
   const { sessions, deleteSession } = useSessionsStore();
   const [pendingDelete, setPendingDelete] = useState<Session | null>(null);
 
@@ -43,7 +45,7 @@ export function HomePage({ onOpenSession, onNewSession }: Props) {
 
   const devBar = DevSessionsBar && (
     <Suspense fallback={null}>
-      <DevSessionsBar />
+      <DevSessionsBar onPreviewTour={onPreviewTour} />
     </Suspense>
   );
 

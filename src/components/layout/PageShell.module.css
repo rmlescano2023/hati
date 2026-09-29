@@ -19,3 +19,11 @@
     padding: 0 1rem 4rem;
   }
 }
+
+/* Mobile shell: clearance so content never sits under the floating tab bar.
+   Longhand, after the 600px block, so it layers on its shorthand. */
+@media (max-width: 640px) {
+  .shell {
+    padding-bottom: calc(96px + env(safe-area-inset-bottom));
+  }
+}
