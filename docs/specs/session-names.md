@@ -550,12 +550,13 @@ type Props = { onCancel: () => void; onCreate: (raw: string) => void };
 - **Submit** (Enter in the box, or Create): `preventDefault`. If the `submitted` ref is already set, return;
   otherwise set it and call `onCreate(draft)`. A double tap or repeated Enter makes exactly one session
   (AC-2.9).
-- **Cancel and Escape:** the dialog's `onCancel` calls `preventDefault`, then `cancel()`. `cancel()` calls
-  `dialog.close()`, so the browser returns focus to the button that opened it, and then `onCancel()`. No
-  session is made, and typed text is dropped without asking (AC-2.6).
-- **Backdrop clicks do nothing.** There's no `onClick` on the dialog, matching `OnboardingDialog`. (Note:
-  `ConfirmDialog` *does* cancel on a backdrop click. AC-2.6's "consistent with other dialogs" holds only for
-  `OnboardingDialog`; this follows the AC. Assumption A1.)
+- **Cancel, Escape and a backdrop click:** the dialog's `onCancel` calls `preventDefault`, then `cancel()`.
+  `cancel()` calls `dialog.close()`, so the browser returns focus to the button that opened it, and then
+  `onCancel()`. No session is made, and typed text is dropped without asking (AC-2.6).
+- **A backdrop click closes it, the same as Cancel.** The dialog's `onClick` calls `cancel()` when
+  `e.target` is the dialog element itself, exactly as `ConfirmDialog` does, so it matches the delete and
+  remove-member confirmations. (The owner overruled assumption A1 at approval; AC-2.6 is read as "a backdrop
+  click cancels, consistent with the confirmation dialogs".)
 - **Styles:** import `../shared/ConfirmDialog.module.css` as `confirmStyles` for `dialog`, `body`, `title`
   and `actions`. There's precedent: `HistoryPage` reuses `HomePage.module.css`, and `SessionTabs` reuses
   `NavTabs.module.css`. `NewSessionDialog.module.css` adds:
@@ -734,7 +735,7 @@ and 1280px unless a width is named.
 | 2.1, 2.2 | T: both New Session buttons open the dialog with focus in the box; no session exists until Create. |
 | 2.3, 2.4 | T: named and blank creates open Expenses; blank gives the dates title. |
 | 2.5 | T: create named, reload, then check another browser. |
-| 2.6 | T: Cancel, Esc and a backdrop click: no session, same screen, empty box next time. |
+| 2.6 | T: Cancel, Esc and a backdrop click each close the prompt: no session, same screen, empty box next time. |
 | 2.7 | T: paste 80 chars; 60 kept. U: server truncation in `sessionName.test.ts`. |
 | 2.8 | T: keyboard-only create; Tab order; the box's accessible name. |
 | 2.9 | T: double-click Create and hold Enter; exactly one new card. |
@@ -825,8 +826,9 @@ the schema change is additive only.
    build task, before the local preview. It adds one nullable column and changes no existing data. The
    alternative is that you run it yourself before the build starts.
 2. **Assumptions you can overrule before approving** (none blocks the build):
-   - **A1.** A backdrop click on the New Session prompt does nothing, per AC-2.6. `ConfirmDialog` dialogs do
-     close on a backdrop click, so "consistent with other dialogs" only matches the onboarding dialogs.
+   - **A1. Overruled by the owner at approval.** A backdrop click on the New Session prompt closes it, the
+     same as Cancel, and creates no session, matching the `ConfirmDialog` confirmations (delete session,
+     remove member). AC-2.6 is amended to match.
    - **A2.** On page 1 the name sits under "Statement of Account" (Hati / Statement of Account /
      **Bali Trip** / Period / Generated). The embedded title uses the same printable text as the heading, so
      a name with nothing printable gives the unnamed title too.
