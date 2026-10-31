@@ -118,7 +118,8 @@ Read the code before writing about it. The main sources of truth:
 ## Keeping docs in sync
 
 When asked to update docs after a change, find what the change touched (`git
-diff main...HEAD`, or the commits named in the task). Search every doc
+diff origin/main...HEAD` after a `git fetch`, never against local `main`, or the
+commits named in the task). Search every doc
 listed above for mentions of those files, routes, components, commands and
 behaviors (`grep -rn`). Update what's wrong in the repo docs, and list what's
 wrong in the out-of-repo documents for the user to decide on.

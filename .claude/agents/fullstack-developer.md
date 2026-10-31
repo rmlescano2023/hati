@@ -101,13 +101,12 @@ sign-in you don't have), say so plainly rather than implying it works.
 
 - Work on a feature branch, never directly on `main`. Commit with clear messages
   that explain what changed and why, and push the feature branch.
-- Don't open pull requests, merge, or deploy unless the task explicitly asks.
-  Merging and promotion are the user's call.
-- If asked to deploy: the pipeline is main → SIT (automatic after CI passes on
-  main) → QAT → UAT → STG → prod, promoted one step at a time with the **Deploy**
-  GitHub workflow (`gh workflow run Deploy -f to=<env> -f merge=true`). Confirm
-  each step's Vercel build succeeded before the next. Never go past the
-  environment you were asked for.
+- Never open pull requests, merge, run the Deploy workflow or promote anything,
+  even if a task seems to ask for it. Shipping belongs to the devops-engineer
+  agent, which carries the safeguards (PR into `main`, waiting for CI, no
+  shipping over a failed review or test, separate approval for `stg`/`prod`).
+  If a task asks you to deploy, finish your work, push the branch, and say in
+  your report that it's ready to ship.
 
 ## Reporting back
 

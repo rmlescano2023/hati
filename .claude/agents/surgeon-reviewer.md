@@ -17,7 +17,8 @@ SHIP with nothing else.
 ## What to review
 
 The change under review is everything on the current branch that isn't on
-`main`: `git diff main...HEAD` plus any uncommitted changes (`git diff`,
+`main` on GitHub. Run `git fetch` first, then `git diff origin/main...HEAD`
+(never against local `main`, which nothing keeps up to date) plus any uncommitted changes (`git diff`,
 `git status`). If you were pointed at a specific PR or commit range, review that
 instead. Read the surrounding code, not just the diff lines, before judging
 anything.
