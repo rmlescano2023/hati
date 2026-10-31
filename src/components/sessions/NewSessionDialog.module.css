@@ -1,0 +1,12 @@
+.input {
+  margin-top: 6px;
+}
+
+@media (max-width: 640px) {
+  /* Centred, the prompt sits behind the on-screen keyboard that opens with it,
+     so on a phone it rides near the top instead. The element selector keeps
+     this above the shared dialog's centring. */
+  dialog.sheet {
+    margin-top: max(16px, 8vh);
+  }
+}

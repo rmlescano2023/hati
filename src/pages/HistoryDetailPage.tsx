@@ -5,7 +5,7 @@ import { ExportSoaButton } from '../components/summary/ExportSoaButton';
 import { useSessionsStore } from '../context/SessionsStoreContext';
 import { groupRecordsForBreakdown } from '../lib/calculations';
 import { compareNames, formatLongDate, joinNames, sortNames } from '../lib/format';
-import { sessionTitle } from '../lib/sessionLabel';
+import { sessionDisplayTitle, sessionTitle } from '../lib/sessionLabel';
 import styles from './HistoryDetailPage.module.css';
 
 type Props = {
@@ -40,8 +40,9 @@ export function HistoryDetailPage({ sessionId, onBack }: Props) {
       <header className={styles.header}>
         <div className={styles.titles}>
           <h2 className={styles.heading}>
-            <span className={styles.date}>{sessionTitle(session)}</span>
+            <span className={styles.date}>{sessionDisplayTitle(session)}</span>
           </h2>
+          {session.name !== null && <p className={styles.dates}>{sessionTitle(session)}</p>}
           <p className={styles.meta}>
             Finished {formatLongDate(closedOn)}
             {members.length > 0 && <> · {joinNames(members)}</>}

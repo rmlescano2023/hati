@@ -4,6 +4,7 @@ import { NavTabs, type TabId } from './components/layout/NavTabs';
 import { PageShell } from './components/layout/PageShell';
 import { SessionWorkspace } from './components/layout/SessionWorkspace';
 import { SyncBanner } from './components/layout/SyncBanner';
+import { NewSessionDialog } from './components/sessions/NewSessionDialog';
 import type { SessionTabId } from './components/layout/SessionTabs';
 import { Button } from './components/shared/Button';
 import { PlusIcon } from './components/shared/icons';
@@ -33,6 +34,8 @@ const TOP_LEVEL = new Set<Screen['kind']>(['home', 'history']);
 export default function App() {
   const { sessions, createSession, deleteSession, sync } = useSessionsStore();
   const [screen, setScreen] = useState<Screen>({ kind: 'home' });
+  /** Whether the New Session prompt is open. */
+  const [naming, setNaming] = useState(false);
   const { shouldRun: firstLogin, markSeen } = useOnboarding();
 
   /**
@@ -70,11 +73,14 @@ export default function App() {
 
   const openSession = (sessionId: string) =>
     setScreen({ kind: 'session', sessionId, tab: 'expenses' });
-  const newSession = () => {
-    const id = createSession();
+  const startSession = (name: string | null) => {
+    const id = createSession(name);
     if (phase === 'running' && tourSession.current === null) tourSession.current = id;
     openSession(id);
   };
+  // The tour narrates one tap on the highlighted button; a prompt in the middle
+  // of it would be a step the tour knows nothing about.
+  const newSession = () => (phase === 'running' ? startSession(null) : setNaming(true));
 
   const endTour = useCallback(
     (completed: boolean) => {
@@ -87,7 +93,11 @@ export default function App() {
         // Keep it if they actually put something in it — silently deleting
         // what someone typed is worse than leaving a session behind.
         const created = sessions.find((s) => s.id === id);
-        const untouched = created && created.members.length === 0 && created.records.length === 0;
+        const untouched =
+          created &&
+          created.members.length === 0 &&
+          created.records.length === 0 &&
+          created.name === null;
         if (untouched) deleteSession(id);
       }
 
@@ -207,6 +217,15 @@ export default function App() {
           Get started
         </Button>
       </OnboardingDialog>
+      {naming && (
+        <NewSessionDialog
+          onCancel={() => setNaming(false)}
+          onCreate={(raw) => {
+            setNaming(false);
+            startSession(raw);
+          }}
+        />
+      )}
       <SyncBanner />
       {screen.kind === 'home' && (
         <HomePage

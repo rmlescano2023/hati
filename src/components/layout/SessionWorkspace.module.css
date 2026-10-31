@@ -7,7 +7,84 @@
   margin-bottom: 0.75rem;
 }
 
+/* The auto basis keeps a short date on Back's line, as it always was, while a
+   long name wraps onto a line of its own rather than squeezing Back. */
+.titleBlock {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.titles {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
+  min-width: 0;
+}
+
+.name {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
 .started {
   font-size: 12px;
   color: var(--text3);
+  overflow-wrap: anywhere;
+}
+
+.nameInput {
+  width: min(20rem, 100%);
+}
+
+.rename {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 23px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  cursor: pointer;
+  color: var(--text3);
+  opacity: 0.7;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.rename:hover,
+.rename:focus-visible {
+  opacity: 1;
+  color: var(--text);
+  background: var(--surface2);
+}
+
+.icon {
+  width: 15px;
+  height: 15px;
+  display: block;
+}
+
+@media (max-width: 640px) {
+  /* A thumb-sized target without making the header row any taller: the
+     negative margin gives the extra height back. */
+  .rename {
+    min-width: 32px;
+    min-height: 32px;
+    margin: -4.5px 0;
+  }
 }

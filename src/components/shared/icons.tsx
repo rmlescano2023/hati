@@ -5,9 +5,10 @@ type Props = {
 };
 
 /**
- * Line icons for the tab bars and the New Session button. Stroked in
- * currentColor, so each one takes the colour of the text beside it, including
- * a tab's active colour. Decorative: the label next to them carries the name.
+ * Line icons for the tab bars, the New Session button and the rename pencils.
+ * Stroked in currentColor, so each one takes the colour of the text beside it,
+ * including a tab's active colour. Decorative: the label next to them, or the
+ * button's own aria-label, carries the name.
  */
 function Icon({ className, children }: Props & { children: ReactNode }) {
   return (
@@ -75,6 +76,15 @@ export function PlusIcon(props: Props) {
   return (
     <Icon {...props}>
       <path d="M12 5v14M5 12h14" />
+    </Icon>
+  );
+}
+
+export function PencilIcon(props: Props) {
+  return (
+    <Icon {...props}>
+      <path d="M4 20h4L19 9a2.83 2.83 0 0 0-4-4L4 16v4Z" />
+      <path d="m13.5 6.5 4 4" />
     </Icon>
   );
 }

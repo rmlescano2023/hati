@@ -1,0 +1,6 @@
+/* Size and look come from the global text input; this only lets the box
+   shrink inside a flex row. */
+.input {
+  width: 100%;
+  min-width: 0;
+}
