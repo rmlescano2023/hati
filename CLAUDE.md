@@ -72,10 +72,18 @@ Hati's work is done by project subagents in `.claude/agents/`, dispatched by a
 coordinating session. The four principles above apply to all of them, with one
 adjustment:
 
+- **95% confidence before changing anything.** Don't make changes until you're
+  about 95% confident you know what needs to be built. For trivial tasks, use
+  judgment.
+  - The **coordinating session** gets there by asking the user follow-up
+    questions, in Plan Mode, before it dispatches any subagent.
+  - A **subagent** can't ask the user, so below that confidence it doesn't
+    build or write the spec. It stops and returns its questions instead.
 - **"Ask" means stop and report.** A subagent can't ask the user mid-task. When
   something is unclear or there are several reasonable readings, don't pick one
   silently: stop before acting on it, and put the question in your report so
-  the coordinating session can bring it to the user.
+  the coordinating session can bring it to the user. Batch all your questions
+  into one report rather than stopping at the first one.
 - **Reviews use the Surgical Changes test.** For `surgeon-reviewer`, every
   changed line in a diff should trace back to the task. Unrelated changes, such
   as reformatting, drive-by refactors or deleted pre-existing code, are a
