@@ -23,6 +23,10 @@ export function NewSessionDialog({ onCancel, onCreate }: Props) {
   const [draft, setDraft] = useState('');
   // A double tap on Create, or a held Enter, must still make one session.
   const submitted = useRef(false);
+  // Whether the current press began on the backdrop. A drag that starts in the
+  // box, say selecting the typed name, and ends past the dialog's edge also
+  // fires its click on the dialog element, and must not throw the name away.
+  const pressedBackdrop = useRef(false);
 
   useEffect(() => {
     const dialog = ref.current;
@@ -49,10 +53,16 @@ export function NewSessionDialog({ onCancel, onCreate }: Props) {
         e.preventDefault();
         cancel();
       }}
-      // Clicking the backdrop lands on the dialog element itself, never on its
+      // Pressing the backdrop lands on the dialog element itself, never on its
       // contents, which is how a click outside is told apart from one inside.
+      // Both ends of the click must be outside for it to cancel.
+      onPointerDown={(e) => {
+        pressedBackdrop.current = e.target === ref.current;
+      }}
       onClick={(e) => {
-        if (e.target === ref.current) cancel();
+        const outside = pressedBackdrop.current && e.target === ref.current;
+        pressedBackdrop.current = false;
+        if (outside) cancel();
       }}
     >
       <form

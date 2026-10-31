@@ -1,6 +1,6 @@
 # Spec: user-named sessions
 
-Status: **draft, awaiting owner approval.** Branch `session-names`.
+Status: **approved by the owner on 2026-11-01.** Branch `session-names`.
 
 ## 1. Summary
 
