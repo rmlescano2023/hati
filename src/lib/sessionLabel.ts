@@ -23,3 +23,8 @@ export function sessionTitle(session: Session): string {
   }
   return `Started ${formatLongDate(session.createdAt.slice(0, 10))}`;
 }
+
+/** The session's own name when it has one, otherwise the dates it covers. */
+export function sessionDisplayTitle(session: Session): string {
+  return session.name ?? sessionTitle(session);
+}
