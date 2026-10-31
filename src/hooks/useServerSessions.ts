@@ -157,7 +157,9 @@ export function useServerSessions(): Result {
           const res = await authedFetch(ENDPOINT, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: session.id }),
+            // The name chosen in the New Session prompt goes with the create, so
+            // it is stored even if nothing else about the session is ever saved.
+            body: JSON.stringify({ id: session.id, name: session.name }),
           });
           if (!res.ok) throw new Error(`Could not create the session (${res.status}).`);
         } catch (err) {
