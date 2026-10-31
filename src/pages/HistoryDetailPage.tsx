@@ -51,6 +51,7 @@ export function HistoryDetailPage({ sessionId, onBack }: Props) {
           layout="inline"
           members={sortNames(session.members)}
           records={session.records}
+          name={session.name}
           fileNameSuffix={closedOn}
         />
       </header>

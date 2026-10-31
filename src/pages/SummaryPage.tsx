@@ -15,7 +15,7 @@ import {
 import { sortNames } from '../lib/format';
 
 export function SummaryPage({ onClosed }: { onClosed: () => void }) {
-  const { members, records } = useAppData();
+  const { name, members, records } = useAppData();
   const [view, setView] = useState<MatrixView>('netted');
 
   const sortedMembers = useMemo(() => sortNames(members), [members]);
@@ -45,7 +45,7 @@ export function SummaryPage({ onClosed }: { onClosed: () => void }) {
         onViewChange={setView}
       />
       <NetBalanceCards balances={balances} />
-      <ExportSoaButton members={sortedMembers} records={records} />
+      <ExportSoaButton members={sortedMembers} records={records} name={name} />
       <CloseSessionButton onClosed={onClosed} />
     </>
   );
