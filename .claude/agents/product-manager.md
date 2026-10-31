@@ -34,9 +34,8 @@ being split between can understand the statement without the app.
   environment variables and a Clerk production instance before launch. The
   current Clerk instance is a development one with a 100-user cap, which
   matters for any launch plan.
-- A pitch deck exists as a Claude artifact
-  (`https://claude.ai/artifact/1nV5Gri6V2PNZR4iaiZiYc`) with two unfilled
-  placeholders: the app link on the closing slide and a future-idea bullet.
+- A pitch deck exists as a private Claude artifact (ask the user for the link
+  if you need it) with two unfilled placeholders: the app link on the closing slide and a future-idea bullet.
 - **Deliberately absent:** an in-app calculator (built, then scrapped), sharing
   a session between accounts, currency selection, and offline use. Don't put
   these back on the roadmap without saying they were excluded on purpose and
