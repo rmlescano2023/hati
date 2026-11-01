@@ -21,11 +21,14 @@ import {
   todayIso,
 } from '../lib/format';
 import { EPSILON } from '../lib/money';
+import { PDF_HEADING_WORD_MAX, breakLongWords, printableSessionName } from '../lib/soaName';
 import type { OwedMatrix, PurchaseRecord } from '../types';
 
 export type SoaProps = {
   members: string[];
   records: PurchaseRecord[];
+  /** The session's name; null when it has none. */
+  name: string | null;
 };
 
 const A4_WIDTH = 595.28;
@@ -36,12 +39,15 @@ const H_MARGIN = 80;
 const needsLandscape = (memberCount: number) => memberCount > 5;
 
 function DocHeader({
+  name,
   members,
   grandTotal,
   periodFrom,
   periodTo,
   generatedOn,
 }: {
+  /** Already reduced to what the font can print. */
+  name: string | null;
   members: string[];
   grandTotal: number;
   periodFrom: string;
@@ -53,6 +59,11 @@ function DocHeader({
       <View style={styles.headerLeft}>
         <Text style={styles.wordmark}>Hati</Text>
         <Text style={styles.headerSub}>Statement of Account</Text>
+        {name !== null && (
+          // Hyphenation is off, so an unbroken run is cut by hand to stay
+          // inside the column.
+          <Text style={styles.headerName}>{breakLongWords(name, PDF_HEADING_WORD_MAX)}</Text>
+        )}
         <Text style={styles.headerSub}>
           Period: {periodFrom} — {periodTo}
         </Text>
@@ -127,7 +138,7 @@ function Footer() {
   );
 }
 
-export function SoaDocument({ members, records }: SoaProps) {
+export function SoaDocument({ members, records, name }: SoaProps) {
   const sortedMembers = sortNames(members);
   const groups = groupRecordsForBreakdown(records, sortedMembers, 'asc');
   const raw = getRawOwedMatrix(records, sortedMembers);
@@ -140,6 +151,9 @@ export function SoaDocument({ members, records }: SoaProps) {
   const periodFrom = dates.length > 0 ? formatLongDate(dates[0]) : '—';
   const periodTo = dates.length > 0 ? formatLongDate(dates[dates.length - 1]) : '—';
   const generatedOn = formatLongDate(todayIso());
+  // The heading and the embedded title share one printable form, so a name
+  // with nothing the font can draw reads as unnamed in both.
+  const printable = printableSessionName(name);
 
   const landscape = needsLandscape(sortedMembers.length);
   const breakdownWidth = (landscape ? A4_HEIGHT : A4_WIDTH) - H_MARGIN;
@@ -147,7 +161,7 @@ export function SoaDocument({ members, records }: SoaProps) {
 
   return (
     <Document
-      title={`Hati SOA — ${generatedOn}`}
+      title={printable ? `Hati SOA — ${printable}` : `Hati SOA — ${generatedOn}`}
       author="Hati"
       subject="Group expenses statement of account"
       creator="Hati"
@@ -155,6 +169,7 @@ export function SoaDocument({ members, records }: SoaProps) {
     >
       <Page size="A4" style={styles.page}>
         <DocHeader
+          name={printable}
           members={sortedMembers}
           grandTotal={grandTotal}
           periodFrom={periodFrom}

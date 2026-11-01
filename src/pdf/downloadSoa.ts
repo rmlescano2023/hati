@@ -1,6 +1,7 @@
 import { createElement, type ReactElement } from 'react';
 import type { DocumentProps } from '@react-pdf/renderer';
 import { todayIso } from '../lib/format';
+import { soaFileName } from '../lib/soaName';
 import type { PurchaseRecord } from '../types';
 
 type Args = {
@@ -12,6 +13,8 @@ type Args = {
    * period it covers rather than the day it happened to be generated.
    */
   fileNameSuffix?: string;
+  /** The session's name, for the page-1 heading and the file name; null when unnamed. */
+  name: string | null;
 };
 
 /**
@@ -24,7 +27,7 @@ type Args = {
  * The renderer is imported dynamically so its ~1MB of code never lands in the
  * initial page bundle.
  */
-export async function downloadSoa({ members, records, fileNameSuffix }: Args): Promise<void> {
+export async function downloadSoa({ members, records, fileNameSuffix, name }: Args): Promise<void> {
   const [{ pdf }, { registerPdfFonts }, { SoaDocument }] = await Promise.all([
     import('@react-pdf/renderer'),
     import('./fonts'),
@@ -38,13 +41,14 @@ export async function downloadSoa({ members, records, fileNameSuffix }: Args): P
   const element = createElement(SoaDocument, {
     members,
     records,
+    name,
   }) as unknown as ReactElement<DocumentProps>;
 
   const blob = await pdf(element).toBlob();
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `Hati-SOA-${fileNameSuffix || todayIso()}.pdf`;
+  link.download = soaFileName(name, fileNameSuffix || todayIso());
   document.body.appendChild(link);
   link.click();
   link.remove();

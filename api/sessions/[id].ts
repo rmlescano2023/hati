@@ -45,16 +45,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     try {
       await client.sql`begin`;
       await client.sql`
-        insert into expense_sessions (id, user_id, status, created_at, closed_at, members)
+        insert into expense_sessions (id, user_id, status, created_at, closed_at, members, name)
         values (
           ${sessionId}, ${userId}, ${session.status},
           ${session.createdAt}, ${session.closedAt},
-          ${JSON.stringify(session.members)}::jsonb
+          ${JSON.stringify(session.members)}::jsonb,
+          ${session.name}
         )
         on conflict (id) do update set
           status    = excluded.status,
           closed_at = excluded.closed_at,
-          members   = excluded.members`;
+          members   = excluded.members,
+          name      = excluded.name`;
 
       // Replacing this session's records is far smaller than rewriting the
       // account, and avoids diffing a list the client already rebuilt.

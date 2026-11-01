@@ -1,7 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { ensureUser, getUserId, loadSessions, pool } from '../_shared.js';
+import { parseSessionName } from '../_validate.js';
 
-/** `GET` every session the caller owns; `POST` a new empty draft. */
+/** `GET` every session the caller owns; `POST` a new empty draft, optionally named. */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   let userId: string | null;
   try {
@@ -20,13 +21,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body ?? {});
     const id = typeof body.id === 'string' && body.id ? body.id : null;
     if (!id) return res.status(400).json({ error: 'A session id is required.' });
+    const name = parseSessionName(body.name);
 
     await ensureUser(userId);
     // The client generated the id and has already navigated into the session,
     // so this insert is catching up rather than being waited on.
     await pool.sql`
-      insert into expense_sessions (id, user_id, status, members)
-      values (${id}, ${userId}, 'draft', '[]'::jsonb)
+      insert into expense_sessions (id, user_id, status, members, name)
+      values (${id}, ${userId}, 'draft', '[]'::jsonb, ${name})
       on conflict (id) do nothing`;
 
     return res.status(201).json({ id });

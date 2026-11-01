@@ -8,7 +8,7 @@ import {
   type EventData,
   type Step,
 } from 'react-joyride';
-import { TOUR_STEPS, screenMatches, type ScreenShape } from './steps';
+import { TOUR_STEPS, screenMatches, wentToNextStep, type ScreenShape } from './steps';
 
 type Props = {
   run: boolean;
@@ -75,11 +75,17 @@ export function OnboardingTour({ run, screen, onNavigate, onDone }: Props) {
   );
 
   // Next does the navigating, so a screen that does not match the current step
-  // means the user went somewhere themselves. Let them.
+  // means the user went somewhere themselves. If it is where Next would have
+  // gone, as when they tap the highlighted New Session, follow along; anywhere
+  // else, let them.
   useEffect(() => {
     if (!run || done.current) return;
     const current = TOUR_STEPS[index];
     if (!current || screenMatches(current.screen, screen)) return;
+    if (wentToNextStep(index, screen)) {
+      setIndex(index + 1);
+      return;
+    }
 
     done.current = true;
     finish.current(false);
