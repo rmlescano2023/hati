@@ -49,7 +49,7 @@ export function SessionNameInput({ initialName, className, onSave, onClose }: Pr
       type="text"
       className={[styles.input, className].filter(Boolean).join(' ')}
       aria-label="Session name"
-      placeholder="Name this session"
+      placeholder="Name your session"
       maxLength={SESSION_NAME_MAX}
       value={draft}
       onChange={(e) => {

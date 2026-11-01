@@ -97,7 +97,7 @@ export function NewSessionDialog({ onCancel, onCreate }: Props) {
         }}
       >
         <h2 id="new-session-title" className={confirmStyles.title}>
-          Enter Session name
+          Name your session
         </h2>
         <input
           type="text"

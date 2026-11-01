@@ -379,8 +379,9 @@ type Props = {
 ```
 
 **Rendering:**
-- `<input type="text">` with `aria-label="Session name"`, `placeholder="Name this session"` and
-  `maxLength={SESSION_NAME_MAX}`.
+- `<input type="text">` with `aria-label="Session name"`, `placeholder="Name your session"` and
+  `maxLength={SESSION_NAME_MAX}`. The owner set this placeholder after approval, to match the New Session
+  prompt's heading; it replaces AC-3.2's "Name this session".
 - `value` is local `draft` state, initialised to `initialName ?? ''`. Dates are never prefilled (AC-3.2).
 - The latest draft is mirrored in a ref, so the unmount cleanup can read it.
 
@@ -541,7 +542,7 @@ type Props = { onCancel: () => void; onCreate: (raw: string) => void };
   focuses the first focusable element, which is the input (AC-2.1).
 - **Markup:** a `<dialog aria-labelledby="new-session-title">` containing a `<form>` with
   `className={confirmStyles.body}`:
-  - `<h2 id="new-session-title" className={confirmStyles.title}>Enter Session name</h2>`. The owner set
+  - `<h2 id="new-session-title" className={confirmStyles.title}>Name your session</h2>`. The owner set
     this heading after approval; it replaces AC-2.1's "Name this session (optional)". The placeholder,
     buttons and the box's accessible name are unchanged.
   - `<input type="text" aria-label="Session name" placeholder="e.g. Bali trip" maxLength={SESSION_NAME_MAX}>`,
