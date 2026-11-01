@@ -482,11 +482,12 @@ The ids come from `useId()`. Before the restructure, the card button's accessibl
 - `.titleLine`: flex, `align-items: flex-start`, gap 4px, `min-width: 0`.
 - `.dates`: 12px, `--text3`, `overflow-wrap: anywhere`.
 - `.rename` (desktop): 26 × 23px (one title line), flex-centred, no border, `background: none`,
-  `border-radius: var(--radius-sm)`, `color: var(--text2)` at full opacity, `cursor: pointer`, `flex: none`,
-  `position: relative; z-index: 1`. Hover and focus-visible: `color: var(--text);
+  `border-radius: var(--radius-sm)`, `color: var(--text2)` at `opacity: 0.8`, `cursor: pointer`,
+  `flex: none`, `position: relative; z-index: 1`. Hover and focus-visible: `opacity: 1; color: var(--text);
   background: var(--surface2)`. The icon uses its own 16px `.pencilIcon` (the 15px `.icon` stays for
-  delete). The owner asked for a stronger pencil after the ui-ux-tester's run: the original `--text3` at 0.7
-  opacity was hard to find. `--text2` is plainly visible but still a step quieter than the `--text` title.
+  delete). The owner asked for a stronger pencil after the ui-ux-tester's run (the original `--text3` at 0.7
+  opacity was hard to find), then a touch quieter than full opacity: `--text2` at 0.8 is plainly visible but
+  a step quieter than the `--text` title.
 - `.rename` at 640px and below: `min-width: 32px; min-height: 32px; margin: -4.5px 0`. That's at least the
   delete button's 25px target (AC-3.12), without making the title line taller.
 - `.titleLine .nameInput`: `flex: 1 1 auto`, `height: 28px`, `margin: -2.4px 0`, `padding: 0 8px`, and the
@@ -657,8 +658,21 @@ const newSession = () => (phase === 'running' ? startSession(null) : setNaming(t
   - `.titles`: flex column, `align-items: flex-end`, `text-align: right`, `min-width: 0`.
   - `.name`: 14px, 600, `--text`, `letter-spacing: -0.01em`, `overflow-wrap: anywhere`.
   - `.started`: unchanged, plus `overflow-wrap: anywhere`.
-  - `.rename`: the same rules as the card's `.rename`, including the 32px mobile minimum, plus a 16px
-    `.icon`.
+  - `.rename`: the same look as the card's `.rename` (`--text2` at 0.8, full `--text` on hover and focus),
+    with a 32px target at 640px and below, plus a 16px `.icon`. It is centred on the title's **first
+    line**, not on the name and dates together, so it sits beside the name (or beside the first line of a
+    wrapping name), and beside the dates when the session is unnamed:
+    - `.titleBlock` uses `align-items: flex-start` and sets `--first-line: calc(12px * 1.45)` (the dates
+      line); `.titleBlock:has(.name)` sets `calc(14px * 1.45)` (the name line). 1.45 is the body's line
+      height.
+    - `.rename` sets `--pencil-height` (23px, or 32px at 640px and below), `height: var(--pencil-height)` and
+      `margin-block: calc((var(--first-line) - var(--pencil-height)) / 2)`, so it is centred on that line and
+      its margins give back the extra height. The line, and the header row, never grow.
+  - No jump when the box opens. Desktop Back is 24px tall (a `sm` ghost button with `line-height: 1`), so
+    an unnamed session's header row is 24px. `SessionWorkspace` adds `.unnamedInput` to the box when the
+    session is unnamed, and `.titleBlock .unnamedInput { margin-block: -7px; }` keeps the 38px box at the
+    row's 24px. A named session's two lines are already 37.7px, and on a phone Back is 38px, so neither
+    needs it.
   - `.titleBlock .nameInput`: `width: min(20rem, 100%)`. It needs the two-class selector: a single
     `.nameInput` loses to the global `input[type='text'] { width: 100% }`, which is more specific, and that
     stretched the box across the whole header row in the first build.
@@ -730,6 +744,17 @@ No step or target changes. One tour behaviour changes, after the ui-ux-tester's 
   instead. Anywhere else still ends it. `App` already records the tapped session as the tour's session, so
   later steps reuse it and `endTour` cleans it up as before.
 - The tour's cleanup can't race the create: see the `creating` map under the store in section 5.
+- **A rename open when the tour ends counts (AC-5.5).** If the header rename box is still open when Skip is
+  tapped, iOS Safari doesn't blur it, so the name used to be saved only by the box's unmount, after
+  `endTour` had already judged the session untouched and deleted it. Now:
+  - `endTour` blurs the focused element first, so an open box saves through its normal blur path. The
+    save is queued before, or together with, the tour's own state changes.
+  - `endTour` no longer decides itself. It sets `tourCleanup` state to the tour's session id. An effect in
+    `App` then keeps or deletes the session using the `sessions` of that render, which already hold the
+    saved name. The "untouched" rule is unchanged.
+  - This is React timing, not pure logic, and the Vitest suite runs in `node` with no component tests, so
+    it has no unit test. The ui-ux-tester covers it: during the tour, open the header rename, type a name
+    without Enter, tap Skip, and check that the session remains, named, after a reload.
 - `endTour` keeps a tour session the user named (AC-5.5).
 - Run `steps.test.ts` and `targets.test.ts`. Both must pass; `steps.test.ts` gains cases for
   `wentToNextStep`.
