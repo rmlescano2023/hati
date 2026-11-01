@@ -32,6 +32,10 @@ export function ConfirmDialog({
   onCancel,
 }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
+  // Whether the current press began on the backdrop. A drag that starts in the
+  // dialog, say on its message or a button, and ends past the dialog's edge
+  // also fires its click on the dialog element, and must not cancel.
+  const pressedBackdrop = useRef(false);
 
   useEffect(() => {
     const dialog = ref.current;
@@ -64,8 +68,14 @@ export function ConfirmDialog({
       }}
       // Clicking the backdrop lands on the dialog element itself, never on its
       // contents, which is how a click outside is told apart from one inside.
+      // Both ends of the click must be outside for it to cancel.
+      onPointerDown={(e) => {
+        pressedBackdrop.current = e.target === ref.current;
+      }}
       onClick={(e) => {
-        if (e.target === ref.current) onCancel();
+        const outside = pressedBackdrop.current && e.target === ref.current;
+        pressedBackdrop.current = false;
+        if (outside) onCancel();
       }}
     >
       <div className={styles.body}>

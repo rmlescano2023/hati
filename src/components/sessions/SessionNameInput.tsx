@@ -13,7 +13,7 @@ type Props = {
 };
 
 /**
- * The inline rename box on a Home card and in the session header. It mounts
+ * The inline rename box in the session header. It mounts
  * only once the pencil is tapped and unmounts when the edit ends, which is why
  * it isn't `EditableCell`: that one is always mounted, drops an empty value
  * rather than saving it, and clearing a name has to save no name.
