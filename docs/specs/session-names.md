@@ -541,7 +541,9 @@ type Props = { onCancel: () => void; onCreate: (raw: string) => void };
   focuses the first focusable element, which is the input (AC-2.1).
 - **Markup:** a `<dialog aria-labelledby="new-session-title">` containing a `<form>` with
   `className={confirmStyles.body}`:
-  - `<h2 id="new-session-title" className={confirmStyles.title}>Name this session (optional)</h2>`
+  - `<h2 id="new-session-title" className={confirmStyles.title}>Enter Session name</h2>`. The owner set
+    this heading after approval; it replaces AC-2.1's "Name this session (optional)". The placeholder,
+    buttons and the box's accessible name are unchanged.
   - `<input type="text" aria-label="Session name" placeholder="e.g. Bali trip" maxLength={SESSION_NAME_MAX}>`,
     controlled by `draft`.
   - `<div className={confirmStyles.actions}>` holding `<Button onClick={cancel}>Cancel</Button>` and
@@ -561,9 +563,15 @@ type Props = { onCancel: () => void; onCreate: (raw: string) => void };
   and `actions`. There's precedent: `HistoryPage` reuses `HomePage.module.css`, and `SessionTabs` reuses
   `NavTabs.module.css`. `NewSessionDialog.module.css` adds:
   - `.input { margin-top: 6px; }`
-  - Inside `@media (max-width: 640px)`: `dialog.sheet { margin-top: max(16px, 8vh); }`. The element
-    selector keeps specificity above the shared `.dialog`. At 375px with the keyboard open, this keeps the
-    box and both buttons above the keyboard, not centred behind it (AC-2.10).
+  - Inside `@media (max-width: 640px)` the prompt is centred vertically in the *visible* viewport (an
+    owner change after approval; it replaced an earlier top placement). A `useEffect` copies
+    `window.visualViewport`'s `offsetTop` and `height` into `--visible-top` and `--visible-height` on the
+    dialog, updated on its `resize` and `scroll` events, and
+    `dialog.sheet { top: var(--visible-top, 0px); bottom: calc(100% - var(--visible-top, 0px) - var(--visible-height, 100%)); }`
+    lets the shared `margin: auto` centre the box between those insets. With the keyboard closed that is
+    the screen's centre. With it open, the visible viewport is the space above the keyboard, so the box and
+    both buttons centre there rather than behind it (AC-2.10). Without `visualViewport` the fallbacks give
+    the shared centring. The element selector keeps specificity above the shared `.dialog`.
   - The dialog element gets `className={`${confirmStyles.dialog} ${styles.sheet}`}`.
 
 ### App (`src/App.tsx`)
@@ -769,7 +777,7 @@ For the documentation-engineer, after the code ships:
   name heading; the embedded title; characters DM Sans can't draw are omitted.
 - **README "Data and privacy" SQL block:** add `name text -- null until the user names the session`.
 - **`docs/mobile-breakpoints.md` (640px section):** the `SessionCard` and `SessionWorkspace` pencils (32px
-  minimum) and the New Session dialog's top placement.
+  minimum) and the New Session dialog's centring in the visible viewport above the keyboard.
 - Any user-facing guides in `Documentation/` that describe creating a session (the new prompt) or the SOA
   file name.
 

@@ -36,6 +36,28 @@ export function NewSessionDialog({ onCancel, onCreate }: Props) {
     if (dialog && !dialog.open) dialog.showModal();
   }, []);
 
+  useEffect(() => {
+    const dialog = ref.current;
+    const viewport = window.visualViewport;
+    if (!dialog || !viewport) return;
+    // The on-screen keyboard opens with the prompt, because the box is focused.
+    // It shrinks only the visible part of the page, not the layout the dialog
+    // is centred in, so a plain centred dialog can sit behind it. Tracking the
+    // visible area lets the phone styles centre the prompt in what can actually
+    // be seen, which with the keyboard up is the space above it.
+    const track = () => {
+      dialog.style.setProperty('--visible-top', `${viewport.offsetTop}px`);
+      dialog.style.setProperty('--visible-height', `${viewport.height}px`);
+    };
+    track();
+    viewport.addEventListener('resize', track);
+    viewport.addEventListener('scroll', track);
+    return () => {
+      viewport.removeEventListener('resize', track);
+      viewport.removeEventListener('scroll', track);
+    };
+  }, []);
+
   const cancel = () => {
     // Closing before unmounting lets the browser hand focus back to the button
     // that opened the prompt.
@@ -75,7 +97,7 @@ export function NewSessionDialog({ onCancel, onCreate }: Props) {
         }}
       >
         <h2 id="new-session-title" className={confirmStyles.title}>
-          Name this session (optional)
+          Enter Session name
         </h2>
         <input
           type="text"

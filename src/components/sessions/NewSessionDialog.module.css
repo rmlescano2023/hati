@@ -3,10 +3,15 @@
 }
 
 @media (max-width: 640px) {
-  /* Centred, the prompt sits behind the on-screen keyboard that opens with it,
-     so on a phone it rides near the top instead. The element selector keeps
-     this above the shared dialog's centring. */
+  /* Centred in the part of the screen that is visible, rather than in the whole
+     layout, so the on-screen keyboard that opens with the prompt never covers
+     it: with the keyboard up, the prompt centres in the space above it. The
+     variables come from the dialog's visualViewport tracking; without them the
+     insets fall back to the whole screen, which is the shared centring. The
+     auto margins do the centring between these insets, and the element
+     selector keeps this above the shared dialog's rule. */
   dialog.sheet {
-    margin-top: max(16px, 8vh);
+    top: var(--visible-top, 0px);
+    bottom: calc(100% - var(--visible-top, 0px) - var(--visible-height, 100%));
   }
 }
