@@ -7,6 +7,8 @@ import styles from './ExportSoaButton.module.css';
 type Props = {
   members: string[];
   records: PurchaseRecord[];
+  /** The session's name at the moment of export; null when unnamed. */
+  name: string | null;
   /** Passed through to the filename; defaults to today's date. */
   fileNameSuffix?: string;
   /** Overrides the caption under the button. Ignored when `layout` is 'inline'. */
@@ -22,6 +24,7 @@ type Props = {
 export function ExportSoaButton({
   members,
   records,
+  name,
   fileNameSuffix,
   hint,
   layout = 'block',
@@ -33,7 +36,7 @@ export function ExportSoaButton({
     setBusy(true);
     setError('');
     try {
-      await downloadSoa({ members, records, fileNameSuffix });
+      await downloadSoa({ members, records, fileNameSuffix, name });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not generate the PDF.');
     } finally {

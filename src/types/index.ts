@@ -62,6 +62,8 @@ export type Session = {
   closedAt: string | null;
   members: string[];
   records: PurchaseRecord[];
+  /** The name the user gave it, tidied; null means unnamed and titled by its dates. */
+  name: string | null;
 };
 
 export type AppData = {

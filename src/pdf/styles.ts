@@ -39,6 +39,15 @@ export const styles = StyleSheet.create({
   brandRow: { flexDirection: 'row', alignItems: 'center' },
   wordmark: { fontSize: 20, fontWeight: 700, letterSpacing: -0.6 },
   headerSub: { fontSize: 9, color: palette.text2, marginTop: 3 },
+  // The session's own name: more prominent than the 9pt lines around it, and
+  // inside the 60% column so a long one wraps before reaching Members.
+  headerName: {
+    fontSize: 13,
+    fontWeight: 700,
+    color: palette.text,
+    letterSpacing: -0.2,
+    marginTop: 5,
+  },
   headerRight: { flexDirection: 'column', alignItems: 'flex-end', maxWidth: '40%' },
   headerLabel: {
     fontSize: 7,

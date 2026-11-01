@@ -4,12 +4,18 @@ import { compareNames, toTitleCase } from '../lib/format';
 import { roundMoney } from '../lib/money';
 import { getItemShares } from '../lib/calculations';
 import { createId } from '../lib/id';
+import { applySessionName, normaliseSessionName } from '../lib/sessionName';
 import type { NewPurchaseRecord, PurchaseItem, PurchaseRecord, Session } from '../types';
 
 type SessionsStoreValue = {
   sessions: Session[];
-  /** Creates an empty draft and returns its id, for the caller to navigate into. */
-  createSession: () => string;
+  /**
+   * Creates an empty draft, named if `name` has anything usable in it, and
+   * returns its id for the caller to navigate into.
+   */
+  createSession: (name?: string | null) => string;
+  /** Names or renames a draft; a blank name clears it. Closed sessions are left alone. */
+  renameSession: (sessionId: string, rawName: string) => void;
   closeSession: (sessionId: string) => void;
   /** Removes a session outright. Unlike closing, nothing is kept. */
   deleteSession: (sessionId: string) => void;
@@ -117,7 +123,7 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
     [updateSession],
   );
 
-  const createSession = useCallback((): string => {
+  const createSession = useCallback((name?: string | null): string => {
     const id = createId('session');
     // The caller navigates into the session immediately, so the id is minted
     // here and the server catches up rather than being awaited.
@@ -128,9 +134,17 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
       closedAt: null,
       members: [],
       records: [],
+      name: normaliseSessionName(name ?? null),
     });
     return id;
   }, [addSession]);
+
+  const renameSession = useCallback(
+    (sessionId: string, rawName: string) => {
+      updateSession(sessionId, (session) => applySessionName(session, rawName));
+    },
+    [updateSession],
+  );
 
   const closeSession = useCallback(
     (sessionId: string) => {
@@ -290,6 +304,7 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
     () => ({
       sessions,
       createSession,
+      renameSession,
       closeSession,
       deleteSession,
       addMember,
@@ -311,6 +326,7 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
       retry,
       sessions,
       createSession,
+      renameSession,
       closeSession,
       deleteSession,
       addMember,

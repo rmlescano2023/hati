@@ -35,6 +35,9 @@
   font-size: 13px;
   line-height: 1.5;
   color: var(--text2);
+  /* A message can quote a user's own text, such as a session name with no
+     spaces, which would otherwise run past the dialog's edge. */
+  overflow-wrap: anywhere;
 }
 
 .actions {

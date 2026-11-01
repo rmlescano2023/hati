@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { sessionTitle } from './sessionLabel';
+import { sessionDisplayTitle, sessionTitle } from './sessionLabel';
 import type { PurchaseRecord, Session } from '../types';
 
 const record = (date: string): PurchaseRecord => ({
@@ -18,6 +18,7 @@ const session = (over: Partial<Session> = {}): Session => ({
   closedAt: null,
   members: ['Ana'],
   records: [],
+  name: null,
   ...over,
 });
 
@@ -58,5 +59,21 @@ describe('sessionTitle', () => {
 
   it('falls back to createdAt when a closed session has neither records nor closedAt', () => {
     expect(sessionTitle(session({ status: 'closed', closedAt: null }))).toBe('September 17, 2026');
+  });
+});
+
+describe('sessionDisplayTitle', () => {
+  it('uses the name when the session has one', () => {
+    expect(sessionDisplayTitle(session({ name: 'Bali Trip' }))).toBe('Bali Trip');
+  });
+
+  it('falls back to the dates for an unnamed session', () => {
+    const s = session({ records: [record('2026-04-28')] });
+    expect(sessionDisplayTitle(s)).toBe(sessionTitle(s));
+  });
+
+  it('leaves sessionTitle on the dates even when the session is named', () => {
+    const s = session({ name: 'Bali Trip', records: [record('2026-04-28')] });
+    expect(sessionTitle(s)).toBe('April 28, 2026');
   });
 });
