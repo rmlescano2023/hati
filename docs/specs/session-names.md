@@ -2,6 +2,11 @@
 
 Status: **approved by the owner on 2026-11-01.** Branch `session-names`.
 
+> **2026-11-01: the card pencil was removed at the owner's request.** In Progress cards on Home are plain
+> and read-only again; renaming happens only in the New Session prompt and the open session's header.
+> This spec has been updated to match the business-analyst's requirements delta (see "Requirements changed
+> on 2026-11-01" at the end of section 1). Branch `fix-confirm-dialog-drag-out`.
+
 ## 1. Summary
 
 A session can carry an optional name the user chooses ("Bali Trip"). When it has one, the name replaces the
@@ -10,12 +15,58 @@ History detail heading, the delete confirmation, screen-reader labels, and the S
 embedded title, file name). The dates then show as a quieter second line. Unnamed sessions look exactly as
 they do today.
 
-Only drafts can be named or renamed, from three places: the "+ New Session" prompt (Cancel / Create), a
-pencil on each In Progress card (inline edit), and a pencil in the open session's header. Closed sessions
-show their name but can't be renamed.
+Only drafts can be named or renamed, from two places: the "+ New Session" prompt (Cancel / Create) and a
+pencil in the open session's header. Home cards, History cards and the closed detail page have no way to
+rename (BR-11), and closed sessions show their name but can't be renamed. Renaming from the Home card is
+out of scope.
 
 Source: the business-analyst's revised requirements, "User-named sessions" (BR-1 to BR-24, US-1 to US-7),
 with the owner's answers folded in. The system-architect was skipped by the owner's choice.
+
+### Requirements changed on 2026-11-01
+
+From the business-analyst's delta, "Remove the card rename pencil".
+
+**Removed.** US-3 entirely (AC-3.1 to AC-3.12). Its edit behaviour survives only in the header (AC-4.2).
+AC-3.8 to AC-3.11 (tap-away on a card, delete while editing, a second card's pencil, nav while editing) no
+longer apply. BR-17 is retired, because the header edit is now the only inline edit.
+
+**Reworded.**
+- **AC-2.1:** the prompt title is "Name your session". There is no rename from Home.
+- **AC-4.2:** in the header, tapping the pencil turns the title into a focused text box, prefilled with the
+  current name with its text selected. An unnamed session's box starts empty with a placeholder; the dates
+  are never prefilled. Enter or tapping away saves. Esc cancels and sends nothing. Clearing the text (or
+  leaving only spaces) and saving removes the name, so the dates become the title. Saving without a change
+  sends nothing.
+- **AC-4.6 (added):** the header pencil's touch target is no smaller than the delete icon's (25px); at least
+  32px on a phone.
+- **AC-5.4:** adding the header pencil and the dialog does not duplicate or move any tour target. The
+  header pencil stays outside `workspace-back`. `session-list` is untouched.
+- **AC-6.1:** existing sessions display as today, with no pencil on the cards.
+- **BR-11 (added):** Home cards, History cards and the closed detail page have no way to rename. In a
+  draft, the only rename is in its header.
+- **BR-16** applies to the header edit and the prompt only.
+- Unchanged: AC-1.1, 1.2, 1.3, 1.5, 1.6, 1.7 (the delete aria-label "Delete session <display title>"), 1.8,
+  1.9.
+
+**New.**
+- **AC-1.10 Plain Home and History cards.** A card holds only: the title (the name, or the dates when
+  unnamed), the dates line when named, members ("No members yet" when empty), the purchase count and the
+  total. Home cards also have the trash icon; History cards don't. There's no pencil or text box, and
+  nothing on a card is editable. An unnamed card looks exactly as it did before this feature. Tapping
+  anywhere except the trash opens the session. The trash opens the delete confirmation and doesn't open the
+  session. The only labelled control is the trash ("Delete session <display title>").
+- **AC-1.11 Card behaviour as before the pencil.**
+  - The whole card is one focusable control, with its focus ring around the whole card, and Enter or Space
+    opens it.
+  - Hovering highlights the card, but hovering the trash doesn't.
+  - At 320px and 375px a 60-character name wraps with no horizontal scroll and no ellipsis, the total stays
+    on the title's first line, and the title may use the full width beside the total.
+- **AC-1.12:** rename a draft in its header, go Back to Home, tap the trash, and the confirmation shows the
+  new name.
+
+**Accepted.** Fixing a typo means opening the session first. Names already set on UAT are kept, with no
+data change and no migration.
 
 ## 2. Layers touched
 
@@ -36,10 +87,10 @@ with the owner's answers folded in. The system-architect was skipped by the owne
 | Client state | `src/context/SessionsStoreContext.tsx` | `createSession(name?)`, new `renameSession` | `updateSession` / `mutateSession` |
 | Client state | `src/context/AppDataContext.tsx` | expose `name` to the open session's pages | — |
 | UI | `src/components/shared/icons.tsx` | new `PencilIcon` | `Icon` wrapper |
-| UI | `src/components/sessions/SessionNameInput.tsx` + `.module.css` **(new)** | the inline rename box (card and header) | global `input[type='text']` styles |
+| UI | `src/components/sessions/SessionNameInput.tsx` + `.module.css` **(new)** | the inline rename box (header) | global `input[type='text']` styles |
 | UI | `src/components/sessions/NewSessionDialog.tsx` + `.module.css` **(new)** | the "+ New Session" prompt | `ConfirmDialog.module.css` classes, `Button` |
-| UI | `src/components/sessions/SessionCard.tsx` + `.module.css` | name and dates lines, pencil, inline edit; restructured so the pencil can sit beside the title | `TrashIcon`, existing classes |
-| UI | `src/pages/HomePage.tsx` | one-edit-at-a-time state, rename wiring, delete wording, delete looked up by id | `ConfirmDialog`, `pluralize` |
+| UI | `src/components/sessions/SessionCard.tsx` + `.module.css` | name and dates lines; the card stays one button, as before the feature | `TrashIcon`, existing classes |
+| UI | `src/pages/HomePage.tsx` | delete wording, delete looked up by id | `ConfirmDialog`, `pluralize` |
 | UI | `src/App.tsx` | New Session opens the prompt (except while the tour runs); `endTour` counts a name as "touched" | `newSession`, `tourSession` |
 | UI | `src/components/layout/SessionWorkspace.tsx` + `.module.css` | name and dates in the header, pencil, inline edit | `.started` style |
 | UI | `src/pages/HistoryDetailPage.tsx` + `.module.css` | name as heading, then a dates line | `.date`, `.meta` |
@@ -51,7 +102,7 @@ with the owner's answers folded in. The system-architect was skipped by the owne
 | Dev tooling | `scripts/render-soa-check.tsx` | optional 5th argument: a session name | — |
 | Tests | see section 8 | | |
 
-Not touched: `HistoryPage.tsx` (it renders `SessionCard` without rename or delete), `steps.ts`,
+Not touched: `HistoryPage.tsx` (it renders `SessionCard` without delete), `steps.ts`,
 `OnboardingTour.tsx`, `SyncBanner`, `calculations.ts`, `money.ts`, and `scripts/db/verify-migration.ts`
 (a one-off script that no tsconfig type-checks).
 
@@ -223,7 +274,7 @@ and both create and rename.
   `normaliseSessionName(raw) === session.name` (BR-6).
 - Otherwise it returns `{ ...session, name: normaliseSessionName(raw) }`.
 - Because `mutateSession` treats an identical object as a no-op, an unchanged save, an Escape, or any
-  repeated save of the same value sends no request (AC-3.7). Section 6 relies on that.
+  repeated save of the same value sends no request (AC-4.2). Section 6 relies on that.
 
 ### `src/lib/sessionLabel.ts`
 
@@ -337,7 +388,7 @@ assumption A3.)
 
 Shared conventions:
 - All new mobile-only rules go inside `@media (max-width: 640px)`.
-- Where desktop changes, it's only to show the name, the dates line and the pencil.
+- Where desktop changes, it's only to show the name, the dates line and the header pencil.
 - A 60-character name, including one with no spaces, wraps: never an ellipsis, and never a horizontal
   scroll at 320px (BR-9, AC-1.8). Every name-bearing element gets `overflow-wrap: anywhere` and a
   `min-width: 0` flex parent.
@@ -363,7 +414,7 @@ Why a new component instead of `EditableCell` (settled point 2): `EditableCell` 
 rename, and bending it would change behaviour inside `BreakdownTable`.
 - It's an always-mounted input that shows a resting value. The rename box mounts only after the pencil is
   tapped.
-- Its text commit **drops empty values**, but clearing a name must save `null` (AC-3.6).
+- Its text commit **drops empty values**, but clearing a name must save `null` (AC-4.2).
 - It has no `maxLength` (AC-2.7), and it doesn't collapse internal whitespace (BR-2).
 - It has a table-cell look: transparent until hover, and a 44px mobile height tuned to the Breakdown table.
 
@@ -386,14 +437,14 @@ type Props = {
 **Rendering:**
 - `<input type="text">` with `aria-label="Session name"`, `placeholder="Name your session"` and
   `maxLength={SESSION_NAME_MAX}`. The owner set this placeholder after approval, to match the New Session
-  prompt's heading; it replaces AC-3.2's "Name this session".
-- `value` is local `draft` state, initialised to `initialName ?? ''`. Dates are never prefilled (AC-3.2).
+  prompt's heading; it replaces the original "Name this session".
+- `value` is local `draft` state, initialised to `initialName ?? ''`. Dates are never prefilled (AC-4.2).
 - The latest draft is mirrored in a ref, so the unmount cleanup can read it.
 
 **Behaviour.** A `finished` ref makes the first ending win.
-- **Mount:** a `useEffect` calls `focus()` and then `select()` (AC-3.2).
+- **Mount:** a `useEffect` calls `focus()` and then `select()` (AC-4.2).
 - **Enter:** `preventDefault`; `finished = true`; `onSave(draft)`; `onClose('enter')`.
-- **Escape:** `preventDefault`; `finished = true`; `onClose('escape')`. Nothing is saved (AC-3.5).
+- **Escape:** `preventDefault`; `finished = true`; `onClose('escape')`. Nothing is saved (AC-4.2).
 - **Blur:** if not finished: `finished = true`; `onSave(draft)`; `onClose('blur')`.
 - **Unmount cleanup:** if not finished, `onSave(draftRef.current)`. It doesn't set `finished`.
   - This is the backstop for every "do something else while editing" case where the browser doesn't fire a
@@ -405,131 +456,50 @@ type Props = {
 **CSS** (`SessionNameInput.module.css`): `.input { width: 100%; min-width: 0; }`. Everything else comes from
 the global `input[type='text']` (38px, 13px). There's no mobile override.
 
-### Home cards (`SessionCard.tsx`, `SessionCard.module.css`)
+### Home and History cards (`SessionCard.tsx`, `SessionCard.module.css`)
 
-**New prop** (only HomePage passes it; History never does):
-
-```ts
-/** Drafts on Home only: the pencil and the inline name editor. */
-rename?: {
-  editing: boolean;
-  onStart: () => void;
-  onSave: (raw: string) => void;
-  onEnd: () => void;
-};
-```
-
-**Restructure.** The pencil has to sit beside the title, and a button can't nest inside the card's
-`<button>`. So the card becomes the **stretched-button pattern**:
-- `.row` takes over the card's visual box: border, background, radius, padding, and a column with a 6px
-  gap. It stays `position: relative`.
-- The title becomes the card's one `<button className={styles.open}>`, whose `::after` covers the whole row:
-  `content: ''; position: absolute; inset: 0; border-radius: var(--radius)`. Tapping anywhere on the card
-  still opens it, and it's still a real button, which matters to the existing comment about keyboard
-  behaviour.
-- The pencil and the delete button get `position: relative; z-index: 1` (delete stays `absolute`, adding
-  `z-index: 1`), so they sit above the overlay.
+The card is plain and read-only (AC-1.10). It keeps its pre-feature structure: the whole card is one
+`<button className={styles.card}>`, and delete is a sibling laid over its bottom corner, because a button
+can't nest inside another button. Only the title line changed:
 
 ```tsx
-<div className={styles.row} onPointerDownCapture={…} onClickCapture={…}>
-  <span className={styles.top}>
-    <span className={styles.titles}>
-      <span className={styles.titleLine}>
-        {editing ? (
-          <SessionNameInput className={styles.nameInput} initialName={session.name} … />
-        ) : (
-          <button type="button" className={styles.open} onClick={onClick}
-                  aria-describedby={/* ids of dates (if named), total, members, count */}>
-            {sessionDisplayTitle(session)}
-          </button>
-        )}
-        {rename && !editing && (
-          <button type="button" ref={pencilRef} className={styles.rename}
-                  title="Rename session"
-                  aria-label={`Rename session ${sessionDisplayTitle(session)}`}
-                  onClick={rename.onStart}>
-            <PencilIcon className={styles.icon} />
-          </button>
-        )}
+<div className={styles.row}>
+  <button type="button" className={styles.card} onClick={onClick}>
+    <span className={styles.top}>
+      <span className={styles.titles}>
+        <span className={styles.title}>{sessionDisplayTitle(session)}</span>
+        {session.name !== null && <span className={styles.dates}>{sessionTitle(session)}</span>}
       </span>
-      {session.name !== null && <span id={…} className={styles.dates}>{sessionTitle(session)}</span>}
+      <span className={styles.total}>{formatMoney(getGrandTotal(session.records))}</span>
     </span>
-    <span id={…} className={styles.total}>{formatMoney(getGrandTotal(session.records))}</span>
-  </span>
-  <span id={…} className={styles.members}>…unchanged…</span>
-  <span id={…} className={styles.count}>…unchanged…</span>
+    <span className={styles.members}>…unchanged…</span>
+    <span className={styles.count}>…unchanged…</span>
+  </button>
   {onDelete && <button … aria-label={`Delete session ${sessionDisplayTitle(session)}`}>…</button>}
 </div>
 ```
 
-The ids come from `useId()`. Before the restructure, the card button's accessible name was its whole text;
-`aria-describedby` keeps that information. The outer elements stay `span`s, as today.
+Why the pre-feature structure rather than the stretched title button the card pencil needed: with the
+pencil gone nothing has to sit beside the title, and the plain button gives AC-1.11 by construction.
+- The card is one focusable control, and the global `button:focus-visible` rule rings the whole card.
+  Enter and Space open it because it's a real button.
+- `.card:hover` highlights it. The trash is a sibling, not a child, so hovering the trash doesn't.
+- An unnamed card renders the same markup and rules as before the feature, plus an inert `.titles` wrapper.
+- It needs no `:has()`, `::after` overlay, `z-index` or `aria-describedby`; the button's accessible name is
+  its whole text, as before.
 
-**CSS changes:**
-- **Move:** the `.card` box rules (border, radius, background, padding, flex column, gap, transition) move
-  to `.row`.
-- **Hover:** `.card:hover` becomes `.row:has(.open:hover)`, so hovering the delete or pencil doesn't
-  highlight the card, which matches today.
-- **Focus:** keyboard focus rings the whole card as today:
-  `.row:has(.open:focus-visible) { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(78, 168, 124, 0.18); }`
-  plus `.open:focus-visible { box-shadow: none; }`.
-- `.open` takes the old `.date` text styles (16px, 600, -0.02em, `--text`) plus `font: inherit` overrides,
-  `background: none; border: none; padding: 0; text-align: left; cursor: pointer; color: inherit;
-  overflow-wrap: anywhere; min-width: 0`. Delete `.date`. `.card` is removed.
-- `.titles`: flex column, gap 2px, `flex: 1 1 auto`, `min-width: 0`. `.top` keeps
-  `align-items: baseline`, so the total aligns with the title's first line (BR-9). `.total` keeps `nowrap`
-  and adds `flex: none`.
-- `.titleLine`: flex, `align-items: flex-start`, gap 4px, `min-width: 0`.
+**CSS** (against the pre-feature file):
+- `.date` is renamed `.title`, with the same type (16px, 600, -0.02em, `--text`) plus
+  `overflow-wrap: anywhere`.
+- `.titles`: flex column, gap 2px, `flex: 1 1 auto`, `min-width: 0`, so the title may use the full width
+  beside the total. `.top` keeps `align-items: baseline`, so the total aligns with the title's first line
+  (BR-9, AC-1.11). `.total` keeps `nowrap` and adds `flex: none`.
 - `.dates`: 12px, `--text3`, `overflow-wrap: anywhere`.
-- `.rename` (desktop): 26 × 23px (one title line), flex-centred, no border, `background: none`,
-  `border-radius: var(--radius-sm)`, `color: var(--text2)` at `opacity: 0.8`, `cursor: pointer`,
-  `flex: none`, `position: relative; z-index: 1`. Hover and focus-visible: `opacity: 1; color: var(--text);
-  background: var(--surface2)`. The icon uses its own 16px `.pencilIcon` (the 15px `.icon` stays for
-  delete). The owner asked for a stronger pencil after the ui-ux-tester's run (the original `--text3` at 0.7
-  opacity was hard to find), then a touch quieter than full opacity: `--text2` at 0.8 is plainly visible but
-  a step quieter than the `--text` title.
-- `.rename` at 640px and below: `min-width: 32px; min-height: 32px; margin: -4.5px 0`. That's at least the
-  delete button's 25px target (AC-3.12), without making the title line taller.
-- `.titleLine .nameInput`: `flex: 1 1 auto`, `height: 28px`, `margin: -2.4px 0`, `padding: 0 8px`, and the
-  title's type (16px, 600, -0.02em). The box takes the 23.2px title line's place without changing the
-  card's height, so nothing below it moves while renaming (the first build grew the card by about 12px). The
-  16px type also stops iOS zooming on focus. The two-class selector outranks the global
-  `input[type='text']`. Only one box shows at a time.
-
-An unnamed card in History or on Home renders the same as today, apart from the pencil on Home.
-
-**Interaction while editing** (AC-3.8 to AC-3.11). There's no `.open` button while editing, so the card body
-is inert apart from the input and the delete. Two guards on `.row`, using a `swallowClick` ref:
-- `onPointerDownCapture`:
-  - When not editing, set `swallowClick = false`.
-  - When editing and the target is outside the input and outside the delete button, set
-    `swallowClick = true`.
-- `onClickCapture`: if `swallowClick`, reset it, call `e.stopPropagation()`, and, if still editing (the
-  browser didn't blur), call `rename.onEnd()`.
-
-So the tap that ends the edit never opens the session, and the next tap does (AC-3.8). A tap on delete isn't
-swallowed. The blur saves first, and the confirmation reads the saved name (AC-3.9; see HomePage). Tapping
-another card's pencil works either way: the blur saves the first edit, or the parent switches `editingId`
-and the first box's unmount saves it (AC-3.10). A nav tab or "+ New Session" works the same way: blur or
-unmount saves, and the action proceeds (AC-3.11).
-
-**Focus:** when `onClose` reports `'enter'` or `'escape'`, set a `restoreFocus` ref. A `useEffect` on
-`rename?.editing` then focuses `pencilRef` once the pencil is back (AC-2.8 spirit).
+- Nothing else changes, and there's no mobile-only rule.
 
 ### HomePage (`src/pages/HomePage.tsx`)
 
-- `const [editingId, setEditingId] = useState<string | null>(null)` keeps one edit open at a time (BR-17).
-- Each draft card gets:
-  ```ts
-  rename={{
-    editing: editingId === session.id,
-    onStart: () => setEditingId(session.id),
-    onSave: (raw) => renameSession(session.id, raw),
-    onEnd: () => setEditingId((id) => (id === session.id ? null : id)),
-  }}
-  ```
-  The card wires `onClose` to `onEnd`.
-- **Delete is looked up by id, not snapshotted.** That removes the stale-title risk.
+- **Delete is looked up by id, not snapshotted.** That removes the stale-title risk (AC-1.12).
   - `pendingDelete` state becomes `pendingDeleteId: string | null`.
   - `const pendingDelete = drafts.find((s) => s.id === pendingDeleteId) ?? null`.
   - `onDelete={() => setPendingDeleteId(session.id)}`.
@@ -571,9 +541,11 @@ type Props = { onCancel: () => void; onCreate: (raw: string) => void };
 - **Cancel, Escape and a backdrop click:** the dialog's `onCancel` calls `preventDefault`, then `cancel()`.
   `cancel()` calls `dialog.close()`, so the browser returns focus to the button that opened it, and then
   `onCancel()`. No session is made, and typed text is dropped without asking (AC-2.6).
-- **A backdrop click closes it, the same as Cancel.** The dialog's `onClick` calls `cancel()` when
-  `e.target` is the dialog element itself, exactly as `ConfirmDialog` does, so it matches the delete and
-  remove-member confirmations. (The owner overruled assumption A1 at approval; AC-2.6 is read as "a backdrop
+- **A backdrop click closes it, the same as Cancel.** The dialog cancels only when the press and the
+  click both land on the backdrop: `onPointerDown` records whether the press began on the dialog element
+  itself, and `onClick` calls `cancel()` only if it did and `e.target` is the dialog element too. A drag
+  that starts inside the box and ends past its edge doesn't cancel. `ConfirmDialog` does exactly the same,
+  so it matches the delete and remove-member confirmations. (The owner overruled assumption A1 at approval; AC-2.6 is read as "a backdrop
   click cancels, consistent with the confirmation dialogs".)
 - **Styles:** import `../shared/ConfirmDialog.module.css` as `confirmStyles` for `dialog`, `body`, `title`
   and `actions`. There's precedent: `HistoryPage` reuses `HomePage.module.css`, and `SessionTabs` reuses
@@ -658,8 +630,11 @@ const newSession = () => (phase === 'running' ? startSession(null) : setNaming(t
   - `.titles`: flex column, `align-items: flex-end`, `text-align: right`, `min-width: 0`.
   - `.name`: 14px, 600, `--text`, `letter-spacing: -0.01em`, `overflow-wrap: anywhere`.
   - `.started`: unchanged, plus `overflow-wrap: anywhere`.
-  - `.rename`: the same look as the card's `.rename` (`--text2` at 0.8, full `--text` on hover and focus),
-    with a 32px target at 640px and below, plus a 16px `.icon`. It is centred on the title's **first
+  - `.rename`: 26px wide, no border, `background: none`, `border-radius: var(--radius-sm)`, `--text2` at
+    `opacity: 0.8`, and full opacity, `--text` and `--surface2` on hover and focus. The owner asked for a
+    stronger pencil after the ui-ux-tester's run (the original `--text3` at 0.7 opacity was hard to find),
+    then a touch quieter than full opacity. It has a 32px target at 640px and below (AC-4.6), plus a 16px
+    `.icon`. It is centred on the title's **first
     line**, not on the name and dates together, so it sits beside the name (or beside the first line of a
     wrapping name), and beside the dates when the session is unnamed:
     - `.titleBlock` uses `align-items: flex-start` and sets `--first-line: calc(12px * 1.45)` (the dates
@@ -676,7 +651,7 @@ const newSession = () => (phase === 'running' ? startSession(null) : setNaming(t
   - `.titleBlock .nameInput`: `width: min(20rem, 100%)`. It needs the two-class selector: a single
     `.nameInput` loses to the global `input[type='text'] { width: 100% }`, which is more specific, and that
     stretched the box across the whole header row in the first build.
-  - At 375px a 60-character name wraps without hiding Back or the pencil (AC-4.6).
+  - At 375px a 60-character name wraps without hiding Back or the pencil (AC-1.8).
 
 ### History detail (`HistoryDetailPage.tsx`, `.module.css`)
 
@@ -733,8 +708,8 @@ No step or target changes. One tour behaviour changes, after the ui-ux-tester's 
 - `new-session` (nav fab and empty-state button), `session-list`, `workspace-back`, `tab-*`, `nav-*` and
   `finish-session` stay on the same elements, with the same names, on the same screens.
 - No new element carries a `data-tour`.
-- The header pencil is a sibling of the Back button, not inside it. Card pencils are children of the
-  existing `session-list` div, which isn't moved.
+- The header pencil is a sibling of the Back button, not inside it. The `session-list` div is untouched
+  (AC-5.4).
 - While `phase === 'running'`, New Session skips the prompt (AC-5.2). It shows again once the phase leaves
   `running` (AC-5.3). Step 1's Next still calls `createSession()` directly (AC-5.1).
 - **Tapping the highlighted New Session on step 1 acts like Next.** The tap opens the new session on
@@ -790,6 +765,9 @@ and 1280px unless a width is named.
 | 1.5, 1.6, 1.7 | T: delete wording, empty and with purchases, named and unnamed; the aria-label read from the accessibility tree. |
 | 1.8 | T at 320px and desktop: 60-char name with spaces and with none, in card, header and detail; no horizontal scroll or ellipsis, total visible, delete not overlapping. |
 | 1.9 | T: finish a named draft; History shows the name. |
+| 1.10 | T: Home and History cards, named and unnamed: no pencil or text box; an unnamed card matches `main` before PR #83; a tap anywhere but the trash opens the session; the trash opens the confirmation only; the trash is the only labelled control in the accessibility tree. |
+| 1.11 | T: Tab to a card: one stop, focus ring round the whole card, Enter and Space open it; hover the card (highlights) and the trash (doesn't); at 320px and 375px a 60-char name, spaced and unbroken, wraps with no scroll or ellipsis and the total stays on the title's first line. |
+| 1.12 | T: rename a draft in its header, Back, tap the trash; the confirmation shows the new name. |
 | 2.1, 2.2 | T: both New Session buttons open the dialog with focus in the box; no session exists until Create. |
 | 2.3, 2.4 | T: named and blank creates open Expenses; blank gives the dates title. |
 | 2.5 | T: create named, reload, then check another browser. |
@@ -798,14 +776,11 @@ and 1280px unless a width is named.
 | 2.8 | T: keyboard-only create; Tab order; the box's accessible name. |
 | 2.9 | T: double-click Create and hold Enter; exactly one new card. |
 | 2.10 | T at 375px (iPhone emulation): keyboard open, box and buttons visible. |
-| 3.1 to 3.7 | T: pencil and aria-label on Home only; prefill and select; clicking the box doesn't open; Enter and blur save and survive a reload; Esc and an unchanged save send no PUT (Network panel); clearing reverts to dates. U: `applySessionName` same-object cases. |
-| 3.8 to 3.11 | T: each ordering case, desktop and touch emulation. |
-| 3.12 | T at 375px: pencil target 32px or more; box fits; total stays visible. |
-| 4.1 to 4.6 | T: header pencil and label, edit, cancel and clear, tabs and Back while editing, no pencil on closed, 375px wrap. |
+| 4.1 to 4.6 | T: header pencil and label; edit with prefill and select, Enter and blur save and survive a reload, Esc and an unchanged save send no PUT (Network panel), clearing reverts to dates; tabs and Back while editing; no pencil on closed; 375px wrap; pencil target 32px or more at 375px. U: `applySessionName` same-object cases. |
 | 5.1 to 5.3 | T: run the tour (dev "Preview Tour") with Next and with a tap on the highlighted button; no prompt; afterwards the prompt returns. |
 | 5.4 | U: `targets.test.ts`, `steps.test.ts`. T: steps highlight the same elements. |
 | 5.5 | T: rename the tour session mid-tour, skip; the session remains. |
-| 6.1 | T: pre-existing sessions unchanged, pencil on drafts. |
+| 6.1 | T: pre-existing sessions unchanged, no pencil on the cards. |
 | 6.2 | T: block `/api/sessions/*` in DevTools, rename; the banner and "Try again" work. |
 | 6.3 | U: `sessionValidation.test.ts`, `sessionName.test.ts`. |
 | 7.1, 7.2 | T: download from Summary and from History detail; open the PDF; heading as specified, amounts unchanged. |
@@ -822,11 +797,11 @@ and 1280px unless a width is named.
 
 For the documentation-engineer, after the code ships:
 - **README "Sessions" and "History" sections:** sessions can be named; the name is optional, and drafts can
-  be renamed from the card pencil or the header.
+  be renamed from the pencil in the open session's header.
 - **README "SOA export":** file names `Hati-SOA-<name>-<date>.pdf` and `Hati-SOA-<date>.pdf`; the page-1
   name heading; the embedded title; characters DM Sans can't draw are omitted.
 - **README "Data and privacy" SQL block:** add `name text -- null until the user names the session`.
-- **`docs/mobile-breakpoints.md` (640px section):** the `SessionCard` and `SessionWorkspace` pencils (32px
+- **`docs/mobile-breakpoints.md` (640px section):** the `SessionWorkspace` header pencil (32px
   minimum) and the New Session dialog's centring in the visible viewport above the keyboard.
 - Any user-facing guides in `Documentation/` that describe creating a session (the new prompt) or the SOA
   file name.
@@ -848,7 +823,7 @@ For the documentation-engineer, after the code ships:
    store; `name` in `AppDataContext`.
 5. **UI building blocks.** `PencilIcon`, `SessionNameInput`, `NewSessionDialog`.
 6. **Screens.**
-   - `SessionCard` restructure and rename; `HomePage` (editing state, delete by id, wording).
+   - `SessionCard` name and dates lines; `HomePage` (delete by id, wording).
    - `App` (prompt, tour bypass, `endTour`).
    - `SessionWorkspace` header; `HistoryDetailPage`.
    → Verify: `steps.test.ts` and `targets.test.ts` green.
@@ -868,13 +843,13 @@ For the documentation-engineer, after the code ships:
 | New code runs against the shared database before the column exists, so GET returns 500 on local, preview or sit | Task 1 runs first; section 3 states the order. |
 | Old sit, qat or uat code against the altered table | Explicit column lists everywhere; the old upsert doesn't touch `name` (section 3). |
 | A browser tab opened before the deploy (old bundle) saves a session after someone named it elsewhere, so the PUT without `name` clears the name | Accepted. It's the same last-write-wins every other field already has, and AC-6.3 defines a missing field as no name. Reloading the tab fixes it. |
-| Blur-then-click ordering differs on iOS Safari, so edits could be lost or a session opened by mistake | Unmount-save backstop, `editingId` switching, and the swallow guard (section 6). Saves are idempotent, so double saves cost nothing. The tester covers touch. |
-| The `SessionCard` restructure shifts the desktop or History look | The box, typography, hover and focus rules are moved, not redesigned. The tester compares unnamed cards before and after. |
+| Blur-then-click ordering differs on iOS Safari, so edits could be lost or a session opened by mistake | Unmount-save backstop in the header box (section 6). Saves are idempotent, so double saves cost nothing. The tester covers touch. |
+| The `SessionCard` title change shifts the desktop or History look | The card keeps its pre-feature structure and rules; only the title line gains a wrapper and the dates line. The tester compares unnamed cards before and after. |
 | PDF heading overflow on an unbroken name | `breakLongWords` at 18, from measured glyph widths; checked by a real render (task 7). |
 | Emoji print as boxes in the PDF | The coverage table filter is measured from the bundled fonts, and unit-tested. |
 
-Size: **medium to large.** About 30 files, each change small; most of the effort is in the card
-restructure and the edit-ordering cases. Risk: **medium** on interaction details, **low** on data, since
+Size: **medium to large.** About 30 files, each change small; most of the effort is in the header
+edit-ordering cases. Risk: **medium** on interaction details, **low** on data, since
 the schema change is additive only.
 
 ## 12. Decisions for the user
