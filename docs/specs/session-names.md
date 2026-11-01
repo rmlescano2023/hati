@@ -258,6 +258,11 @@ following the purchases as they change.
 in the prompt therefore persists on creation (AC-2.5). The dev seeder's `replaceAll` is unchanged, because
 its PUT carries the name.
 
+`useServerSessions` keeps each in-flight create's promise in a `creating` map, by session id, and
+`removeSession` awaits it before sending the DELETE. Without that, a delete sent right after a create (the
+tour removing its untouched session as it ends) could reach the server first, find nothing (404), and the
+create would then leave an empty draft behind. (Added after the ui-ux-tester's run.)
+
 ### PDF rules (`src/lib/soaName.ts`, new, pure)
 
 ```ts
@@ -477,12 +482,18 @@ The ids come from `useId()`. Before the restructure, the card button's accessibl
 - `.titleLine`: flex, `align-items: flex-start`, gap 4px, `min-width: 0`.
 - `.dates`: 12px, `--text3`, `overflow-wrap: anywhere`.
 - `.rename` (desktop): 26 × 23px (one title line), flex-centred, no border, `background: none`,
-  `border-radius: var(--radius-sm)`, `color: var(--text3)`, `opacity: 0.7`, `cursor: pointer`, `flex: none`,
-  `position: relative; z-index: 1`. Hover and focus-visible: `opacity: 1; color: var(--text);
-  background: var(--surface2)`. The icon uses the existing 15px `.icon`.
+  `border-radius: var(--radius-sm)`, `color: var(--text2)` at full opacity, `cursor: pointer`, `flex: none`,
+  `position: relative; z-index: 1`. Hover and focus-visible: `color: var(--text);
+  background: var(--surface2)`. The icon uses its own 16px `.pencilIcon` (the 15px `.icon` stays for
+  delete). The owner asked for a stronger pencil after the ui-ux-tester's run: the original `--text3` at 0.7
+  opacity was hard to find. `--text2` is plainly visible but still a step quieter than the `--text` title.
 - `.rename` at 640px and below: `min-width: 32px; min-height: 32px; margin: -4.5px 0`. That's at least the
   delete button's 25px target (AC-3.12), without making the title line taller.
-- `.nameInput`: `flex: 1 1 auto`. Only one box shows at a time.
+- `.titleLine .nameInput`: `flex: 1 1 auto`, `height: 28px`, `margin: -2.4px 0`, `padding: 0 8px`, and the
+  title's type (16px, 600, -0.02em). The box takes the 23.2px title line's place without changing the
+  card's height, so nothing below it moves while renaming (the first build grew the card by about 12px). The
+  16px type also stops iOS zooming on focus. The two-class selector outranks the global
+  `input[type='text']`. Only one box shows at a time.
 
 An unnamed card in History or on Home renders the same as today, apart from the pencil on Home.
 
@@ -528,6 +539,9 @@ unmount saves, and the action proceeds (AC-3.11).
     That's today's sentence with the display title.
   - Empty and named: `` `“${pendingDelete.name}” is empty. Deleting it cannot be undone.` ``
   - Empty and unnamed: `'This session is empty. Deleting it cannot be undone.'`, unchanged.
+  - The shared `ConfirmDialog.module.css` `.message` gains `overflow-wrap: anywhere`, so a quoted
+    60-character name with no spaces wraps instead of giving the dialog a horizontal scrollbar. Other
+    confirmations' messages have ordinary words and look the same.
 - The empty-state button and the `data-tour="session-list"` div are unchanged.
 
 ### "+ New Session" prompt (`NewSessionDialog.tsx`, new)
@@ -643,9 +657,11 @@ const newSession = () => (phase === 'running' ? startSession(null) : setNaming(t
   - `.titles`: flex column, `align-items: flex-end`, `text-align: right`, `min-width: 0`.
   - `.name`: 14px, 600, `--text`, `letter-spacing: -0.01em`, `overflow-wrap: anywhere`.
   - `.started`: unchanged, plus `overflow-wrap: anywhere`.
-  - `.rename`: the same rules as the card's `.rename`, including the 32px mobile minimum, plus a 15px
+  - `.rename`: the same rules as the card's `.rename`, including the 32px mobile minimum, plus a 16px
     `.icon`.
-  - `.nameInput`: `width: min(20rem, 100%)`.
+  - `.titleBlock .nameInput`: `width: min(20rem, 100%)`. It needs the two-class selector: a single
+    `.nameInput` loses to the global `input[type='text'] { width: 100% }`, which is more specific, and that
+    stretched the box across the whole header row in the first build.
   - At 375px a 60-character name wraps without hiding Back or the pencil (AC-4.6).
 
 ### History detail (`HistoryDetailPage.tsx`, `.module.css`)
@@ -699,7 +715,7 @@ The PDF is identical at any screen width, because nothing in it depends on the v
 
 ## 7. Onboarding tour impact
 
-No step, target or tour behaviour changes.
+No step or target changes. One tour behaviour changes, after the ui-ux-tester's run (AC-5.2).
 - `new-session` (nav fab and empty-state button), `session-list`, `workspace-back`, `tab-*`, `nav-*` and
   `finish-session` stay on the same elements, with the same names, on the same screens.
 - No new element carries a `data-tour`.
@@ -707,8 +723,16 @@ No step, target or tour behaviour changes.
   existing `session-list` div, which isn't moved.
 - While `phase === 'running'`, New Session skips the prompt (AC-5.2). It shows again once the phase leaves
   `running` (AC-5.3). Step 1's Next still calls `createSession()` directly (AC-5.1).
+- **Tapping the highlighted New Session on step 1 acts like Next.** The tap opens the new session on
+  Expenses, which is step 2's screen. `OnboardingTour` used to treat any screen that didn't match the
+  current step as wandering off and ended the tour. It now first asks `wentToNextStep(index, screen)` (new,
+  in `steps.ts`): if the user is exactly where Next would have taken them, the tour moves to the next step
+  instead. Anywhere else still ends it. `App` already records the tapped session as the tour's session, so
+  later steps reuse it and `endTour` cleans it up as before.
+- The tour's cleanup can't race the create: see the `creating` map under the store in section 5.
 - `endTour` keeps a tour session the user named (AC-5.5).
-- Run `steps.test.ts` and `targets.test.ts`. Both must pass unchanged.
+- Run `steps.test.ts` and `targets.test.ts`. Both must pass; `steps.test.ts` gains cases for
+  `wentToNextStep`.
 
 ## 8. Test plan
 
