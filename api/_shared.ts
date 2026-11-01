@@ -51,6 +51,7 @@ type SessionRow = {
   created_at: Date | string;
   closed_at: Date | string | null;
   members: string[];
+  name: string | null;
 };
 
 type RecordRow = {
@@ -73,7 +74,7 @@ const iso = (v: Date | string): string => (v instanceof Date ? v.toISOString() :
  */
 export async function loadSessions(userId: string): Promise<Session[]> {
   const { rows: sessionRows } = await pool.sql<SessionRow>`
-    select id, status, created_at, closed_at, members
+    select id, status, created_at, closed_at, members, name
     from expense_sessions
     where user_id = ${userId}
     order by created_at`;
@@ -114,5 +115,6 @@ export async function loadSessions(userId: string): Promise<Session[]> {
     closedAt: s.closed_at === null ? null : iso(s.closed_at),
     members: s.members,
     records: bySession.get(s.id) ?? [],
+    name: s.name,
   }));
 }

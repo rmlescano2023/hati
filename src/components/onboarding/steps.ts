@@ -85,3 +85,14 @@ export function screenMatches(shape: ScreenShape, screen: ScreenShape): boolean 
   if (shape.kind === 'session' && screen.kind === 'session') return shape.tab === screen.tab;
   return true;
 }
+
+/**
+ * Whether the user, on step `index`, has gone exactly where Next would have
+ * taken them. Tapping the highlighted control does that on the first step: New
+ * Session opens the session on Expenses, which is where the second step lives,
+ * so the tour carries on rather than ending.
+ */
+export function wentToNextStep(index: number, screen: ScreenShape): boolean {
+  const next = TOUR_STEPS[index + 1];
+  return next !== undefined && screenMatches(next.screen, screen);
+}

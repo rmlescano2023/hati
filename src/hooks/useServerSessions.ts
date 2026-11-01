@@ -67,6 +67,14 @@ export function useServerSessions(): Result {
    */
   const seq = useRef(new Map<string, number>());
 
+  /**
+   * Creates still in flight, by session id. A delete sent before its create has
+   * landed finds nothing to delete, and the create then leaves the session
+   * behind on the server, so a delete waits for the create first. The tour
+   * deletes the session it made as soon as it ends, which is how this shows up.
+   */
+  const creating = useRef(new Map<string, Promise<unknown>>());
+
   const authedFetch = useCallback(
     async (path: string, init: RequestInit) => {
       const token = await getToken();
@@ -152,19 +160,24 @@ export function useServerSessions(): Result {
       setSessions((prev) => [...prev, session]);
       // The caller has already navigated into it, so this catches up rather
       // than being awaited.
-      void (async () => {
+      const create = (async () => {
         try {
           const res = await authedFetch(ENDPOINT, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: session.id }),
+            // The name chosen in the New Session prompt goes with the create, so
+            // it is stored even if nothing else about the session is ever saved.
+            body: JSON.stringify({ id: session.id, name: session.name }),
           });
           if (!res.ok) throw new Error(`Could not create the session (${res.status}).`);
         } catch (err) {
           setError(err instanceof Error ? err.message : 'Could not create the session.');
           setStatus('error');
+        } finally {
+          creating.current.delete(session.id);
         }
       })();
+      creating.current.set(session.id, create);
     },
     [authedFetch],
   );
@@ -174,6 +187,7 @@ export function useServerSessions(): Result {
       setSessions((prev) => prev.filter((s) => s.id !== sessionId));
       void (async () => {
         try {
+          await creating.current.get(sessionId);
           const res = await authedFetch(`${ENDPOINT}/${encodeURIComponent(sessionId)}`, {
             method: 'DELETE',
           });
