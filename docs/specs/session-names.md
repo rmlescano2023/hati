@@ -541,9 +541,11 @@ type Props = { onCancel: () => void; onCreate: (raw: string) => void };
 - **Cancel, Escape and a backdrop click:** the dialog's `onCancel` calls `preventDefault`, then `cancel()`.
   `cancel()` calls `dialog.close()`, so the browser returns focus to the button that opened it, and then
   `onCancel()`. No session is made, and typed text is dropped without asking (AC-2.6).
-- **A backdrop click closes it, the same as Cancel.** The dialog's `onClick` calls `cancel()` when
-  `e.target` is the dialog element itself, exactly as `ConfirmDialog` does, so it matches the delete and
-  remove-member confirmations. (The owner overruled assumption A1 at approval; AC-2.6 is read as "a backdrop
+- **A backdrop click closes it, the same as Cancel.** The dialog cancels only when the press and the
+  click both land on the backdrop: `onPointerDown` records whether the press began on the dialog element
+  itself, and `onClick` calls `cancel()` only if it did and `e.target` is the dialog element too. A drag
+  that starts inside the box and ends past its edge doesn't cancel. `ConfirmDialog` does exactly the same,
+  so it matches the delete and remove-member confirmations. (The owner overruled assumption A1 at approval; AC-2.6 is read as "a backdrop
   click cancels, consistent with the confirmation dialogs".)
 - **Styles:** import `../shared/ConfirmDialog.module.css` as `confirmStyles` for `dialog`, `body`, `title`
   and `actions`. There's precedent: `HistoryPage` reuses `HomePage.module.css`, and `SessionTabs` reuses
