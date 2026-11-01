@@ -30,12 +30,10 @@ type Props = {
  * from the action in the nav row.
  */
 export function HomePage({ onOpenSession, onNewSession, onPreviewTour }: Props) {
-  const { sessions, deleteSession, renameSession } = useSessionsStore();
+  const { sessions, deleteSession } = useSessionsStore();
   // Held by id and looked up on render, so the confirmation always reads the
-  // session's current name, including one saved by the tap that opened it.
+  // session's current name.
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
-  // One rename at a time: opening another card's box closes this one.
-  const [editingId, setEditingId] = useState<string | null>(null);
 
   const drafts = useMemo(
     () =>
@@ -80,12 +78,6 @@ export function HomePage({ onOpenSession, onNewSession, onPreviewTour }: Props) 
             session={session}
             onClick={() => onOpenSession(session.id)}
             onDelete={() => setPendingDeleteId(session.id)}
-            rename={{
-              editing: editingId === session.id,
-              onStart: () => setEditingId(session.id),
-              onSave: (raw) => renameSession(session.id, raw),
-              onEnd: () => setEditingId((id) => (id === session.id ? null : id)),
-            }}
           />
         ))}
       </div>
