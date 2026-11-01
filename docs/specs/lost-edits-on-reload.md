@@ -343,5 +343,3 @@ the core flows.
    recommend all three, because it's the same rule ("a load never overrides a write the server hasn't
    confirmed") and costs two checks. Without it, "Try again" during a create can hide a just-made
    session, and during a delete it can show a deleted one again.
-2. **The prompt covers creates, deletes and dev seeding as well as saves,** as you asked. No choice
-   needed, noted for completeness.
