@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { TOUR_STEPS, screenMatches } from './steps';
+import { TOUR_STEPS, screenMatches, wentToNextStep } from './steps';
 
 describe('screenMatches', () => {
   it('matches a top-level screen by kind', () => {
@@ -82,5 +82,22 @@ describe('the tour sequence', () => {
       expect(step.title.length).toBeGreaterThan(0);
       expect(step.content.length).toBeGreaterThan(20);
     }
+  });
+});
+
+describe('wentToNextStep', () => {
+  it('treats tapping the highlighted New Session on the first step as pressing Next', () => {
+    // The tap opens the new session on Expenses, which is where Next goes.
+    expect(TOUR_STEPS[0].target).toBe('new-session');
+    expect(wentToNextStep(0, { kind: 'session', tab: 'expenses' })).toBe(true);
+  });
+
+  it('does not count going anywhere else as following the tour', () => {
+    expect(wentToNextStep(0, { kind: 'history' })).toBe(false);
+    expect(wentToNextStep(0, { kind: 'session', tab: 'summary' })).toBe(false);
+  });
+
+  it('has no next step to go to from the last one', () => {
+    expect(wentToNextStep(TOUR_STEPS.length - 1, { kind: 'home' })).toBe(false);
   });
 });

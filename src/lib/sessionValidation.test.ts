@@ -71,6 +71,26 @@ describe('parseSession as the write boundary', () => {
     expect(s).not.toHaveProperty('userId');
   });
 
+  it('reads an absent name as no name, so older clients stay valid', () => {
+    expect(parseSession(valid)?.name).toBeNull();
+  });
+
+  it('tidies the name it stores', () => {
+    expect(parseSession({ ...valid, name: '  Bali   Trip ' })?.name).toBe('Bali Trip');
+  });
+
+  it('accepts the session but drops a name that is not a string', () => {
+    for (const bad of [42, {}, true]) {
+      const s = parseSession({ ...valid, name: bad });
+      expect(s?.id).toBe('session_1');
+      expect(s?.name).toBeNull();
+    }
+  });
+
+  it('cuts an over-long name rather than rejecting the session', () => {
+    expect(parseSession({ ...valid, name: 'n'.repeat(200) })?.name).toBe('n'.repeat(60));
+  });
+
   it('ignores an item amount that is not a finite number', () => {
     const s = parseSession({
       ...valid,

@@ -34,6 +34,7 @@ describe('parseAppData', () => {
       expect(session.records[0].id).toBe('rec_1');
       expect(session.records[0].items).toHaveLength(1);
       expect(session.id).toMatch(/^session_/);
+      expect(session.name).toBeNull();
     });
 
     it('migrates an empty v1 blob to no sessions rather than an empty one', () => {
@@ -65,6 +66,7 @@ describe('parseAppData', () => {
           closedAt: null,
           members: ['Ana'],
           records: [record],
+          name: 'Bali Trip',
         },
         {
           id: 'session_closed',
@@ -73,6 +75,7 @@ describe('parseAppData', () => {
           closedAt: '2026-09-12T08:00:00.000Z',
           members: ['Ana', 'Bea'],
           records: [record],
+          name: null,
         },
       ],
     };

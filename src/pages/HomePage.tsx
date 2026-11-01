@@ -5,8 +5,7 @@ import { ConfirmDialog } from '../components/shared/ConfirmDialog';
 import { EmptyState } from '../components/shared/EmptyState';
 import { useSessionsStore } from '../context/SessionsStoreContext';
 import { pluralize } from '../lib/format';
-import { sessionTitle } from '../lib/sessionLabel';
-import type { Session } from '../types';
+import { sessionDisplayTitle } from '../lib/sessionLabel';
 import styles from './HomePage.module.css';
 
 // Dev-only: `import.meta.env.DEV` is statically false in a production build, so
@@ -31,8 +30,12 @@ type Props = {
  * from the action in the nav row.
  */
 export function HomePage({ onOpenSession, onNewSession, onPreviewTour }: Props) {
-  const { sessions, deleteSession } = useSessionsStore();
-  const [pendingDelete, setPendingDelete] = useState<Session | null>(null);
+  const { sessions, deleteSession, renameSession } = useSessionsStore();
+  // Held by id and looked up on render, so the confirmation always reads the
+  // session's current name, including one saved by the tap that opened it.
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  // One rename at a time: opening another card's box closes this one.
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const drafts = useMemo(
     () =>
@@ -42,6 +45,7 @@ export function HomePage({ onOpenSession, onNewSession, onPreviewTour }: Props) 
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     [sessions],
   );
+  const pendingDelete = drafts.find((s) => s.id === pendingDeleteId) ?? null;
 
   const devBar = DevSessionsBar && (
     <Suspense fallback={null}>
@@ -75,7 +79,13 @@ export function HomePage({ onOpenSession, onNewSession, onPreviewTour }: Props) 
             key={session.id}
             session={session}
             onClick={() => onOpenSession(session.id)}
-            onDelete={() => setPendingDelete(session)}
+            onDelete={() => setPendingDeleteId(session.id)}
+            rename={{
+              editing: editingId === session.id,
+              onStart: () => setEditingId(session.id),
+              onSave: (raw) => renameSession(session.id, raw),
+              onEnd: () => setEditingId((id) => (id === session.id ? null : id)),
+            }}
           />
         ))}
       </div>
@@ -85,15 +95,17 @@ export function HomePage({ onOpenSession, onNewSession, onPreviewTour }: Props) 
         title="Delete this session?"
         message={
           pendingDelete && pendingDelete.records.length > 0
-            ? `“${sessionTitle(pendingDelete)}” and its ${pluralize(pendingDelete.records.length, 'purchase')} will be deleted. This cannot be undone.`
-            : 'This session is empty. Deleting it cannot be undone.'
+            ? `“${sessionDisplayTitle(pendingDelete)}” and its ${pluralize(pendingDelete.records.length, 'purchase')} will be deleted. This cannot be undone.`
+            : pendingDelete && pendingDelete.name !== null
+              ? `“${pendingDelete.name}” is empty. Deleting it cannot be undone.`
+              : 'This session is empty. Deleting it cannot be undone.'
         }
         confirmLabel="Delete Session"
         destructive
-        onCancel={() => setPendingDelete(null)}
+        onCancel={() => setPendingDeleteId(null)}
         onConfirm={() => {
           if (pendingDelete) deleteSession(pendingDelete.id);
-          setPendingDelete(null);
+          setPendingDeleteId(null);
         }}
       />
     </>

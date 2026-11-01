@@ -1,7 +1,7 @@
 /**
  * Dev-only harness: renders the SOA to /tmp with a large demo data set so the
  * pagination behaviour can be inspected without hand-entering data.
- * Run with:  npx vite-node scripts/render-soa-check.tsx
+ * Run with:  npx vite-node scripts/render-soa-check.tsx [members] [items] [out.pdf] [name]
  */
 import { createElement } from 'react';
 import { Font, renderToFile } from '@react-pdf/renderer';
@@ -31,12 +31,14 @@ Font.registerHyphenationCallback((word) => [word]);
 const memberCount = Number(process.argv[2] ?? 12);
 const itemCount = Number(process.argv[3] ?? 30);
 const out = process.argv[4] ?? '/tmp/hati-soa-check.pdf';
+// An optional session name, for checking how the page-1 heading wraps.
+const name = process.argv[5] ?? null;
 
 const data = buildDemoData(memberCount, itemCount);
 
 await renderToFile(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  createElement(SoaDocument, { members: data.members, records: data.records }) as any,
+  createElement(SoaDocument, { members: data.members, records: data.records, name }) as any,
   out,
 );
 

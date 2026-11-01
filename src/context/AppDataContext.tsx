@@ -10,6 +10,8 @@ import type { NewPurchaseRecord, PurchaseRecord } from '../types';
  * know nothing about sessions at all.
  */
 type AppDataValue = {
+  /** The session's name, for the SOA it exports; null when unnamed. */
+  name: string | null;
   members: string[];
   records: PurchaseRecord[];
   addMember: (rawName: string) => boolean;
@@ -51,6 +53,7 @@ export function AppDataProvider({
   const value = useMemo<AppDataValue | null>(() => {
     if (!session) return null;
     return {
+      name: session.name,
       members: session.members,
       records: session.records,
       addMember: (name) => store.addMember(sessionId, name),

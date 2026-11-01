@@ -81,6 +81,7 @@ export function buildDemoSessions(): Session[] {
       closedAt: status === 'closed' ? daysAgoIso(Math.max(0, endDaysAgo - closedAfterDays)) : null,
       members: demo.members,
       records,
+      name: null,
     };
   });
 }

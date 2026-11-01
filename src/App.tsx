@@ -4,6 +4,7 @@ import { NavTabs, type TabId } from './components/layout/NavTabs';
 import { PageShell } from './components/layout/PageShell';
 import { SessionWorkspace } from './components/layout/SessionWorkspace';
 import { SyncBanner } from './components/layout/SyncBanner';
+import { NewSessionDialog } from './components/sessions/NewSessionDialog';
 import type { SessionTabId } from './components/layout/SessionTabs';
 import { Button } from './components/shared/Button';
 import { PlusIcon } from './components/shared/icons';
@@ -33,6 +34,8 @@ const TOP_LEVEL = new Set<Screen['kind']>(['home', 'history']);
 export default function App() {
   const { sessions, createSession, deleteSession, sync } = useSessionsStore();
   const [screen, setScreen] = useState<Screen>({ kind: 'home' });
+  /** Whether the New Session prompt is open. */
+  const [naming, setNaming] = useState(false);
   const { shouldRun: firstLogin, markSeen } = useOnboarding();
 
   /**
@@ -52,6 +55,8 @@ export default function App() {
    * afterwards — onboarding should not leave a session nobody meant to make.
    */
   const tourSession = useRef<string | null>(null);
+  /** The tour's session, waiting to be kept or removed once the tour has ended. */
+  const [tourCleanup, setTourCleanup] = useState<string | null>(null);
 
   /**
    * Dev-only: a tour started from the Preview Tour button rather than from the
@@ -70,11 +75,14 @@ export default function App() {
 
   const openSession = (sessionId: string) =>
     setScreen({ kind: 'session', sessionId, tab: 'expenses' });
-  const newSession = () => {
-    const id = createSession();
+  const startSession = (name: string | null) => {
+    const id = createSession(name);
     if (phase === 'running' && tourSession.current === null) tourSession.current = id;
     openSession(id);
   };
+  // The tour narrates one tap on the highlighted button; a prompt in the middle
+  // of it would be a step the tour knows nothing about.
+  const newSession = () => (phase === 'running' ? startSession(null) : setNaming(true));
 
   const endTour = useCallback(
     (completed: boolean) => {
@@ -83,21 +91,35 @@ export default function App() {
       if (previewing.current) previewing.current = false;
       else markSeen();
 
-      if (id !== null) {
-        // Keep it if they actually put something in it — silently deleting
-        // what someone typed is worse than leaving a session behind.
-        const created = sessions.find((s) => s.id === id);
-        const untouched = created && created.members.length === 0 && created.records.length === 0;
-        if (untouched) deleteSession(id);
-      }
+      // A rename box still open as the tour ends saves on blur, but iOS Safari
+      // does not blur it when Skip is tapped. Blurring here makes that save
+      // land first, and the session is judged below only once it has.
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+      if (id !== null) setTourCleanup(id);
 
       // Whichever way it ended, do not leave them inside a session the tour
       // opened — and finishing it earns a welcome.
       setScreen({ kind: 'home' });
       setPhase(completed ? 'done' : 'off');
     },
-    [deleteSession, markSeen, sessions],
+    [markSeen],
   );
+
+  // Keep the tour's session if they actually put something in it — silently
+  // deleting what someone typed is worse than leaving a session behind. Run as
+  // an effect rather than inside endTour so it reads the sessions after any
+  // name saved as the tour ended, not the ones endTour was created with.
+  useEffect(() => {
+    if (tourCleanup === null) return;
+    setTourCleanup(null);
+    const created = sessions.find((s) => s.id === tourCleanup);
+    const untouched =
+      created &&
+      created.members.length === 0 &&
+      created.records.length === 0 &&
+      created.name === null;
+    if (untouched) deleteSession(tourCleanup);
+  }, [tourCleanup, sessions, deleteSession]);
 
   /**
    * Where the tour sends the app when Next or Back is pressed. A session step
@@ -207,6 +229,15 @@ export default function App() {
           Get started
         </Button>
       </OnboardingDialog>
+      {naming && (
+        <NewSessionDialog
+          onCancel={() => setNaming(false)}
+          onCreate={(raw) => {
+            setNaming(false);
+            startSession(raw);
+          }}
+        />
+      )}
       <SyncBanner />
       {screen.kind === 'home' && (
         <HomePage

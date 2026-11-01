@@ -33,6 +33,14 @@
   font-weight: 600;
   letter-spacing: -0.02em;
   color: var(--text);
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.dates {
+  font-size: 13px;
+  color: var(--text2);
+  overflow-wrap: anywhere;
 }
 
 .meta {
