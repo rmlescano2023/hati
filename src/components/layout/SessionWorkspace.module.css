@@ -8,14 +8,22 @@
 }
 
 /* The auto basis keeps a short date on Back's line, as it always was, while a
-   long name wraps onto a line of its own rather than squeezing Back. */
+   long name wraps onto a line of its own rather than squeezing Back.
+   --first-line is the height of the title's first line (the body's 1.45 line
+   height at its type size), which the pencil centres on: the dates when the
+   session is unnamed, the name when it has one. */
 .titleBlock {
+  --first-line: calc(12px * 1.45);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: flex-end;
   gap: 4px;
   flex: 1 1 auto;
   min-width: 0;
+}
+
+.titleBlock:has(.name) {
+  --first-line: calc(14px * 1.45);
 }
 
 .titles {
@@ -46,7 +54,19 @@
   width: min(20rem, 100%);
 }
 
+/* An unnamed session's header is only as tall as the Back button (24px on
+   desktop), so the negative margins keep the 38px box from making it taller as
+   it opens. A named one's two lines are already the box's height, and on a
+   phone Back is 38px itself. */
+.titleBlock .unnamedInput {
+  margin-block: -7px;
+}
+
+/* Centred on the title's first line rather than on the whole block, so it sits
+   beside the name, and beside the first line of one that wraps. The margins
+   give back whatever it is taller than that line, so the line never grows. */
 .rename {
+  --pencil-height: 23px;
   position: relative;
   z-index: 1;
   flex: none;
@@ -54,7 +74,8 @@
   align-items: center;
   justify-content: center;
   width: 26px;
-  height: 23px;
+  height: var(--pencil-height);
+  margin-block: calc((var(--first-line) - var(--pencil-height)) / 2);
   padding: 0;
   border: none;
   border-radius: var(--radius-sm);
@@ -63,13 +84,16 @@
   /* Plainly visible, so renaming can be found, but a step quieter than the
      name it sits beside. */
   color: var(--text2);
+  opacity: 0.8;
   transition:
     color 0.15s ease,
-    background 0.15s ease;
+    background 0.15s ease,
+    opacity 0.15s ease;
 }
 
 .rename:hover,
 .rename:focus-visible {
+  opacity: 1;
   color: var(--text);
   background: var(--surface2);
 }
@@ -81,11 +105,10 @@
 }
 
 @media (max-width: 640px) {
-  /* A thumb-sized target without making the header row any taller: the
-     negative margin gives the extra height back. */
+  /* A thumb-sized target, still centred on the first line, whose margins give
+     the extra height back so the header row is no taller. */
   .rename {
+    --pencil-height: 32px;
     min-width: 32px;
-    min-height: 32px;
-    margin: -4.5px 0;
   }
 }

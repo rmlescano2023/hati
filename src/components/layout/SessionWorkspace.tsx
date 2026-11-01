@@ -50,7 +50,7 @@ export function SessionWorkspace({ sessionId, tab, onTabChange, onBack, onClosed
           <div className={styles.titleBlock}>
             {renaming ? (
               <SessionNameInput
-                className={styles.nameInput}
+                className={`${styles.nameInput} ${session.name === null ? styles.unnamedInput : ''}`}
                 initialName={session.name}
                 onSave={(raw) => renameSession(sessionId, raw)}
                 onClose={(via) => {

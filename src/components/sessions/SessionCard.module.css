@@ -116,13 +116,16 @@
   /* Plainly visible, so renaming can be found, but a step quieter than the
      title it sits beside. */
   color: var(--text2);
+  opacity: 0.8;
   transition:
     color 0.15s ease,
-    background 0.15s ease;
+    background 0.15s ease,
+    opacity 0.15s ease;
 }
 
 .rename:hover,
 .rename:focus-visible {
+  opacity: 1;
   color: var(--text);
   background: var(--surface2);
 }
