@@ -55,6 +55,8 @@ export default function App() {
    * afterwards — onboarding should not leave a session nobody meant to make.
    */
   const tourSession = useRef<string | null>(null);
+  /** The tour's session, waiting to be kept or removed once the tour has ended. */
+  const [tourCleanup, setTourCleanup] = useState<string | null>(null);
 
   /**
    * Dev-only: a tour started from the Preview Tour button rather than from the
@@ -89,25 +91,35 @@ export default function App() {
       if (previewing.current) previewing.current = false;
       else markSeen();
 
-      if (id !== null) {
-        // Keep it if they actually put something in it — silently deleting
-        // what someone typed is worse than leaving a session behind.
-        const created = sessions.find((s) => s.id === id);
-        const untouched =
-          created &&
-          created.members.length === 0 &&
-          created.records.length === 0 &&
-          created.name === null;
-        if (untouched) deleteSession(id);
-      }
+      // A rename box still open as the tour ends saves on blur, but iOS Safari
+      // does not blur it when Skip is tapped. Blurring here makes that save
+      // land first, and the session is judged below only once it has.
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+      if (id !== null) setTourCleanup(id);
 
       // Whichever way it ended, do not leave them inside a session the tour
       // opened — and finishing it earns a welcome.
       setScreen({ kind: 'home' });
       setPhase(completed ? 'done' : 'off');
     },
-    [deleteSession, markSeen, sessions],
+    [markSeen],
   );
+
+  // Keep the tour's session if they actually put something in it — silently
+  // deleting what someone typed is worse than leaving a session behind. Run as
+  // an effect rather than inside endTour so it reads the sessions after any
+  // name saved as the tour ended, not the ones endTour was created with.
+  useEffect(() => {
+    if (tourCleanup === null) return;
+    setTourCleanup(null);
+    const created = sessions.find((s) => s.id === tourCleanup);
+    const untouched =
+      created &&
+      created.members.length === 0 &&
+      created.records.length === 0 &&
+      created.name === null;
+    if (untouched) deleteSession(tourCleanup);
+  }, [tourCleanup, sessions, deleteSession]);
 
   /**
    * Where the tour sends the app when Next or Back is pressed. A session step
