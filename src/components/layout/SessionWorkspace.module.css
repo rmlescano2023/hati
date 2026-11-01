@@ -40,7 +40,9 @@
   overflow-wrap: anywhere;
 }
 
-.nameInput {
+/* The extra class outranks the global text-input rule's width: 100%, which
+   otherwise stretches the box across the whole header row. */
+.titleBlock .nameInput {
   width: min(20rem, 100%);
 }
 
@@ -58,24 +60,23 @@
   border-radius: var(--radius-sm);
   background: none;
   cursor: pointer;
-  color: var(--text3);
-  opacity: 0.7;
+  /* Plainly visible, so renaming can be found, but a step quieter than the
+     name it sits beside. */
+  color: var(--text2);
   transition:
     color 0.15s ease,
-    background 0.15s ease,
-    opacity 0.15s ease;
+    background 0.15s ease;
 }
 
 .rename:hover,
 .rename:focus-visible {
-  opacity: 1;
   color: var(--text);
   background: var(--surface2);
 }
 
 .icon {
-  width: 15px;
-  height: 15px;
+  width: 16px;
+  height: 16px;
   display: block;
 }
 

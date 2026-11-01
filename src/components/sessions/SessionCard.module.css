@@ -84,8 +84,19 @@
   overflow-wrap: anywhere;
 }
 
-.nameInput {
+/* The box takes the title's place without changing the card's height, so
+   nothing below it moves while renaming: it is taller than the 23px title line
+   for an easier target, and the negative margins give the difference back.
+   The title's own type size also stops iOS zooming in on focus. The extra
+   class outranks the global text-input rule. */
+.titleLine .nameInput {
   flex: 1 1 auto;
+  height: 28px;
+  margin: -2.4px 0;
+  padding: 0 8px;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
 }
 
 .rename {
@@ -102,19 +113,24 @@
   border-radius: var(--radius-sm);
   background: none;
   cursor: pointer;
-  color: var(--text3);
-  opacity: 0.7;
+  /* Plainly visible, so renaming can be found, but a step quieter than the
+     title it sits beside. */
+  color: var(--text2);
   transition:
     color 0.15s ease,
-    background 0.15s ease,
-    opacity 0.15s ease;
+    background 0.15s ease;
 }
 
 .rename:hover,
 .rename:focus-visible {
-  opacity: 1;
   color: var(--text);
   background: var(--surface2);
+}
+
+.pencilIcon {
+  width: 16px;
+  height: 16px;
+  display: block;
 }
 
 .total {

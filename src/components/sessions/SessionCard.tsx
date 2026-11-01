@@ -126,7 +126,7 @@ export function SessionCard({ session, onClick, onDelete, rename }: Props) {
                 aria-label={`Rename session ${sessionDisplayTitle(session)}`}
                 onClick={rename.onStart}
               >
-                <PencilIcon className={styles.icon} />
+                <PencilIcon className={styles.pencilIcon} />
               </button>
             )}
           </span>
