@@ -4,6 +4,8 @@
  * them only wires them up and the rules themselves can be tested directly.
  */
 
+import type { Session } from '../types';
+
 type Send<T> = (value: T) => Promise<void>;
 
 /**
@@ -108,4 +110,150 @@ export function mergeLoaded<S extends { id: string }>(
     if (isUnconfirmed(s.id) && !serverIds.has(s.id)) merged.push(s);
   }
   return merged.filter((s) => !isDeleting(s.id));
+}
+
+/**
+ * How long one save, create, delete or load may take, token fetch included.
+ * Local saves take 5 to 10 seconds, so this leaves room without leaving the
+ * user to wait minutes on a request that is never coming back.
+ */
+export const WRITE_TIMEOUT_MS = 30_000;
+
+export class TimeoutError extends Error {
+  constructor() {
+    super('The server took too long to answer.');
+    this.name = 'TimeoutError';
+  }
+}
+
+/**
+ * Runs one server operation, abandoning it at `ms`. The timeout rejects
+ * before the signal aborts, so the race always settles with `TimeoutError`
+ * rather than the `AbortError` an aborted `fetch` throws. Whatever the work
+ * does afterwards is ignored, and `Promise.race` has already handled it, so a
+ * late rejection is never unhandled.
+ */
+export function withDeadline<T>(ms: number, work: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      reject(new TimeoutError());
+      controller.abort();
+    }, ms);
+  });
+  return Promise.race([work(controller.signal), deadline]).finally(() => clearTimeout(timer));
+}
+
+/**
+ * Sends one request with the user's token. A token that only arrives after
+ * `signal` has aborted sends nothing: the attempt has already been reported
+ * as failed, and a late write could undo a newer one.
+ */
+export async function authorisedFetch(
+  getToken: () => Promise<string | null>,
+  send: typeof fetch,
+  path: string,
+  init: RequestInit,
+  signal?: AbortSignal,
+): Promise<Response> {
+  const token = await getToken();
+  if (signal?.aborted) throw new TimeoutError();
+  if (!token) throw new Error('Not signed in.');
+  return send(path, {
+    ...init,
+    signal,
+    headers: { ...init.headers, Authorization: `Bearer ${token}` },
+  });
+}
+
+export type FailureKind = 'save' | 'delete' | 'load' | 'seed';
+
+/**
+ * One write or load that failed and hasn't been resolved yet. Keeping them
+ * apart, rather than one global error, is what stops a success on one
+ * session from hiding a failure on another. A `'save'` also covers a failed
+ * create, because a later save of the session creates the row too.
+ */
+export type Failure = { kind: FailureKind; sessionId: string | null; message: string };
+
+/** Adds `next`, replacing any failure with the same kind and session, so it becomes the most recent. */
+export function addFailure(list: readonly Failure[], next: Failure): Failure[] {
+  return [...list.filter((f) => f.kind !== next.kind || f.sessionId !== next.sessionId), next];
+}
+
+/**
+ * Removes the failure with this kind and session. Returns `list` itself when
+ * there is none, so a state setter given the result skips the re-render.
+ */
+export function resolveFailure(
+  list: readonly Failure[],
+  kind: FailureKind,
+  sessionId: string | null,
+): readonly Failure[] {
+  const next = list.filter((f) => f.kind !== kind || f.sessionId !== sessionId);
+  return next.length === list.length ? list : next;
+}
+
+/** The sessions whose save, create or delete failed, for the reverted-edit note. */
+export function failedSessionIds(list: readonly Failure[]): string[] {
+  return list.flatMap((f) =>
+    (f.kind === 'save' || f.kind === 'delete') && f.sessionId !== null ? [f.sessionId] : [],
+  );
+}
+
+/**
+ * Whether a reload visibly replaced anything whose write had failed: a failed
+ * session's copy changed, disappeared (a create that never landed) or
+ * reappeared (a delete that never landed).
+ */
+export function revertedAny<S extends { id: string }>(
+  failedIds: Iterable<string>,
+  before: S[],
+  after: S[],
+  same: (a: S, b: S) => boolean,
+): boolean {
+  for (const id of failedIds) {
+    const b = before.find((s) => s.id === id);
+    const a = after.find((s) => s.id === id);
+    if (!b !== !a) return true;
+    if (b && a && !same(b, a)) return true;
+  }
+  return false;
+}
+
+/** Primitives by `===`, arrays in order, and plain objects regardless of key order. */
+function deepEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false;
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+    return a.every((value, i) => deepEqual(value, b[i]));
+  }
+  const aKeys = Object.keys(a);
+  const bRecord = b as Record<string, unknown>;
+  if (aKeys.length !== Object.keys(b).length) return false;
+  return aKeys.every(
+    (key) => key in bRecord && deepEqual((a as Record<string, unknown>)[key], bRecord[key]),
+  );
+}
+
+/**
+ * Whether two copies of a session show the user the same thing. Timestamps,
+ * record order and key order are left out because the server rewrites them
+ * even for a save that landed: a POSTed row gets the server's `now()`, `GET`
+ * orders records by date, and `jsonb` reorders keys. Comparing them would show
+ * a "not saved" note for a save that was saved.
+ */
+export function sameSessionContent(a: Session, b: Session): boolean {
+  const records = (s: Session) =>
+    s.records
+      .map((record) => ({ ...record, createdAt: '' }))
+      .sort((x, y) => (x.id < y.id ? -1 : x.id > y.id ? 1 : 0));
+  return (
+    a.name === b.name &&
+    a.status === b.status &&
+    deepEqual(a.members, b.members) &&
+    deepEqual(records(a), records(b))
+  );
 }

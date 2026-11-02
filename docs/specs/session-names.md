@@ -56,6 +56,8 @@ longer apply. BR-17 is retired, because the header edit is now the only inline e
   nothing on a card is editable. An unnamed card looks exactly as it did before this feature. Tapping
   anywhere except the trash opens the session. The trash opens the delete confirmation and doesn't open the
   session. The only labelled control is the trash ("Delete session <display title>").
+  > **Superseded in part by `docs/specs/round3-save-feedback-and-polish.md` (#11):** History cards now
+  > have the same trash and delete confirmation as Home cards, so `HistoryPage.tsx` is touched there.
 - **AC-1.11 Card behaviour as before the pencil.**
   - The whole card is one focusable control, with its focus ring around the whole card, and Enter or Space
     opens it.
