@@ -15,6 +15,23 @@ Status: **approved by the owner on 2026-11-02.** D1 and D2 are decided as recomm
 > section 9, task 6 in section 10, D2 in section 12, and AC-3.1 to AC-3.9. The leave warning (AC-3.10)
 > stays, with the pending-writes counter that drives it. The rest of Branch A stands: the queue, the
 > 30-second deadlines, per-session errors and the reverted-edit note.
+>
+> **Follow-ups the owner approved the same day, on the same branch** (requirements: the "Delta
+> 2026-11-02 (a, b, c)" section of that file):
+> - **(a)** After 10 seconds with no outcome, "Saving…" becomes "Still saving…", in the same muted style.
+>   The 10 seconds run from the click, a new click restarts them, and leaving the tab cancels them.
+> - **(b)** A reported failure or a timeout shows "Not saved — see above." in error colour, rather than
+>   clearing the message. Saved and Not saved are final, so a late landing never turns it into Saved.
+>   When the banner clears without a reload (a later save succeeded), the message clears to empty (the
+>   owner's answer to Q2).
+> - **(c)** Save to Breakdown is never disabled. A click with something missing saves nothing and
+>   names the first gap, checking items, then the date, then the payor. A missing date used to be
+>   reported as "Choose who paid". Each validation message goes once its gap is filled, and a change
+>   in the save state replaces it.
+> - **Shorter wording** (the owner's answer to Q1), so every message fits two lines beside the button
+>   at 320px and the row never grows: "Not saved — see above.", "Add an item first.", "Pick a date." and
+>   "Choose who paid." "Saving…", "Still saving…" and "Saved to Breakdown." are unchanged.
+> - One always-mounted polite status region now carries every message, validation included.
 
 Branches, both from `origin/main` at `b153faa` and both carrying this spec:
 - **Branch A, `save-feedback`:** #3 Saving cue, #4 reverted-edit note, #5 30-second timeout, and the
