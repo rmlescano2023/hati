@@ -64,6 +64,7 @@
 
 /* The box and its hint stack; the box keeps the width it had on its own. */
 .renameBox {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -72,17 +73,26 @@
   min-width: 0;
 }
 
+/* On desktop the hint hangs below the header rather than in it, over the empty
+   right of the tab row. In the flow it made the header taller while renaming,
+   so a click on a tab blurred the box, the header shrank and the tab moved up
+   from under the pointer before the click landed. Out of the flow the header
+   keeps one height whether the box is open or not. It never takes a click. */
 .hint {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
   font-size: 12px;
   color: var(--text3);
   text-align: right;
+  pointer-events: none;
 }
 
-/* The hint now sits under an unnamed session's box, so the box keeps its
-   bottom margin; otherwise the -7px would pull the hint into the box. The top
-   margin stays, so the header still doesn't grow upwards. */
-.renameBox .unnamedInput {
-  margin-bottom: 0;
+/* An unnamed session's box hangs 7px below its row (the negative margin
+   above), so the hint starts that much lower to clear it. */
+.renameBox:has(.unnamedInput) .hint {
+  margin-top: 11px;
 }
 
 /* Centred on the title's first line rather than on the whole block, so it sits
@@ -133,5 +143,21 @@
   .rename {
     --pencil-height: 32px;
     min-width: 32px;
+  }
+
+  /* A phone's tabs are the fixed bottom pill, so below the header is the page
+     itself, which a hanging hint would cover. The hint stays in the flow
+     there and the header grows by its line while renaming. */
+  .hint,
+  .renameBox:has(.unnamedInput) .hint {
+    position: static;
+    margin-top: 0;
+  }
+
+  /* With the hint under an unnamed session's box, the box keeps its bottom
+     margin; otherwise the -7px would pull the hint into the box. The top
+     margin stays, so the header still doesn't grow upwards. */
+  .renameBox .unnamedInput {
+    margin-bottom: 0;
   }
 }
