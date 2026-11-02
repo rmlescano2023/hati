@@ -62,6 +62,29 @@
   margin-block: -7px;
 }
 
+/* The box and its hint stack; the box keeps the width it had on its own. */
+.renameBox {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  width: min(20rem, 100%);
+  min-width: 0;
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--text3);
+  text-align: right;
+}
+
+/* The hint now sits under an unnamed session's box, so the box keeps its
+   bottom margin; otherwise the -7px would pull the hint into the box. The top
+   margin stays, so the header still doesn't grow upwards. */
+.renameBox .unnamedInput {
+  margin-bottom: 0;
+}
+
 /* Centred on the title's first line rather than on the whole block, so it sits
    beside the name, and beside the first line of one that wraps. The margins
    give back whatever it is taller than that line, so the line never grows. */
