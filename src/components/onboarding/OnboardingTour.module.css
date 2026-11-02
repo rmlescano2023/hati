@@ -1,0 +1,14 @@
+/* The live region is always there, so it can announce the nudge when it
+   appears; it takes no room while empty. */
+.status {
+  display: block;
+}
+
+/* Sits between the step's text and its buttons, pointing at Next. */
+.nudge {
+  display: block;
+  margin-top: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--accent-text);
+}

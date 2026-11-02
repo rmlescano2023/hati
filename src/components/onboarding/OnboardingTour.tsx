@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Joyride,
   ACTIONS,
@@ -9,6 +9,30 @@ import {
   type Step,
 } from 'react-joyride';
 import { TOUR_STEPS, screenMatches, wentToNextStep, type ScreenShape } from './steps';
+import styles from './OnboardingTour.module.css';
+
+/** How long the "Tap Next" nudge stays after the last stray tap. */
+const NUDGE_MS = 3000;
+
+// The tooltip renders through a portal, which keeps context, so the step text
+// can follow the nudge while `steps` keeps one identity. That matters because
+// Joyride deep-compares `steps` and resets when they change.
+const NudgeContext = createContext(false);
+
+/** A step's text, with a live region below it for the nudge. */
+function StepContent({ text }: { text: string }) {
+  const nudging = useContext(NudgeContext);
+  return (
+    <>
+      {text}
+      {/* Always mounted and only gaining text, so the nudge is announced once
+          rather than on every tap that restarts it. */}
+      <span className={styles.status} role="status">
+        {nudging && <span className={styles.nudge}>Tap Next to continue</span>}
+      </span>
+    </>
+  );
+}
 
 type Props = {
   run: boolean;
@@ -42,6 +66,8 @@ type Props = {
 export function OnboardingTour({ run, screen, onNavigate, onDone }: Props) {
   const [index, setIndex] = useState(0);
   const done = useRef(false);
+  const [nudging, setNudging] = useState(false);
+  const nudgeTimer = useRef<number | undefined>(undefined);
 
   // Kept in a ref so the navigation effect does not re-run when the parent
   // happens to hand over a new function identity.
@@ -55,7 +81,7 @@ export function OnboardingTour({ run, screen, onNavigate, onDone }: Props) {
       TOUR_STEPS.map((s, i) => ({
         target: `[data-tour="${s.target}"]`,
         title: s.title,
-        content: s.content,
+        content: <StepContent text={s.content} />,
         // Every step offers Next ('primary' is its name in this library) and,
         // from the second onwards, Back — a tutorial you can only go forwards
         // through punishes anyone who reads a step too quickly.
@@ -112,6 +138,53 @@ export function OnboardingTour({ run, screen, onNavigate, onDone }: Props) {
     return () => cancelAnimationFrame(id);
   }, [run, index, screen]);
 
+  // Testers tapped the tabs to move on and the tour seemed frozen, because a
+  // tap on the dimmed screen does nothing. A tap on a tab other than the
+  // highlighted one now says how to continue instead. It is stopped before the
+  // tab sees it, so one reached through the spotlight's padding can't change
+  // the screen and end the tour.
+  useEffect(() => {
+    if (!run || done.current) return;
+
+    const onClick = (event: MouseEvent) => {
+      // A keyboard activation has no click count; it behaves as before.
+      if (event.detail === 0) return;
+      const target = event.target as Element;
+      // `.react-joyride__overlay` is Joyride's own class, not a public API. If
+      // a later version renames it, the nudge stops but the tour still works.
+      if (!target.closest('.react-joyride__overlay') && !target.closest('[role="tab"]')) return;
+
+      const tab = [...document.querySelectorAll<HTMLElement>('[role="tab"]')].find((el) => {
+        const r = el.getBoundingClientRect();
+        return (
+          event.clientX >= r.left &&
+          event.clientX <= r.right &&
+          event.clientY >= r.top &&
+          event.clientY <= r.bottom
+        );
+      });
+      if (!tab) return;
+      const highlighted = document.querySelector(`[data-tour="${TOUR_STEPS[index].target}"]`);
+      if (tab === highlighted) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      window.clearTimeout(nudgeTimer.current);
+      setNudging(true);
+      nudgeTimer.current = window.setTimeout(() => setNudging(false), NUDGE_MS);
+    };
+
+    window.addEventListener('click', onClick, true);
+    return () => window.removeEventListener('click', onClick, true);
+  }, [run, index]);
+
+  // Next and Back hide the nudge; the cleanup also clears its timer when the
+  // tour unmounts.
+  useEffect(() => {
+    setNudging(false);
+    return () => window.clearTimeout(nudgeTimer.current);
+  }, [index]);
+
   const handleEvent = (data: EventData) => {
     if (data.status === STATUS.FINISHED || data.status === STATUS.SKIPPED) {
       if (done.current) return;
@@ -144,29 +217,31 @@ export function OnboardingTour({ run, screen, onNavigate, onDone }: Props) {
   if (!run) return null;
 
   return (
-    <Joyride
-      steps={steps}
-      stepIndex={index}
-      // Without this the component mounts and sits idle: the tour never
-      // starts, with nothing logged to say why.
-      run={run}
-      continuous
-      onEvent={handleEvent}
-      options={{
-        primaryColor: '#4ea87c',
-        backgroundColor: '#1c1f25',
-        arrowColor: '#1c1f25',
-        textColor: '#ecebe7',
-        overlayColor: 'rgba(0, 0, 0, 0.6)',
-        zIndex: 10_000,
-      }}
-      styles={{
-        // Skip is the way out, not the way forward: it should be findable
-        // without competing with the button that continues.
-        buttonSkip: { color: '#6c727d', fontSize: 13 },
-        buttonBack: { color: '#a8adb7', fontSize: 13, marginRight: 4 },
-        buttonPrimary: { fontWeight: 600 },
-      }}
-    />
+    <NudgeContext.Provider value={nudging}>
+      <Joyride
+        steps={steps}
+        stepIndex={index}
+        // Without this the component mounts and sits idle: the tour never
+        // starts, with nothing logged to say why.
+        run={run}
+        continuous
+        onEvent={handleEvent}
+        options={{
+          primaryColor: '#4ea87c',
+          backgroundColor: '#1c1f25',
+          arrowColor: '#1c1f25',
+          textColor: '#ecebe7',
+          overlayColor: 'rgba(0, 0, 0, 0.6)',
+          zIndex: 10_000,
+        }}
+        styles={{
+          // Skip is the way out, not the way forward: it should be findable
+          // without competing with the button that continues.
+          buttonSkip: { color: '#6c727d', fontSize: 13 },
+          buttonBack: { color: '#a8adb7', fontSize: 13, marginRight: 4 },
+          buttonPrimary: { fontWeight: 600 },
+        }}
+      />
+    </NudgeContext.Provider>
   );
 }
