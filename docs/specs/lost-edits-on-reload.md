@@ -1,6 +1,6 @@
 # Spec: lost edits on reload
 
-Status: **awaiting the owner's approval.** Branch `fix-lost-edits-on-reload`, from `main` at `0f3b6fd`.
+Status: **approved by the owner on 2026-11-02.** Branch `fix-lost-edits-on-reload`, from `main` at `0f3b6fd`.
 
 ## 1. Summary
 
@@ -35,6 +35,9 @@ A load also replaces any session that has a save in flight. With the fix, this o
 The owner's decisions:
 - Fix bugs 1 to 3.
 - A load keeps the on-screen copy of any session with a save in flight or queued.
+- A load also keeps the on-screen state for sessions with a create or delete in flight: a session
+  created locally that the server doesn't have yet is kept, and a session being deleted is left out
+  (decided at approval, section 12).
 - While any write is in flight or queued, closing or reloading the tab shows the browser's standard
   `beforeunload` prompt.
 - No `keepalive`.
@@ -136,8 +139,8 @@ The hook passes:
 - `isUnconfirmed = (id) => queue.isBusy(id) || creating.current.has(id)`
 - `isDeleting = (id) => deleting.current.has(id)`
 
-The owner's rule names saves. Treating in-flight creates and deletes the same way is my extension of it
-(decision 1).
+The owner's rule first named saves. At approval the owner extended it to in-flight creates and deletes
+too (section 12).
 
 ### `useServerSessions.ts` wiring
 
@@ -339,7 +342,8 @@ the core flows.
 
 ## 12. Decisions for the user
 
-1. **Should a load also respect in-flight creates and deletes, or only saves?** You named saves. I
-   recommend all three, because it's the same rule ("a load never overrides a write the server hasn't
-   confirmed") and costs two checks. Without it, "Try again" during a create can hide a just-made
-   session, and during a delete it can show a deleted one again.
+1. **Should a load also respect in-flight creates and deletes, or only saves?** **Decided: yes, all
+   three** (owner, 2026-11-02). It's the same rule ("a load never overrides a write the server hasn't
+   confirmed") and costs two checks. Without it, "Try again" during a create could hide a just-made
+   session, and during a delete it could show a deleted one again. `mergeLoaded` keeps a locally created
+   session the server doesn't have yet, and leaves out a session that's being deleted (section 5).
