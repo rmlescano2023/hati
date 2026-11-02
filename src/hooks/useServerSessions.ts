@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '@clerk/clerk-react';
 import type { Session } from '../types';
+import { createPendingWrites, createSaveQueue, mergeLoaded } from '../lib/writeQueue';
 
 export type SyncStatus = 'loading' | 'ready' | 'saving' | 'error';
 
@@ -41,6 +42,12 @@ async function readJson(res: Response): Promise<unknown> {
   return res.json();
 }
 
+function warnBeforeLeaving(event: BeforeUnloadEvent) {
+  event.preventDefault();
+  // Older Chrome and Safari still need returnValue set to show the prompt.
+  event.returnValue = '';
+}
+
 /**
  * The store's persistence seam, scoped to one session per write.
  *
@@ -52,6 +59,12 @@ async function readJson(res: Response): Promise<unknown> {
  * which is what keeps the app feeling as instant as it did on `localStorage`.
  * The cost is that a failure is discovered after the fact, so status and error
  * are surfaced rather than swallowed.
+ *
+ * Saves for one session go one at a time, and edits made meanwhile fold into
+ * one follow-up carrying the latest copy, so the server can never end on a
+ * stale one. While any write is unconfirmed, leaving or reloading the page
+ * asks first, because a reload cuts the request off and the next load would
+ * show the server's older copy.
  */
 export function useServerSessions(): Result {
   const { getToken, isLoaded, isSignedIn } = useAuth();
@@ -61,11 +74,36 @@ export function useServerSessions(): Result {
   const [reloads, setReloads] = useState(0);
 
   /**
-   * Per-session write sequence. A slow request for one session must not report
-   * success for state that has since moved on, and two sessions being written
-   * at once must not interfere.
+   * The latest list, readable outside a render. A save must be sent exactly
+   * once per edit, and StrictMode may run a state updater twice, so every
+   * write reads and replaces this rather than using an updater. `commit` is
+   * the one place that writes `sessions`, which keeps the two in step.
    */
-  const seq = useRef(new Map<string, number>());
+  const sessionsRef = useRef<Session[]>([]);
+  const commit = useCallback((next: Session[]) => {
+    sessionsRef.current = next;
+    setSessions(next);
+  }, []);
+
+  /**
+   * One save at a time per session. The server applies overlapping saves in
+   * whatever order they reach the row lock, so without this a stale copy
+   * could land last.
+   */
+  const [queue] = useState(() => createSaveQueue<Session>());
+
+  /**
+   * Every write the server hasn't confirmed yet. The leave prompt is attached
+   * only while there is one, which keeps the page eligible for the
+   * back/forward cache the rest of the time.
+   */
+  const [pending] = useState(() =>
+    createPendingWrites((busy) =>
+      busy
+        ? window.addEventListener('beforeunload', warnBeforeLeaving)
+        : window.removeEventListener('beforeunload', warnBeforeLeaving),
+    ),
+  );
 
   /**
    * Creates still in flight, by session id. A delete sent before its create has
@@ -74,6 +112,16 @@ export function useServerSessions(): Result {
    * deletes the session it made as soon as it ends, which is how this shows up.
    */
   const creating = useRef(new Map<string, Promise<unknown>>());
+
+  /**
+   * Deletes still in flight, by session id. A load that lands before the
+   * server has applied one would otherwise show the deleted session again.
+   */
+  const deleting = useRef(new Set<string>());
+
+  // Signing out unmounts the provider, possibly mid-save, and the prompt must
+  // not outlive it.
+  useEffect(() => () => window.removeEventListener('beforeunload', warnBeforeLeaving), []);
 
   const authedFetch = useCallback(
     async (path: string, init: RequestInit) => {
@@ -99,7 +147,16 @@ export function useServerSessions(): Result {
         if (!res.ok) throw new Error(`Could not load your data (${res.status}).`);
         const body = (await readJson(res)) as Session[];
         if (cancelled) return;
-        setSessions(Array.isArray(body) ? body : []);
+        // A load never overrides a write the server hasn't confirmed, so
+        // "Try again" during a save, create or delete doesn't undo it on screen.
+        commit(
+          mergeLoaded(
+            Array.isArray(body) ? body : [],
+            sessionsRef.current,
+            (id) => queue.isBusy(id) || creating.current.has(id),
+            (id) => deleting.current.has(id),
+          ),
+        );
         setStatus('ready');
       } catch (err) {
         if (cancelled) return;
@@ -111,13 +168,15 @@ export function useServerSessions(): Result {
     return () => {
       cancelled = true;
     };
-  }, [authedFetch, isLoaded, isSignedIn, reloads]);
+  }, [authedFetch, commit, isLoaded, isSignedIn, queue, reloads]);
 
-  const save = useCallback(
+  /**
+   * Sends one save, and never rejects because it reports its own errors. A
+   * result that a newer queued copy will supersede leaves the status alone, so
+   * a slow request can't report success for state that has since moved on.
+   */
+  const put = useCallback(
     async (session: Session) => {
-      const mine = (seq.current.get(session.id) ?? 0) + 1;
-      seq.current.set(session.id, mine);
-      setStatus('saving');
       try {
         const res = await authedFetch(`${ENDPOINT}/${encodeURIComponent(session.id)}`, {
           method: 'PUT',
@@ -125,39 +184,48 @@ export function useServerSessions(): Result {
           body: JSON.stringify(session),
         });
         if (!res.ok) throw new Error(`Could not save your changes (${res.status}).`);
-        if (seq.current.get(session.id) !== mine) return;
+        if (queue.hasPending(session.id)) return;
         setError(null);
         setStatus('ready');
       } catch (err) {
-        if (seq.current.get(session.id) !== mine) return;
+        if (queue.hasPending(session.id)) return;
         setError(err instanceof Error ? err.message : 'Could not save your changes.');
         setStatus('error');
       }
     },
-    [authedFetch],
+    [authedFetch, queue],
+  );
+
+  const enqueueSave = useCallback(
+    (session: Session) => {
+      setStatus('saving');
+      // A save folded into a running drain is covered by that drain's tracking.
+      const drain = queue.enqueue(session.id, session, put);
+      if (drain) pending.track(drain);
+    },
+    [pending, put, queue],
   );
 
   const mutateSession = useCallback(
     (sessionId: string, fn: (session: Session) => Session) => {
-      setSessions((prev) => {
-        const index = prev.findIndex((s) => s.id === sessionId);
-        if (index === -1) return prev;
-        const next = fn(prev[index]);
-        // The store's guards return the session unchanged to mean "no-op";
-        // that must not cost a round trip.
-        if (next === prev[index]) return prev;
-        const copy = [...prev];
-        copy[index] = next;
-        void save(next);
-        return copy;
-      });
+      const prev = sessionsRef.current;
+      const index = prev.findIndex((s) => s.id === sessionId);
+      if (index === -1) return;
+      const next = fn(prev[index]);
+      // The store's guards return the session unchanged to mean "no-op";
+      // that must not cost a round trip.
+      if (next === prev[index]) return;
+      const copy = [...prev];
+      copy[index] = next;
+      commit(copy);
+      enqueueSave(next);
     },
-    [save],
+    [commit, enqueueSave],
   );
 
   const addSession = useCallback(
     (session: Session) => {
-      setSessions((prev) => [...prev, session]);
+      commit([...sessionsRef.current, session]);
       // The caller has already navigated into it, so this catches up rather
       // than being awaited.
       const create = (async () => {
@@ -178,16 +246,21 @@ export function useServerSessions(): Result {
         }
       })();
       creating.current.set(session.id, create);
+      pending.track(create);
     },
-    [authedFetch],
+    [authedFetch, commit, pending],
   );
 
   const removeSession = useCallback(
     (sessionId: string) => {
-      setSessions((prev) => prev.filter((s) => s.id !== sessionId));
-      void (async () => {
+      commit(sessionsRef.current.filter((s) => s.id !== sessionId));
+      deleting.current.add(sessionId);
+      const remove = (async () => {
         try {
           await creating.current.get(sessionId);
+          // A save that lands after the delete would insert the session
+          // again, so the delete waits for the session's saves as well.
+          await queue.settled(sessionId);
           const res = await authedFetch(`${ENDPOINT}/${encodeURIComponent(sessionId)}`, {
             method: 'DELETE',
           });
@@ -197,10 +270,13 @@ export function useServerSessions(): Result {
         } catch (err) {
           setError(err instanceof Error ? err.message : 'Could not delete the session.');
           setStatus('error');
+        } finally {
+          deleting.current.delete(sessionId);
         }
       })();
+      pending.track(remove);
     },
-    [authedFetch],
+    [authedFetch, commit, pending, queue],
   );
 
   const replaceAll = useCallback(
@@ -208,38 +284,41 @@ export function useServerSessions(): Result {
       // Dev-only, so a request per session is fine — there is no bulk
       // endpoint, and adding one for a seeder that never ships would be
       // server surface built for nobody.
-      setSessions((prev) => {
-        void (async () => {
-          try {
-            setStatus('saving');
-            for (const old of prev) {
-              await authedFetch(`${ENDPOINT}/${encodeURIComponent(old.id)}`, {
-                method: 'DELETE',
-              });
-            }
-            for (const session of next) {
-              await authedFetch(ENDPOINT, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id: session.id }),
-              });
-              await authedFetch(`${ENDPOINT}/${encodeURIComponent(session.id)}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(session),
-              });
-            }
-            setError(null);
-            setStatus('ready');
-          } catch (err) {
-            setError(err instanceof Error ? err.message : 'Could not seed sessions.');
-            setStatus('error');
+      const prev = sessionsRef.current;
+      commit(next);
+      const seed = (async () => {
+        try {
+          setStatus('saving');
+          for (const old of prev) {
+            // As with a single delete, a save landing afterwards would bring
+            // the old session back.
+            await queue.settled(old.id);
+            await authedFetch(`${ENDPOINT}/${encodeURIComponent(old.id)}`, {
+              method: 'DELETE',
+            });
           }
-        })();
-        return next;
-      });
+          for (const session of next) {
+            await authedFetch(ENDPOINT, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ id: session.id }),
+            });
+            await authedFetch(`${ENDPOINT}/${encodeURIComponent(session.id)}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(session),
+            });
+          }
+          setError(null);
+          setStatus('ready');
+        } catch (err) {
+          setError(err instanceof Error ? err.message : 'Could not seed sessions.');
+          setStatus('error');
+        }
+      })();
+      pending.track(seed);
     },
-    [authedFetch],
+    [authedFetch, commit, pending, queue],
   );
 
   const retry = useCallback(() => setReloads((n) => n + 1), []);
