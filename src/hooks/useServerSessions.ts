@@ -1,7 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '@clerk/clerk-react';
 import type { Session } from '../types';
-import { createPendingWrites, createSaveQueue, mergeLoaded } from '../lib/writeQueue';
+import {
+  TimeoutError,
+  WRITE_TIMEOUT_MS,
+  addFailure,
+  authorisedFetch,
+  createPendingWrites,
+  createSaveQueue,
+  failedSessionIds,
+  mergeLoaded,
+  resolveFailure,
+  revertedAny,
+  sameSessionContent,
+  withDeadline,
+  type Failure,
+} from '../lib/writeQueue';
 
 export type SyncStatus = 'loading' | 'ready' | 'saving' | 'error';
 
@@ -20,9 +34,23 @@ type Result = {
   status: SyncStatus;
   error: string | null;
   retry: () => void;
+  /** True while any save, create or delete is waiting on the server. */
+  unconfirmed: boolean;
+  /** True when "Try again" replaced something whose write had failed. */
+  reverted: boolean;
+  /** Hides the reverted-edit note. */
+  dismissReverted: () => void;
 };
 
 const ENDPOINT = '/api/sessions';
+
+const SAVE_TIMEOUT = 'Saving is taking too long. Check your connection, then try again.';
+const DELETE_TIMEOUT = 'Deleting is taking too long. Check your connection, then try again.';
+const LOAD_TIMEOUT = 'Loading is taking too long. Check your connection, then try again.';
+
+function messageOf(err: unknown, fallback: string): string {
+  return err instanceof Error ? err.message : fallback;
+}
 
 /**
  * Plain `vite` does not serve `/api`, so a request for it is answered with the
@@ -69,9 +97,25 @@ function warnBeforeLeaving(event: BeforeUnloadEvent) {
 export function useServerSessions(): Result {
   const { getToken, isLoaded, isSignedIn } = useAuth();
   const [sessions, setSessions] = useState<Session[]>([]);
-  const [status, setStatus] = useState<SyncStatus>('loading');
-  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  /**
+   * Every write or load that failed and hasn't been resolved, so a success on
+   * one session can't hide a failure on another. The banner shows while any
+   * is left.
+   */
+  const [failures, setFailures] = useState<readonly Failure[]>([]);
+  /** Mirrors `pending.busy` as state, so the Saving cue can follow it. */
+  const [unconfirmed, setUnconfirmed] = useState(false);
+  const [reverted, setReverted] = useState(false);
   const [reloads, setReloads] = useState(0);
+
+  /**
+   * Sessions whose write had failed when "Try again" was pressed, checked
+   * against the next successful load to see whether it rolled any back. They
+   * build up until a load succeeds, so a retry whose load fails too still
+   * reports the rollback on the retry after it.
+   */
+  const revertCandidates = useRef(new Set<string>());
 
   /**
    * The latest list, readable outside a render. A save must be sent exactly
@@ -98,11 +142,11 @@ export function useServerSessions(): Result {
    * back/forward cache the rest of the time.
    */
   const [pending] = useState(() =>
-    createPendingWrites((busy) =>
-      busy
-        ? window.addEventListener('beforeunload', warnBeforeLeaving)
-        : window.removeEventListener('beforeunload', warnBeforeLeaving),
-    ),
+    createPendingWrites((busy) => {
+      if (busy) window.addEventListener('beforeunload', warnBeforeLeaving);
+      else window.removeEventListener('beforeunload', warnBeforeLeaving);
+      setUnconfirmed(busy);
+    }),
   );
 
   /**
@@ -124,81 +168,107 @@ export function useServerSessions(): Result {
   useEffect(() => () => window.removeEventListener('beforeunload', warnBeforeLeaving), []);
 
   const authedFetch = useCallback(
-    async (path: string, init: RequestInit) => {
-      const token = await getToken();
-      if (!token) throw new Error('Not signed in.');
-      return fetch(path, {
-        ...init,
-        headers: { ...init.headers, Authorization: `Bearer ${token}` },
-      });
-    },
+    (path: string, init: RequestInit, signal?: AbortSignal) =>
+      authorisedFetch(() => getToken(), fetch, path, init, signal),
     [getToken],
   );
+
+  /** Records a failure. A new error replaces the reverted-edit note, as the banner takes its slot. */
+  const fail = useCallback((failure: Failure) => {
+    setFailures((f) => addFailure(f, failure));
+    setReverted(false);
+  }, []);
 
   useEffect(() => {
     if (!isLoaded || !isSignedIn) return;
     let cancelled = false;
 
     (async () => {
-      setStatus('loading');
-      setError(null);
+      setLoading(true);
       try {
-        const res = await authedFetch(ENDPOINT, { method: 'GET' });
-        if (!res.ok) throw new Error(`Could not load your data (${res.status}).`);
-        const body = (await readJson(res)) as Session[];
+        // The deadline covers the body too, so a late result is never applied.
+        const body = await withDeadline(WRITE_TIMEOUT_MS, async (signal) => {
+          const res = await authedFetch(ENDPOINT, { method: 'GET' }, signal);
+          if (!res.ok) throw new Error(`Could not load your data (${res.status}).`);
+          return (await readJson(res)) as Session[];
+        });
         if (cancelled) return;
         // A load never overrides a write the server hasn't confirmed, so
         // "Try again" during a save, create or delete doesn't undo it on screen.
-        commit(
-          mergeLoaded(
-            Array.isArray(body) ? body : [],
-            sessionsRef.current,
-            (id) => queue.isBusy(id) || creating.current.has(id),
-            (id) => deleting.current.has(id),
-          ),
+        const before = sessionsRef.current;
+        const after = mergeLoaded(
+          Array.isArray(body) ? body : [],
+          before,
+          (id) => queue.isBusy(id) || creating.current.has(id),
+          (id) => deleting.current.has(id),
         );
-        setStatus('ready');
+        const rolledBack = revertedAny(revertCandidates.current, before, after, sameSessionContent);
+        revertCandidates.current = new Set();
+        commit(after);
+        setFailures((f) => resolveFailure(f, 'load', null));
+        if (rolledBack) setReverted(true);
+        setLoading(false);
       } catch (err) {
         if (cancelled) return;
-        setError(err instanceof Error ? err.message : 'Could not load your data.');
-        setStatus('error');
+        // The sessions on screen stay as they are: empty after a failed first
+        // load, and the last good copy after a failed retry.
+        fail({
+          kind: 'load',
+          sessionId: null,
+          message:
+            err instanceof TimeoutError
+              ? LOAD_TIMEOUT
+              : messageOf(err, 'Could not load your data.'),
+        });
+        setLoading(false);
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [authedFetch, commit, isLoaded, isSignedIn, queue, reloads]);
+  }, [authedFetch, commit, fail, isLoaded, isSignedIn, queue, reloads]);
 
   /**
    * Sends one save, and never rejects because it reports its own errors. A
-   * result that a newer queued copy will supersede leaves the status alone, so
-   * a slow request can't report success for state that has since moved on.
+   * success resolves this session's earlier failure even with a newer copy
+   * queued, because that copy holds every earlier edit. A plain failure with a
+   * newer copy queued stays unreported, since that copy will report for
+   * itself. A timeout is always reported, so the banner shows at 30 seconds
+   * even while the user keeps editing, and the queue then sends the newer copy
+   * as a fresh attempt.
    */
   const put = useCallback(
     async (session: Session) => {
       try {
-        const res = await authedFetch(`${ENDPOINT}/${encodeURIComponent(session.id)}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(session),
+        await withDeadline(WRITE_TIMEOUT_MS, async (signal) => {
+          const res = await authedFetch(
+            `${ENDPOINT}/${encodeURIComponent(session.id)}`,
+            {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(session),
+            },
+            signal,
+          );
+          if (!res.ok) throw new Error(`Could not save your changes (${res.status}).`);
         });
-        if (!res.ok) throw new Error(`Could not save your changes (${res.status}).`);
-        if (queue.hasPending(session.id)) return;
-        setError(null);
-        setStatus('ready');
+        setFailures((f) => resolveFailure(f, 'save', session.id));
       } catch (err) {
-        if (queue.hasPending(session.id)) return;
-        setError(err instanceof Error ? err.message : 'Could not save your changes.');
-        setStatus('error');
+        const timedOut = err instanceof TimeoutError;
+        if (!timedOut && queue.hasPending(session.id)) return;
+        fail({
+          kind: 'save',
+          sessionId: session.id,
+          message: timedOut ? SAVE_TIMEOUT : messageOf(err, 'Could not save your changes.'),
+        });
       }
     },
-    [authedFetch, queue],
+    [authedFetch, fail, queue],
   );
 
   const enqueueSave = useCallback(
     (session: Session) => {
-      setStatus('saving');
       // A save folded into a running drain is covered by that drain's tracking.
       const drain = queue.enqueue(session.id, session, put);
       if (drain) pending.track(drain);
@@ -230,25 +300,41 @@ export function useServerSessions(): Result {
       // than being awaited.
       const create = (async () => {
         try {
-          const res = await authedFetch(ENDPOINT, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            // The name chosen in the New Session prompt goes with the create, so
-            // it is stored even if nothing else about the session is ever saved.
-            body: JSON.stringify({ id: session.id, name: session.name }),
+          await withDeadline(WRITE_TIMEOUT_MS, async (signal) => {
+            const res = await authedFetch(
+              ENDPOINT,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                // The name chosen in the New Session prompt goes with the create, so
+                // it is stored even if nothing else about the session is ever saved.
+                body: JSON.stringify({ id: session.id, name: session.name }),
+              },
+              signal,
+            );
+            if (!res.ok) throw new Error(`Could not create the session (${res.status}).`);
           });
-          if (!res.ok) throw new Error(`Could not create the session (${res.status}).`);
         } catch (err) {
-          setError(err instanceof Error ? err.message : 'Could not create the session.');
-          setStatus('error');
+          // Filed as a save, because a later save of this session creates the
+          // row too and so resolves it.
+          fail({
+            kind: 'save',
+            sessionId: session.id,
+            message:
+              err instanceof TimeoutError
+                ? SAVE_TIMEOUT
+                : messageOf(err, 'Could not create the session.'),
+          });
         } finally {
+          // The deadline settles a stuck create at 30 seconds, so a delete
+          // waiting on it goes ahead then rather than never.
           creating.current.delete(session.id);
         }
       })();
       creating.current.set(session.id, create);
       pending.track(create);
     },
-    [authedFetch, commit, pending],
+    [authedFetch, commit, fail, pending],
   );
 
   const removeSession = useCallback(
@@ -261,22 +347,34 @@ export function useServerSessions(): Result {
           // A save that lands after the delete would insert the session
           // again, so the delete waits for the session's saves as well.
           await queue.settled(sessionId);
-          const res = await authedFetch(`${ENDPOINT}/${encodeURIComponent(sessionId)}`, {
-            method: 'DELETE',
+          // Only the request itself is timed. The waits above are other
+          // writes' attempts, each with its own deadline.
+          await withDeadline(WRITE_TIMEOUT_MS, async (signal) => {
+            const res = await authedFetch(
+              `${ENDPOINT}/${encodeURIComponent(sessionId)}`,
+              { method: 'DELETE' },
+              signal,
+            );
+            if (!res.ok && res.status !== 404) {
+              throw new Error(`Could not delete the session (${res.status}).`);
+            }
           });
-          if (!res.ok && res.status !== 404) {
-            throw new Error(`Could not delete the session (${res.status}).`);
-          }
         } catch (err) {
-          setError(err instanceof Error ? err.message : 'Could not delete the session.');
-          setStatus('error');
+          fail({
+            kind: 'delete',
+            sessionId,
+            message:
+              err instanceof TimeoutError
+                ? DELETE_TIMEOUT
+                : messageOf(err, 'Could not delete the session.'),
+          });
         } finally {
           deleting.current.delete(sessionId);
         }
       })();
       pending.track(remove);
     },
-    [authedFetch, commit, pending, queue],
+    [authedFetch, commit, fail, pending, queue],
   );
 
   const replaceAll = useCallback(
@@ -286,9 +384,10 @@ export function useServerSessions(): Result {
       // server surface built for nobody.
       const prev = sessionsRef.current;
       commit(next);
+      // No deadline here: the 30-second limit is for the user's own writes,
+      // and a seed of many sessions can rightly take longer.
       const seed = (async () => {
         try {
-          setStatus('saving');
           for (const old of prev) {
             // As with a single delete, a save landing afterwards would bring
             // the old session back.
@@ -309,19 +408,43 @@ export function useServerSessions(): Result {
               body: JSON.stringify(session),
             });
           }
-          setError(null);
-          setStatus('ready');
+          setFailures((f) => resolveFailure(f, 'seed', null));
         } catch (err) {
-          setError(err instanceof Error ? err.message : 'Could not seed sessions.');
-          setStatus('error');
+          fail({
+            kind: 'seed',
+            sessionId: null,
+            message: messageOf(err, 'Could not seed sessions.'),
+          });
         }
       })();
       pending.track(seed);
     },
-    [authedFetch, commit, pending, queue],
+    [authedFetch, commit, fail, pending, queue],
   );
 
-  const retry = useCallback(() => setReloads((n) => n + 1), []);
+  /**
+   * Reloads from the server and clears every failure. The sessions whose
+   * writes had failed are remembered, so the load can say whether it rolled
+   * any of them back. A load failure alone adds none, so it never shows a note.
+   */
+  const retry = useCallback(() => {
+    for (const id of failedSessionIds(failures)) revertCandidates.current.add(id);
+    setFailures([]);
+    setReverted(false);
+    setReloads((n) => n + 1);
+  }, [failures]);
+
+  const dismissReverted = useCallback(() => setReverted(false), []);
+
+  const status: SyncStatus = loading
+    ? 'loading'
+    : failures.length > 0
+      ? 'error'
+      : unconfirmed
+        ? 'saving'
+        : 'ready';
+  // One banner for every failure left, with the most recent one's message.
+  const error = failures.length > 0 ? failures[failures.length - 1].message : null;
 
   return {
     sessions,
@@ -332,5 +455,8 @@ export function useServerSessions(): Result {
     status,
     error,
     retry,
+    unconfirmed,
+    reverted,
+    dismissReverted,
   };
 }
