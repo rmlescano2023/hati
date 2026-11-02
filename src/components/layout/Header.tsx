@@ -11,10 +11,17 @@ export function Header() {
   // Shown only after 400ms of waiting, so a fast save never flashes it, and
   // held for 600ms once shown, so a slow one never flickers.
   const [flag] = useState(() => createDelayedFlag(400, 600, setCue));
-  useEffect(() => flag.set(sync.pending), [flag, sync.pending]);
-  useEffect(() => () => flag.dispose(), [flag]);
   // One status at a time: the error banner, then the reverted note, then this.
-  const showCue = cue && sync.status !== 'error' && !sync.reverted;
+  const covered = sync.status === 'error' || sync.reverted;
+  // While covered, the flag is switched off rather than just hidden, so the
+  // cue can't blink back when the banner clears with nothing pending. If
+  // writes are still pending then, it returns after the usual delay.
+  useEffect(() => {
+    if (covered) flag.hideNow();
+    else flag.set(sync.pending);
+  }, [flag, covered, sync.pending]);
+  useEffect(() => () => flag.dispose(), [flag]);
+  const showCue = cue && !covered;
 
   return (
     <header className={styles.header}>

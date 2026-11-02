@@ -11,7 +11,7 @@ export function createDelayedFlag(
   showAfter: number,
   minOn: number,
   onChange: (on: boolean) => void,
-): { set(input: boolean): void; dispose(): void } {
+): { set(input: boolean): void; hideNow(): void; dispose(): void } {
   let on = false;
   let onSince = 0;
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -42,6 +42,17 @@ export function createDelayedFlag(
       }
       // Otherwise the flag already matches the input. Coming back on during
       // the hold lands here, which cancels the hide and keeps the flag on.
+    },
+    /**
+     * Turns the flag off at once, skipping the hold, for when something else
+     * has taken its place. Left on behind it, the flag would show for an
+     * instant once that thing cleared, even with nothing left to show.
+     */
+    hideNow() {
+      clear();
+      if (!on) return;
+      on = false;
+      onChange(false);
     },
     dispose: clear,
   };
