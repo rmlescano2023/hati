@@ -1,4 +1,4 @@
-import { formatDateRange, formatLongDate } from './format';
+import { formatDateRange, formatLongDate, pluralize } from './format';
 import type { Session } from '../types';
 
 /**
@@ -27,4 +27,24 @@ export function sessionTitle(session: Session): string {
 /** The session's own name when it has one, otherwise the dates it covers. */
 export function sessionDisplayTitle(session: Session): string {
   return session.name ?? sessionTitle(session);
+}
+
+/**
+ * The delete confirmation's message, shared by Home and History so both say the
+ * same thing. Only a closed session with purchases warns about its statement:
+ * one with no purchases never had a statement to download.
+ */
+export function deleteSessionMessage(session: Session): string {
+  const n = session.records.length;
+  const m = session.members.length;
+  if (n > 0) {
+    const statement =
+      session.status === 'closed' ? ', and its statement can no longer be downloaded' : '';
+    return `“${sessionDisplayTitle(session)}” and its ${pluralize(n, 'purchase')} will be deleted${statement}. This cannot be undone.`;
+  }
+  const subject = session.name !== null ? `“${session.name}”` : 'This session';
+  if (m > 0) {
+    return `${subject} has ${pluralize(m, 'member')} but no purchases yet. Deleting it cannot be undone.`;
+  }
+  return `${subject} is empty. Deleting it cannot be undone.`;
 }
