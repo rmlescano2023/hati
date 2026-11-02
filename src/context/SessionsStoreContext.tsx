@@ -22,7 +22,15 @@ type SessionsStoreValue = {
   addMember: (sessionId: string, rawName: string) => boolean;
   removeMember: (sessionId: string, name: string) => void;
   clearMembers: (sessionId: string) => void;
-  addRecord: (sessionId: string, input: NewPurchaseRecord) => void;
+  /**
+   * `onSettled` hears true once the server accepts a save carrying the new
+   * record, or false once a failure is reported for it.
+   */
+  addRecord: (
+    sessionId: string,
+    input: NewPurchaseRecord,
+    onSettled?: (saved: boolean) => void,
+  ) => void;
   removeRecord: (sessionId: string, recordId: string) => void;
   removeItem: (sessionId: string, recordId: string, itemId: string) => void;
   updateItemName: (sessionId: string, recordId: string, itemId: string, name: string) => void;
@@ -119,8 +127,12 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
    * rather than rewriting the account.
    */
   const updateSession = useCallback(
-    (sessionId: string, fn: (session: Session) => Session) => {
-      mutateSession(sessionId, fn);
+    (
+      sessionId: string,
+      fn: (session: Session) => Session,
+      onSettled?: (saved: boolean) => void,
+    ) => {
+      mutateSession(sessionId, fn, onSettled);
     },
     [mutateSession],
   );
@@ -225,14 +237,18 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
   );
 
   const addRecord = useCallback(
-    (sessionId: string, input: NewPurchaseRecord) => {
-      updateSession(sessionId, (session) => ({
-        ...session,
-        records: [
-          ...session.records,
-          { ...input, id: createId('rec'), createdAt: new Date().toISOString() },
-        ],
-      }));
+    (sessionId: string, input: NewPurchaseRecord, onSettled?: (saved: boolean) => void) => {
+      updateSession(
+        sessionId,
+        (session) => ({
+          ...session,
+          records: [
+            ...session.records,
+            { ...input, id: createId('rec'), createdAt: new Date().toISOString() },
+          ],
+        }),
+        onSettled,
+      );
     },
     [updateSession],
   );

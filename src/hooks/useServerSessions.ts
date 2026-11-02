@@ -7,6 +7,7 @@ import {
   addFailure,
   authorisedFetch,
   createPendingWrites,
+  createSaveConfirmations,
   createSaveQueue,
   failedSessionIds,
   mergeLoaded,
@@ -24,8 +25,14 @@ type Result = {
   /**
    * Apply `fn` to one session and persist just that session. Returning the
    * session unchanged makes the whole thing a no-op, network included.
+   * `onSettled` hears true once the server accepts a save carrying this edit,
+   * or false once a failure is reported for it (see `createSaveConfirmations`).
    */
-  mutateSession: (sessionId: string, fn: (session: Session) => Session) => void;
+  mutateSession: (
+    sessionId: string,
+    fn: (session: Session) => Session,
+    onSettled?: (saved: boolean) => void,
+  ) => void;
   /** Add a session locally and create it on the server in the background. */
   addSession: (session: Session) => void;
   removeSession: (sessionId: string) => void;
@@ -132,6 +139,9 @@ export function useServerSessions(): Result {
    */
   const [queue] = useState(() => createSaveQueue<Session>());
 
+  /** Who is waiting to hear whether their edit reached the server, kept in step with `queue`. */
+  const [confirmations] = useState(() => createSaveConfirmations());
+
   /**
    * Every write the server hasn't confirmed yet. The leave prompt is attached
    * only while there is one, which keeps the page eligible for the
@@ -235,6 +245,7 @@ export function useServerSessions(): Result {
    */
   const put = useCallback(
     async (session: Session) => {
+      confirmations.sending(session.id);
       try {
         await withDeadline(WRITE_TIMEOUT_MS, async (signal) => {
           const res = await authedFetch(
@@ -249,17 +260,22 @@ export function useServerSessions(): Result {
           if (!res.ok) throw new Error(`Could not save your changes (${res.status}).`);
         });
         setFailures((f) => resolveFailure(f, 'save', session.id));
+        confirmations.saved(session.id);
       } catch (err) {
         const timedOut = err instanceof TimeoutError;
-        if (!timedOut && queue.hasPending(session.id)) return;
+        if (!timedOut && queue.hasPending(session.id)) {
+          confirmations.superseded(session.id);
+          return;
+        }
         fail({
           kind: 'save',
           sessionId: session.id,
           message: timedOut ? SAVE_TIMEOUT : messageOf(err, 'Could not save your changes.'),
         });
+        confirmations.failed(session.id);
       }
     },
-    [authedFetch, fail, queue],
+    [authedFetch, confirmations, fail, queue],
   );
 
   const enqueueSave = useCallback(
@@ -272,20 +288,35 @@ export function useServerSessions(): Result {
   );
 
   const mutateSession = useCallback(
-    (sessionId: string, fn: (session: Session) => Session) => {
+    (
+      sessionId: string,
+      fn: (session: Session) => Session,
+      onSettled?: (saved: boolean) => void,
+    ) => {
       const prev = sessionsRef.current;
       const index = prev.findIndex((s) => s.id === sessionId);
-      if (index === -1) return;
+      // Nothing is saved in either early return, so the caller hears false
+      // rather than waiting on a save that will never come.
+      if (index === -1) {
+        onSettled?.(false);
+        return;
+      }
       const next = fn(prev[index]);
       // The store's guards return the session unchanged to mean "no-op";
       // that must not cost a round trip.
-      if (next === prev[index]) return;
+      if (next === prev[index]) {
+        onSettled?.(false);
+        return;
+      }
       const copy = [...prev];
       copy[index] = next;
       commit(copy);
+      // Before the enqueue, because an idle queue starts the save at once and
+      // the wait must join that save rather than the one after it.
+      if (onSettled) confirmations.wait(sessionId, onSettled);
       enqueueSave(next);
     },
-    [commit, enqueueSave],
+    [commit, confirmations, enqueueSave],
   );
 
   const addSession = useCallback(

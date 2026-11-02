@@ -90,6 +90,62 @@ export function createPendingWrites(onChange: (busy: boolean) => void): {
 }
 
 /**
+ * Tells a caller whether the server accepted a save that carries its edit,
+ * for a confirmation shown where the edit was made. Every save sends the whole
+ * session, so a save started after the edit carries it and one started before
+ * doesn't. Waits therefore join the next save to start, and a success settles
+ * only the waits that save carries.
+ *
+ * Failures follow what the banner reports. A plain failure with a newer copy
+ * queued isn't reported, so its waits ride on with that copy. A reported one
+ * fails every wait on the session, queued ones included, so a timeout is final
+ * for the edits behind it too and a later success never reverses it.
+ *
+ * The caller marks each save with `sending` as it starts and then exactly one
+ * of `saved`, `superseded` or `failed` once it settles. Each `onSettled` is
+ * called once at most.
+ */
+export function createSaveConfirmations(): {
+  /** Calls `onSettled` with true once the next save of `id` to start succeeds, or with false once a failure is reported. */
+  wait(id: string, onSettled: (saved: boolean) => void): void;
+  /** A save of `id` is starting, carrying every edit waited on so far. */
+  sending(id: string): void;
+  /** The save in flight for `id` succeeded. */
+  saved(id: string): void;
+  /** The save in flight failed unreported, and the newer copy queued behind it carries its edits on. */
+  superseded(id: string): void;
+  /** A failure was reported for `id`, failing every wait on it, sent or queued. */
+  failed(id: string): void;
+} {
+  type Settle = (saved: boolean) => void;
+  const waiting = new Map<string, Settle[]>();
+  const inFlight = new Map<string, Settle[]>();
+  const take = (map: Map<string, Settle[]>, id: string): Settle[] => {
+    const list = map.get(id) ?? [];
+    map.delete(id);
+    return list;
+  };
+
+  return {
+    wait(id, onSettled) {
+      waiting.set(id, [...(waiting.get(id) ?? []), onSettled]);
+    },
+    sending(id) {
+      inFlight.set(id, take(waiting, id));
+    },
+    saved(id) {
+      for (const settle of take(inFlight, id)) settle(true);
+    },
+    superseded(id) {
+      waiting.set(id, [...take(inFlight, id), ...take(waiting, id)]);
+    },
+    failed(id) {
+      for (const settle of [...take(inFlight, id), ...take(waiting, id)]) settle(false);
+    },
+  };
+}
+
+/**
  * The list to show after a load. The server is the truth for every session
  * except those with a write it hasn't confirmed: an unconfirmed session keeps
  * its on-screen copy (and stays even if the server doesn't have it yet, as
