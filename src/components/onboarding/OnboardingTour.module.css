@@ -1,14 +1,20 @@
 /* The live region is always there, so it can announce the nudge when it
-   appears; it takes no room while empty. */
+   appears. It always keeps the nudge's line, even while empty, so the tooltip
+   doesn't grow when the nudge shows or shrink when it goes, which moved Next
+   out from under a tap. */
 .status {
   display: block;
+  margin-top: 10px;
+  min-height: calc(13px * 1.4);
+  font-size: 13px;
+  /* The tooltip's own line height, set here so the reserved line matches. */
+  line-height: 1.4;
 }
 
-/* Sits between the step's text and its buttons, pointing at Next. */
+/* Sits between the step's text and its buttons, pointing at the button that
+   continues. */
 .nudge {
   display: block;
-  margin-top: 10px;
-  font-size: 13px;
   font-weight: 500;
   color: var(--accent-text);
 }
