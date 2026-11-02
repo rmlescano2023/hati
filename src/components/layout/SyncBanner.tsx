@@ -10,6 +10,21 @@ import styles from './SyncBanner.module.css';
  */
 export function SyncBanner() {
   const { sync } = useSessionsStore();
+  // "Try again" reloads the server's copy, which can quietly undo an edit that
+  // never landed. Saying so tells the user to redo it rather than assume it
+  // saved. The error banner takes precedence, so only one strip shows.
+  if (sync.status !== 'error' && sync.reverted) {
+    return (
+      <div className={`${styles.banner} ${styles.note}`} role="status">
+        <span className={styles.noteMessage}>
+          {"Some recent changes weren't saved. Showing your last saved version."}
+        </span>
+        <Button size="sm" variant="ghost" onClick={sync.dismissReverted}>
+          Dismiss
+        </Button>
+      </div>
+    );
+  }
   if (sync.status !== 'error') return null;
 
   return (
