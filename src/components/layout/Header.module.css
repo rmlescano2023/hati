@@ -84,10 +84,14 @@
     position: relative;
   }
 
+  /* 12px down rather than 8px sits the cue closer to the account menu it
+     belongs to and further from the screen edge, still clear of the row
+     below. The brighter text keeps a 12px line from being missed. */
   .status {
     position: absolute;
-    top: 8px;
+    top: 12px;
     right: 0;
+    color: var(--text2);
   }
 
   .dot {
