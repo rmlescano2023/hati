@@ -15,3 +15,15 @@
   color: var(--danger-text);
   margin-right: auto;
 }
+
+/* The reverted-edit note shares the banner's slot and layout, in a neutral tone. */
+.note {
+  border-color: var(--border);
+  background: var(--surface2);
+}
+
+.noteMessage {
+  font-size: 12px;
+  color: var(--text2);
+  margin-right: auto;
+}
