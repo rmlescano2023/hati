@@ -4,8 +4,7 @@ import { Button } from '../components/shared/Button';
 import { ConfirmDialog } from '../components/shared/ConfirmDialog';
 import { EmptyState } from '../components/shared/EmptyState';
 import { useSessionsStore } from '../context/SessionsStoreContext';
-import { pluralize } from '../lib/format';
-import { sessionDisplayTitle } from '../lib/sessionLabel';
+import { deleteSessionMessage } from '../lib/sessionLabel';
 import styles from './HomePage.module.css';
 
 // Dev-only: `import.meta.env.DEV` is statically false in a production build, so
@@ -85,13 +84,7 @@ export function HomePage({ onOpenSession, onNewSession, onPreviewTour }: Props) 
       <ConfirmDialog
         open={pendingDelete !== null}
         title="Delete this session?"
-        message={
-          pendingDelete && pendingDelete.records.length > 0
-            ? `“${sessionDisplayTitle(pendingDelete)}” and its ${pluralize(pendingDelete.records.length, 'purchase')} will be deleted. This cannot be undone.`
-            : pendingDelete && pendingDelete.name !== null
-              ? `“${pendingDelete.name}” is empty. Deleting it cannot be undone.`
-              : 'This session is empty. Deleting it cannot be undone.'
-        }
+        message={pendingDelete ? deleteSessionMessage(pendingDelete) : ''}
         confirmLabel="Delete Session"
         destructive
         onCancel={() => setPendingDeleteId(null)}

@@ -49,15 +49,26 @@ export function SessionWorkspace({ sessionId, tab, onTabChange, onBack, onClosed
         {session && (
           <div className={styles.titleBlock}>
             {renaming ? (
-              <SessionNameInput
-                className={`${styles.nameInput} ${session.name === null ? styles.unnamedInput : ''}`}
-                initialName={session.name}
-                onSave={(raw) => renameSession(sessionId, raw)}
-                onClose={(via) => {
-                  setRenaming(false);
-                  if (via !== 'blur') restoreFocus.current = true;
-                }}
-              />
+              <span className={styles.renameBox}>
+                <SessionNameInput
+                  className={`${styles.nameInput} ${session.name === null ? styles.unnamedInput : ''}`}
+                  initialName={session.name}
+                  describedBy="session-name-hint"
+                  onSave={(raw) => renameSession(sessionId, raw)}
+                  onClose={(via) => {
+                    setRenaming(false);
+                    if (via !== 'blur') restoreFocus.current = true;
+                  }}
+                />
+                {/* Worded for the primary pointer rather than the width, so a
+                    touch laptop gets the keyboard wording. It is read when the
+                    box opens, which is all the short-lived box needs. */}
+                <span id="session-name-hint" className={styles.hint}>
+                  {window.matchMedia('(pointer: coarse)').matches
+                    ? 'Tap Done to save'
+                    : 'Enter to save · Esc to cancel'}
+                </span>
+              </span>
             ) : (
               <span className={styles.titles}>
                 {session.name !== null && <span className={styles.name}>{session.name}</span>}

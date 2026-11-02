@@ -1,5 +1,6 @@
 import { roundMoney } from './money';
 import { compareNames } from './format';
+import { createId } from './id';
 import type { PurchaseItem, PurchaseRecord } from '../types';
 
 const NAMES = [
@@ -42,7 +43,11 @@ const ITEM_NAMES = [
   'Tricycle Fare',
 ];
 
-/** Small deterministic PRNG so the demo set is identical every time. */
+/**
+ * Small deterministic PRNG so the demo set's values are identical every time.
+ * Record ids are still fresh on each call, because `purchase_records.id` must
+ * be unique across the whole database, not just within one session.
+ */
 function mulberry32(seed: number) {
   let a = seed;
   return () => {
@@ -110,7 +115,7 @@ export function buildDemoData(
 
     created += 3_600_000;
     records.push({
-      id: `demo_rec_${d}`,
+      id: createId('rec'),
       date: dates[d],
       payorMode: multiPayor ? 'multiple' : 'single',
       payors: multiPayor
@@ -126,7 +131,7 @@ export function buildDemoData(
 
   // A second save on an existing date + payor, to exercise breakdown merging.
   records.push({
-    id: 'demo_rec_merge',
+    id: createId('rec'),
     date: dates[0],
     payorMode: 'single',
     payors: [{ member: members[0], amount: 0 }],
