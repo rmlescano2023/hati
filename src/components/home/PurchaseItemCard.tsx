@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Card } from '../shared/Card';
 import { Button } from '../shared/Button';
 import { ModeToggle } from '../shared/ModeToggle';
@@ -23,6 +23,14 @@ const EMPTY_DRAFT: ItemDraft = {
   amounts: {},
 };
 
+type SaveState = 'idle' | 'saving' | 'saved';
+
+const SAVE_MESSAGE: Record<SaveState, string> = {
+  idle: '',
+  saving: 'Saving…',
+  saved: 'Saved to Breakdown.',
+};
+
 const num = (raw: string | undefined): number => {
   const parsed = Number.parseFloat(raw ?? '');
   return Number.isFinite(parsed) && parsed > 0 ? roundMoney(parsed) : 0;
@@ -38,7 +46,13 @@ export function PurchaseItemCard() {
   const [draft, setDraft] = useState<ItemDraft>(EMPTY_DRAFT);
   const [staged, setStaged] = useState<PurchaseItem[]>([]);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [saveState, setSaveState] = useState<SaveState>('idle');
+  /**
+   * Counts saves from this form, so only the latest one's outcome reaches the
+   * message. Its save carries every earlier purchase, so its "Saved" covers
+   * them too.
+   */
+  const latestSave = useRef(0);
 
   const stagedTotal = useMemo(() => sumMoney(staged.map(getItemTotal)), [staged]);
 
@@ -123,7 +137,9 @@ export function PurchaseItemCard() {
     setStaged((prev) => [...prev, item]);
     resetItemDraft();
     setError('');
-    setSuccess('');
+    // "Saving…" stays until the save settles, so the user still learns
+    // whether the last purchase landed while staging the next one.
+    setSaveState((state) => (state === 'saved' ? 'idle' : state));
   };
 
   const payors: PayorContribution[] =
@@ -146,13 +162,19 @@ export function PurchaseItemCard() {
       );
       return;
     }
-    addRecord({ date, payorMode, payors, items: staged });
+    const thisSave = (latestSave.current += 1);
+    // Set first, because a save that can't start settles at once.
+    setSaveState('saving');
+    // After an unmount the update is dropped, and a remount starts empty, so
+    // leaving the tab mid-save never brings the message back.
+    addRecord({ date, payorMode, payors, items: staged }, (saved) => {
+      if (thisSave === latestSave.current) setSaveState(saved ? 'saved' : 'idle');
+    });
     setStaged([]);
     setSinglePayor('');
     setContributions({});
     resetItemDraft('equal');
     setError('');
-    setSuccess('Saved to Breakdown.');
   };
 
   return (
@@ -222,9 +244,14 @@ export function PurchaseItemCard() {
 
       <div className={styles.saveRow}>
         {error && <span className={`${styles.message} ${styles.error}`}>{error}</span>}
-        {!error && success && (
-          <span className={`${styles.message} ${styles.success}`}>{success}</span>
-        )}
+        {/* Always mounted, so a screen reader announces each change of its
+            text once and politely. A validation message takes its place. */}
+        <span
+          className={`${styles.message} ${saveState === 'saved' ? styles.success : styles.saving}`}
+          role="status"
+        >
+          {error ? '' : SAVE_MESSAGE[saveState]}
+        </span>
         <Button variant="primary" onClick={save} disabled={!canSave}>
           Save to Breakdown →
         </Button>
