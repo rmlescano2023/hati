@@ -1,9 +1,18 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import {
   Joyride,
   ACTIONS,
   EVENTS,
   STATUS,
+  defaultLocale,
   type ButtonType,
   type EventData,
   type Step,
@@ -19,8 +28,12 @@ const NUDGE_MS = 3000;
 // Joyride deep-compares `steps` and resets when they change.
 const NudgeContext = createContext(false);
 
-/** A step's text, with a live region below it for the nudge. */
-function StepContent({ text }: { text: string }) {
+/**
+ * A step's text, with a live region below it for the nudge. `primary` is the
+ * label on the step's primary button, so the nudge names the button the
+ * reader can actually see.
+ */
+function StepContent({ text, primary }: { text: string; primary: ReactNode }) {
   const nudging = useContext(NudgeContext);
   return (
     <>
@@ -28,7 +41,7 @@ function StepContent({ text }: { text: string }) {
       {/* Always mounted and only gaining text, so the nudge is announced once
           rather than on every tap that restarts it. */}
       <span className={styles.status} role="status">
-        {nudging && <span className={styles.nudge}>Tap Next to continue</span>}
+        {nudging && <span className={styles.nudge}>Tap {primary} to continue</span>}
       </span>
     </>
   );
@@ -81,7 +94,14 @@ export function OnboardingTour({ run, screen, onNavigate, onDone }: Props) {
       TOUR_STEPS.map((s, i) => ({
         target: `[data-tour="${s.target}"]`,
         title: s.title,
-        content: <StepContent text={s.content} />,
+        // The same choice Joyride makes for a continuous tour without
+        // progress: its "last" label on the final step, "next" elsewhere.
+        content: (
+          <StepContent
+            text={s.content}
+            primary={i === TOUR_STEPS.length - 1 ? defaultLocale.last : defaultLocale.next}
+          />
+        ),
         // Every step offers Next ('primary' is its name in this library) and,
         // from the second onwards, Back — a tutorial you can only go forwards
         // through punishes anyone who reads a step too quickly.
