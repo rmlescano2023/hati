@@ -110,7 +110,10 @@ describe('deleteSessionMessage', () => {
   });
 
   it('counts the purchases of a draft, as before', () => {
-    const named = session({ name: 'Bali Trip', records: [record('2026-04-24'), record('2026-04-28')] });
+    const named = session({
+      name: 'Bali Trip',
+      records: [record('2026-04-24'), record('2026-04-28')],
+    });
     expect(deleteSessionMessage(named)).toBe(
       '“Bali Trip” and its 2 purchases will be deleted. This cannot be undone.',
     );
