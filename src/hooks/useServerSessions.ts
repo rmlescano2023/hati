@@ -17,7 +17,7 @@ import {
   type Failure,
 } from '../lib/writeQueue';
 
-export type SyncStatus = 'loading' | 'ready' | 'saving' | 'error';
+export type SyncStatus = 'loading' | 'ready' | 'error';
 
 type Result = {
   sessions: Session[];
@@ -34,8 +34,6 @@ type Result = {
   status: SyncStatus;
   error: string | null;
   retry: () => void;
-  /** True while any save, create or delete is waiting on the server. */
-  unconfirmed: boolean;
   /** True when "Try again" replaced something whose write had failed. */
   reverted: boolean;
   /** Hides the reverted-edit note. */
@@ -104,8 +102,6 @@ export function useServerSessions(): Result {
    * is left.
    */
   const [failures, setFailures] = useState<readonly Failure[]>([]);
-  /** Mirrors `pending.busy` as state, so the Saving cue can follow it. */
-  const [unconfirmed, setUnconfirmed] = useState(false);
   const [reverted, setReverted] = useState(false);
   const [reloads, setReloads] = useState(0);
 
@@ -145,7 +141,6 @@ export function useServerSessions(): Result {
     createPendingWrites((busy) => {
       if (busy) window.addEventListener('beforeunload', warnBeforeLeaving);
       else window.removeEventListener('beforeunload', warnBeforeLeaving);
-      setUnconfirmed(busy);
     }),
   );
 
@@ -436,13 +431,7 @@ export function useServerSessions(): Result {
 
   const dismissReverted = useCallback(() => setReverted(false), []);
 
-  const status: SyncStatus = loading
-    ? 'loading'
-    : failures.length > 0
-      ? 'error'
-      : unconfirmed
-        ? 'saving'
-        : 'ready';
+  const status: SyncStatus = loading ? 'loading' : failures.length > 0 ? 'error' : 'ready';
   // One banner for every failure left, with the most recent one's message.
   const error = failures.length > 0 ? failures[failures.length - 1].message : null;
 
@@ -455,7 +444,6 @@ export function useServerSessions(): Result {
     status,
     error,
     retry,
-    unconfirmed,
     reverted,
     dismissReverted,
   };

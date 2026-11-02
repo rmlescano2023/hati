@@ -45,8 +45,6 @@ type SessionsStoreValue = {
     status: SyncStatus;
     error: string | null;
     retry: () => void;
-    /** True while any save, create or delete is waiting on the server; drives the Saving cue. */
-    pending: boolean;
     /** True when "Try again" rolled back something whose write had failed. */
     reverted: boolean;
     dismissReverted: () => void;
@@ -97,8 +95,6 @@ function mapRecordItem(
 }
 
 export function SessionsStoreProvider({ children }: { children: ReactNode }) {
-  // `sync.pending` is the hook's `unconfirmed`, renamed there because `pending`
-  // already names the hook's pending-writes counter.
   const {
     sessions,
     mutateSession,
@@ -108,7 +104,6 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
     status,
     error,
     retry,
-    unconfirmed,
     reverted,
     dismissReverted,
   } = useServerSessions();
@@ -340,13 +335,12 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
       updateItemMemberAmount,
       replaceSessionData,
       replaceAllSessions,
-      sync: { status, error, retry, pending: unconfirmed, reverted, dismissReverted },
+      sync: { status, error, retry, reverted, dismissReverted },
     }),
     [
       status,
       error,
       retry,
-      unconfirmed,
       reverted,
       dismissReverted,
       sessions,
