@@ -177,7 +177,10 @@ export default function App() {
   if (sync.status === 'loading') {
     return (
       <PageShell header={<Header />}>
-        <p className={styles.loading}>Loading your sessions…</p>
+        <div className={styles.loading} role="status">
+          <span className={styles.spinner} aria-hidden="true" />
+          Loading your sessions…
+        </div>
       </PageShell>
     );
   }

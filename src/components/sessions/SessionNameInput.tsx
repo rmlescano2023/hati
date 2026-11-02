@@ -6,6 +6,8 @@ type Props = {
   /** The saved name; null shows an empty box with the placeholder. */
   initialName: string | null;
   className?: string;
+  /** The id of the hint that says how to save, read out with the box. */
+  describedBy?: string;
   /** Raw text. May be called more than once with the same value: the store makes repeats a no-op. */
   onSave: (raw: string) => void;
   /** The edit is over. Keyboard endings return focus to the pencil. */
@@ -18,7 +20,7 @@ type Props = {
  * it isn't `EditableCell`: that one is always mounted, drops an empty value
  * rather than saving it, and clearing a name has to save no name.
  */
-export function SessionNameInput({ initialName, className, onSave, onClose }: Props) {
+export function SessionNameInput({ initialName, className, describedBy, onSave, onClose }: Props) {
   const [draft, setDraft] = useState(initialName ?? '');
   const ref = useRef<HTMLInputElement>(null);
   const draftRef = useRef(draft);
@@ -49,6 +51,9 @@ export function SessionNameInput({ initialName, className, onSave, onClose }: Pr
       type="text"
       className={[styles.input, className].filter(Boolean).join(' ')}
       aria-label="Session name"
+      aria-describedby={describedBy}
+      // Phone keyboards label their return key "Done", which matches the hint.
+      enterKeyHint="done"
       placeholder="Name your session"
       maxLength={SESSION_NAME_MAX}
       value={draft}
