@@ -41,7 +41,16 @@ type SessionsStoreValue = {
   /** Dev-only seeding: swap the whole session list. */
   replaceAllSessions: (sessions: Session[]) => void;
   /** Where the current data stands with the server. */
-  sync: { status: SyncStatus; error: string | null; retry: () => void };
+  sync: {
+    status: SyncStatus;
+    error: string | null;
+    retry: () => void;
+    /** True while any save, create or delete is waiting on the server; drives the Saving cue. */
+    pending: boolean;
+    /** True when "Try again" rolled back something whose write had failed. */
+    reverted: boolean;
+    dismissReverted: () => void;
+  };
 };
 
 const SessionsStoreContext = createContext<SessionsStoreValue | null>(null);
@@ -88,8 +97,21 @@ function mapRecordItem(
 }
 
 export function SessionsStoreProvider({ children }: { children: ReactNode }) {
-  const { sessions, mutateSession, addSession, removeSession, replaceAll, status, error, retry } =
-    useServerSessions();
+  // `sync.pending` is the hook's `unconfirmed`, renamed there because `pending`
+  // already names the hook's pending-writes counter.
+  const {
+    sessions,
+    mutateSession,
+    addSession,
+    removeSession,
+    replaceAll,
+    status,
+    error,
+    retry,
+    unconfirmed,
+    reverted,
+    dismissReverted,
+  } = useServerSessions();
 
   /**
    * Apply `fn` to one session, leaving every other session untouched. Returning
@@ -318,12 +340,15 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
       updateItemMemberAmount,
       replaceSessionData,
       replaceAllSessions,
-      sync: { status, error, retry },
+      sync: { status, error, retry, pending: unconfirmed, reverted, dismissReverted },
     }),
     [
       status,
       error,
       retry,
+      unconfirmed,
+      reverted,
+      dismissReverted,
       sessions,
       createSession,
       renameSession,

@@ -1,6 +1,6 @@
 # Spec: save feedback, polish and History delete (round 3)
 
-Status: **awaiting the owner's approval.** Nothing here is built until it is approved.
+Status: **approved by the owner on 2026-11-02.** D1 and D2 are decided as recommended (section 12).
 
 Branches, both from `origin/main` at `b153faa` and both carrying this spec:
 - **Branch A, `save-feedback`:** #3 Saving cue, #4 reverted-edit note, #5 30-second timeout, and the
@@ -935,15 +935,17 @@ For the documentation-engineer, when the owner asks:
 
 ## 12. Decisions for the user
 
-**D1. #7: there's no defect to fix. Change anything?** The column already reaches the total
-(5.B3). The tester's 305px was the page width less a classic scrollbar, and it still included 70px of
+**D1. #7: there's no defect to fix. Change anything?** **Decided: (a), no change** (owner,
+2026-11-02). The column already reaches the total (5.B3). The tester's 305px was the page width less a classic scrollbar, and it still included 70px of
 gutters and card padding.
 - **(a) Recommended: no change.** Close #7 as working, and the tester re-checks AC-7.2 to AC-7.6. A
   wrapped title will always end ragged.
 - **(b) Give the title 8px more on phones.** Reduce the card's side padding from 18px to 14px at ≤640px
   (6.B1). It's cheap and safe, but it changes how every card looks on a phone for a small gain.
 
-**D2. #3: where the cue sits on a phone.** The requirement's spot (in the row, left of the account
+**D2. #3: where the cue sits on a phone.** **Decided: (a)** (owner, 2026-11-02): on phones the cue
+sits in the header's top padding above the account button, beside it on desktop, and nothing moves or
+wraps at any width when it appears or clears. The requirement's spot (in the row, left of the account
 button, with the title block shrinking) makes the header grow by a line on 396 to 451px phones when
 the cue appears. That breaks AC-3.8 (6.A1).
 - **(a) Recommended:** on phones, the cue sits right-aligned in the header's top padding, above the
@@ -956,10 +958,10 @@ the cue appears. That breaks AC-3.8 (6.A1).
   as an uncaught 500. It isn't a clean 4xx.
 - That also reveals the id exists. Real clients mint random 48-bit ids, so this doesn't happen in
   practice.
-- **Recommended: no API change this round.** A later small fix could catch the unique violation and
+- **Recommended: no API change this round.** Confirmed by the owner on 2026-11-02. A later small fix could catch the unique violation and
   return 409.
 
-**Assumptions, stated rather than asked** (say if any is wrong):
+**Assumptions, stated rather than asked.** The owner confirmed all three on 2026-11-02:
 - A save timeout is always reported, even with a newer copy queued (BR-5.1). A plain save failure with a
   newer copy queued stays silent, as today.
 - A closed session with no purchases (legacy only) gets no statement clause, because it has no
