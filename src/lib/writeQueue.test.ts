@@ -1,5 +1,20 @@
-import { describe, expect, it, vi } from 'vitest';
-import { createPendingWrites, createSaveQueue, mergeLoaded } from './writeQueue';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Session } from '../types';
+import {
+  TimeoutError,
+  WRITE_TIMEOUT_MS,
+  addFailure,
+  authorisedFetch,
+  createPendingWrites,
+  createSaveQueue,
+  failedSessionIds,
+  mergeLoaded,
+  resolveFailure,
+  revertedAny,
+  sameSessionContent,
+  withDeadline,
+  type Failure,
+} from './writeQueue';
 
 /** A promise the test settles by hand, so it decides when a "request" lands. */
 function deferred() {
@@ -278,5 +293,279 @@ describe('mergeLoaded', () => {
       { id: 'c', v: 'local' },
     ];
     expect(mergeLoaded<S>(server, local, none, none).map((s) => s.id)).toEqual(['c', 'a', 'b']);
+  });
+});
+
+describe('withDeadline', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("resolves with the work's value under the limit, and is still waiting at 29,999ms", async () => {
+    let finish!: (value: string) => void;
+    const result = withDeadline(
+      WRITE_TIMEOUT_MS,
+      () => new Promise<string>((res) => (finish = res)),
+    );
+    let settled = false;
+    void result.then(
+      () => (settled = true),
+      () => (settled = true),
+    );
+    await vi.advanceTimersByTimeAsync(29_999);
+    expect(settled).toBe(false);
+    finish('saved');
+    await expect(result).resolves.toBe('saved');
+  });
+
+  it('rejects with TimeoutError at 30,000ms and aborts the signal', async () => {
+    let seen!: AbortSignal;
+    const result = withDeadline(WRITE_TIMEOUT_MS, (signal) => {
+      seen = signal;
+      return new Promise<void>(() => {});
+    });
+    const outcome = expect(result).rejects.toBeInstanceOf(TimeoutError);
+    await vi.advanceTimersByTimeAsync(30_000);
+    await outcome;
+    expect(seen.aborted).toBe(true);
+  });
+
+  // An aborted fetch rejects with an AbortError. The race must already have
+  // settled with the timeout by then, or the banner would show the wrong text.
+  it('settles with TimeoutError, not the AbortError the aborted work throws', async () => {
+    const result = withDeadline(
+      WRITE_TIMEOUT_MS,
+      (signal) =>
+        new Promise<void>((_, reject) =>
+          signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError'))),
+        ),
+    );
+    const outcome = expect(result).rejects.toBeInstanceOf(TimeoutError);
+    await vi.advanceTimersByTimeAsync(WRITE_TIMEOUT_MS);
+    await outcome;
+  });
+
+  // Vitest fails the run on an unhandled rejection, so the late reject below
+  // also proves nothing is left unhandled.
+  it('ignores work that settles after the limit', async () => {
+    let finish!: (value: string) => void;
+    let fail!: (err: unknown) => void;
+    const late = withDeadline(WRITE_TIMEOUT_MS, () => new Promise<string>((res) => (finish = res)));
+    const lateReject = withDeadline(
+      WRITE_TIMEOUT_MS,
+      () => new Promise<string>((_, rej) => (fail = rej)),
+    );
+    const outcomes = Promise.all([
+      expect(late).rejects.toBeInstanceOf(TimeoutError),
+      expect(lateReject).rejects.toBeInstanceOf(TimeoutError),
+    ]);
+    await vi.advanceTimersByTimeAsync(WRITE_TIMEOUT_MS);
+    finish('too late');
+    fail(new Error('too late'));
+    await vi.advanceTimersByTimeAsync(0);
+    await outcomes;
+  });
+
+  it('clears its timer once the work settles, either way', async () => {
+    await withDeadline(WRITE_TIMEOUT_MS, async () => 'ok');
+    expect(vi.getTimerCount()).toBe(0);
+    await expect(
+      withDeadline(WRITE_TIMEOUT_MS, async () => {
+        throw new Error('500');
+      }),
+    ).rejects.toThrow('500');
+    expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+describe('authorisedFetch', () => {
+  const ok = () => vi.fn<typeof fetch>(async () => new Response(null, { status: 200 }));
+
+  it('sends the bearer header and passes the signal', async () => {
+    const send = ok();
+    const controller = new AbortController();
+    await authorisedFetch(
+      async () => 'tok',
+      send,
+      '/api/sessions/a',
+      { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: '{}' },
+      controller.signal,
+    );
+    expect(send).toHaveBeenCalledWith('/api/sessions/a', {
+      method: 'PUT',
+      body: '{}',
+      signal: controller.signal,
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer tok' },
+    });
+  });
+
+  it('never sends when the token only arrives after the attempt was abandoned', async () => {
+    const send = ok();
+    const controller = new AbortController();
+    let giveToken!: (token: string) => void;
+    const token = new Promise<string>((res) => (giveToken = res));
+    const result = authorisedFetch(() => token, send, '/api/sessions/a', {}, controller.signal);
+    controller.abort();
+    giveToken('tok');
+    await expect(result).rejects.toBeInstanceOf(TimeoutError);
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it('rejects with "Not signed in." without sending when there is no token', async () => {
+    const send = ok();
+    await expect(authorisedFetch(async () => null, send, '/api/sessions', {})).rejects.toThrow(
+      'Not signed in.',
+    );
+    expect(send).not.toHaveBeenCalled();
+  });
+});
+
+describe('failures', () => {
+  const save = (sessionId: string, message = `save ${sessionId}`): Failure => ({
+    kind: 'save',
+    sessionId,
+    message,
+  });
+
+  it("keeps A's failure when B's save succeeds", () => {
+    const list = addFailure([], save('A'));
+    expect(resolveFailure(list, 'save', 'B')).toEqual([save('A')]);
+  });
+
+  it('clears only once both failed sessions have saved', () => {
+    const list = addFailure(addFailure([], save('A')), save('B'));
+    const afterA = resolveFailure(list, 'save', 'A');
+    expect(afterA).toEqual([save('B')]);
+    expect(resolveFailure(afterA, 'save', 'B')).toEqual([]);
+  });
+
+  it('replaces a repeat of the same kind and session and moves it to most recent', () => {
+    let list = addFailure([], save('A', 'first'));
+    list = addFailure(list, save('B'));
+    list = addFailure(list, save('A', 'second'));
+    expect(list).toEqual([save('B'), save('A', 'second')]);
+    expect(list[list.length - 1].message).toBe('second');
+  });
+
+  it("doesn't let a save resolve a delete for the same session", () => {
+    const list = addFailure([], { kind: 'delete', sessionId: 'A', message: 'delete A' });
+    expect(resolveFailure(list, 'save', 'A')).toEqual(list);
+  });
+
+  it('returns the same list when nothing matches', () => {
+    const list = addFailure([], save('A'));
+    expect(resolveFailure(list, 'save', 'B')).toBe(list);
+    expect(resolveFailure(list, 'load', null)).toBe(list);
+  });
+
+  it('lists the sessions whose save or delete failed, not loads or seeds', () => {
+    let list = addFailure([], save('A'));
+    list = addFailure(list, { kind: 'delete', sessionId: 'B', message: 'delete B' });
+    list = addFailure(list, { kind: 'load', sessionId: null, message: 'load' });
+    list = addFailure(list, { kind: 'seed', sessionId: null, message: 'seed' });
+    expect(failedSessionIds(list)).toEqual(['A', 'B']);
+  });
+});
+
+describe('revertedAny and sameSessionContent', () => {
+  const session = (id: string, overrides: Partial<Session> = {}): Session => ({
+    id,
+    status: 'draft',
+    createdAt: '2026-11-01T10:00:00.000Z',
+    closedAt: null,
+    name: null,
+    members: ['Ana', 'Ben'],
+    records: [
+      {
+        id: 'rec_1',
+        date: '2026-11-01',
+        payorMode: 'single',
+        payors: [{ member: 'Ana', amount: 0 }],
+        items: [
+          { id: 'item_1', mode: 'equal', name: 'Rice', totalPrice: 100, owners: ['Ana', 'Ben'] },
+        ],
+        createdAt: '2026-11-01T10:01:00.000Z',
+      },
+      {
+        id: 'rec_2',
+        date: '2026-11-02',
+        payorMode: 'single',
+        payors: [{ member: 'Ben', amount: 0 }],
+        items: [{ id: 'item_2', mode: 'custom', name: 'Taxi', amounts: { Ana: 40, Ben: 60 } }],
+        createdAt: '2026-11-02T10:01:00.000Z',
+      },
+    ],
+    ...overrides,
+  });
+  const check = (failed: string[], before: Session[], after: Session[]) =>
+    revertedAny(failed, before, after, sameSessionContent);
+
+  it('is true when a failed save comes back different from the server', () => {
+    expect(check(['A'], [session('A', { name: 'Trip' })], [session('A')])).toBe(true);
+  });
+
+  it('is true when a failed create is missing after the load', () => {
+    expect(check(['A'], [session('A')], [])).toBe(true);
+  });
+
+  it('is true when a failed delete is back after the load', () => {
+    expect(check(['A'], [], [session('A')])).toBe(true);
+  });
+
+  it('is false with no failed sessions', () => {
+    expect(check([], [session('A', { name: 'Trip' })], [session('A')])).toBe(false);
+  });
+
+  // The server orders records by date, rewrites the created_at of a POSTed
+  // row, and jsonb reorders keys, all for a save that did land.
+  it('is false when only order, key order and timestamps differ', () => {
+    const local = session('A');
+    const [first, second] = local.records;
+    const server: Session = {
+      ...local,
+      createdAt: '2026-11-01T10:00:07.123Z',
+      records: [
+        {
+          createdAt: '2026-11-02T10:01:09.000Z',
+          items: [{ amounts: { Ben: 60, Ana: 40 }, name: 'Taxi', mode: 'custom', id: 'item_2' }],
+          payors: second.payors,
+          payorMode: second.payorMode,
+          date: second.date,
+          id: second.id,
+        },
+        { ...first, createdAt: '2026-11-01T10:01:09.000Z' },
+      ],
+    };
+    expect(check(['A'], [local], [server])).toBe(false);
+  });
+
+  it('is false when the session that changed is not one that failed', () => {
+    expect(
+      check(['B'], [session('A', { name: 'Trip' }), session('B')], [session('A'), session('B')]),
+    ).toBe(false);
+  });
+
+  it('is true when one of two failed sessions differs', () => {
+    expect(
+      check(
+        ['A', 'B'],
+        [session('A'), session('B', { members: ['Ana'] })],
+        [session('A'), session('B')],
+      ),
+    ).toBe(true);
+  });
+
+  it('notices a changed status, member, item or amount', () => {
+    const base = session('A');
+    expect(sameSessionContent(base, session('A', { status: 'closed' }))).toBe(false);
+    expect(sameSessionContent(base, session('A', { members: ['Ana', 'Cy'] }))).toBe(false);
+    const priced = structuredClone(base);
+    const item = priced.records[0].items[0];
+    if (item.mode === 'equal') item.totalPrice = 120;
+    expect(sameSessionContent(base, priced)).toBe(false);
+    expect(sameSessionContent(base, { ...base, records: base.records.slice(1) })).toBe(false);
   });
 });
