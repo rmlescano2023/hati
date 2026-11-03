@@ -6,6 +6,7 @@ import {
   addFailure,
   authorisedFetch,
   createPendingWrites,
+  createSaveConfirmations,
   createSaveQueue,
   failedSessionIds,
   mergeLoaded,
@@ -210,6 +211,131 @@ describe('createPendingWrites', () => {
     pending.track(Promise.reject(new Error('offline')));
     await flush();
     expect(pending.busy).toBe(false);
+  });
+});
+
+describe('createSaveConfirmations', () => {
+  it('confirms a waiting edit once the save carrying it succeeds', () => {
+    const confirmations = createSaveConfirmations();
+    const onSettled = vi.fn();
+    confirmations.wait('a', onSettled);
+    confirmations.sending('a');
+    expect(onSettled).not.toHaveBeenCalled();
+    confirmations.saved('a');
+    expect(onSettled.mock.calls).toEqual([[true]]);
+  });
+
+  it('does not confirm an edit with a save that started before it (AC-1.6)', () => {
+    const confirmations = createSaveConfirmations();
+    const onSettled = vi.fn();
+    confirmations.sending('a');
+    confirmations.wait('a', onSettled);
+    confirmations.saved('a');
+    expect(onSettled).not.toHaveBeenCalled();
+
+    confirmations.sending('a');
+    confirmations.saved('a');
+    expect(onSettled.mock.calls).toEqual([[true]]);
+  });
+
+  it("settles a queued edit only with the follow-up save, not the earlier one's (AC-4.1)", () => {
+    const confirmations = createSaveConfirmations();
+    const first = vi.fn();
+    const second = vi.fn();
+    confirmations.wait('a', first);
+    confirmations.sending('a');
+    confirmations.wait('a', second);
+    confirmations.saved('a');
+    expect(first.mock.calls).toEqual([[true]]);
+    expect(second).not.toHaveBeenCalled();
+
+    confirmations.sending('a');
+    confirmations.saved('a');
+    expect(second.mock.calls).toEqual([[true]]);
+    expect(first).toHaveBeenCalledTimes(1);
+  });
+
+  it('confirms every edit folded into one follow-up save (AC-4.2)', () => {
+    const confirmations = createSaveConfirmations();
+    const b = vi.fn();
+    const c = vi.fn();
+    confirmations.sending('a');
+    confirmations.wait('a', b);
+    confirmations.wait('a', c);
+    confirmations.saved('a');
+    confirmations.sending('a');
+    confirmations.saved('a');
+    expect(b.mock.calls).toEqual([[true]]);
+    expect(c.mock.calls).toEqual([[true]]);
+  });
+
+  it('hands a superseded failure on to the newer copy, which settles it (AC-4.4)', () => {
+    const confirmations = createSaveConfirmations();
+    const first = vi.fn();
+    const second = vi.fn();
+    confirmations.wait('a', first);
+    confirmations.sending('a');
+    confirmations.wait('a', second);
+    confirmations.superseded('a');
+    expect(first).not.toHaveBeenCalled();
+    expect(second).not.toHaveBeenCalled();
+
+    confirmations.sending('a');
+    confirmations.saved('a');
+    expect(first.mock.calls).toEqual([[true]]);
+    expect(second.mock.calls).toEqual([[true]]);
+  });
+
+  it('fails a reported failure for the sent edit', () => {
+    const confirmations = createSaveConfirmations();
+    const onSettled = vi.fn();
+    confirmations.wait('a', onSettled);
+    confirmations.sending('a');
+    confirmations.failed('a');
+    expect(onSettled.mock.calls).toEqual([[false]]);
+  });
+
+  it('fails queued edits too, and a later success never reverses it (AC-4.5, BR-6)', () => {
+    const confirmations = createSaveConfirmations();
+    const first = vi.fn();
+    const second = vi.fn();
+    confirmations.wait('a', first);
+    confirmations.sending('a');
+    confirmations.wait('a', second);
+    confirmations.failed('a');
+    expect(first.mock.calls).toEqual([[false]]);
+    expect(second.mock.calls).toEqual([[false]]);
+
+    confirmations.sending('a');
+    confirmations.saved('a');
+    expect(first).toHaveBeenCalledTimes(1);
+    expect(second).toHaveBeenCalledTimes(1);
+  });
+
+  it('settles an edit made after a failure with the next save', () => {
+    const confirmations = createSaveConfirmations();
+    confirmations.sending('a');
+    confirmations.failed('a');
+    const onSettled = vi.fn();
+    confirmations.wait('a', onSettled);
+    confirmations.sending('a');
+    confirmations.saved('a');
+    expect(onSettled.mock.calls).toEqual([[true]]);
+  });
+
+  it("keeps sessions apart, so one session's outcome never settles another's edit", () => {
+    const confirmations = createSaveConfirmations();
+    const a = vi.fn();
+    const b = vi.fn();
+    confirmations.wait('a', a);
+    confirmations.sending('a');
+    confirmations.wait('b', b);
+    confirmations.sending('b');
+    confirmations.failed('b');
+    expect(a).not.toHaveBeenCalled();
+    expect(b.mock.calls).toEqual([[false]]);
+    confirmations.saved('a');
+    expect(a.mock.calls).toEqual([[true]]);
   });
 });
 

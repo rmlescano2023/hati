@@ -37,68 +37,6 @@
   margin-top: 3px;
 }
 
-/* The Saving cue, beside the account menu. */
-.status {
-  flex: none;
-  font-size: 12px;
-  color: var(--text3);
-}
-
-.saving {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  white-space: nowrap;
-}
-
-.dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentColor;
-  animation: pulse 1.2s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  0%,
-  100% {
-    opacity: 0.35;
-  }
-  50% {
-    opacity: 1;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .dot {
-    animation: none;
-  }
-}
-
-@media (max-width: 640px) {
-  /* In the row, the cue would take width from the title block and wrap the
-     subtitle on 396 to 451px phones, growing the header. Placed in the
-     header's empty top padding above the account menu instead, it takes no
-     space, so nothing moves at any width when it appears or clears. */
-  .header {
-    position: relative;
-  }
-
-  /* 12px down rather than 8px sits the cue closer to the account menu it
-     belongs to and further from the screen edge, still clear of the row
-     below. The brighter text keeps a 12px line from being missed. */
-  .status {
-    position: absolute;
-    top: 12px;
-    right: 0;
-    color: var(--text2);
-  }
-
-  .dot {
-    display: none;
-  }
-}
-
 @media (max-width: 480px) {
   .subtitle {
     font-size: 12px;
