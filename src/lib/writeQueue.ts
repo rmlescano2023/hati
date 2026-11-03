@@ -223,13 +223,15 @@ export async function authorisedFetch(
   });
 }
 
-export type FailureKind = 'save' | 'delete' | 'load' | 'seed';
+export type FailureKind = 'save' | 'delete' | 'load' | 'seed' | 'payment';
 
 /**
  * One write or load that failed and hasn't been resolved yet. Keeping them
  * apart, rather than one global error, is what stops a success on one
  * session from hiding a failure on another. A `'save'` also covers a failed
- * create, because a later save of the session creates the row too.
+ * create, because a later save of the session creates the row too. A
+ * `'payment'` has already been reverted on screen, so it is left out of
+ * `failedSessionIds` and never shows the reverted-edit note.
  */
 export type Failure = { kind: FailureKind; sessionId: string | null; message: string };
 
@@ -309,6 +311,7 @@ export function sameSessionContent(a: Session, b: Session): boolean {
   return (
     a.name === b.name &&
     a.status === b.status &&
+    a.me === b.me &&
     deepEqual(a.members, b.members) &&
     deepEqual(records(a), records(b))
   );

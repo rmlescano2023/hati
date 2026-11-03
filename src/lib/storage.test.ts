@@ -36,6 +36,8 @@ describe('parseAppData', () => {
       expect(session.id).toMatch(/^session_/);
       expect(session.name).toBeNull();
       expect(session.activityAt).toBeNull();
+      expect(session.me).toBeNull();
+      expect(session.payments).toEqual([]);
     });
 
     it('migrates an empty v1 blob to no sessions rather than an empty one', () => {
@@ -69,6 +71,8 @@ describe('parseAppData', () => {
           records: [record],
           name: 'Bali Trip',
           activityAt: '2026-09-12T09:30:00.000Z',
+          me: null,
+          payments: [],
         },
         {
           id: 'session_closed',
@@ -79,6 +83,8 @@ describe('parseAppData', () => {
           records: [record],
           name: null,
           activityAt: null,
+          me: 'Ana',
+          payments: [],
         },
       ],
     };

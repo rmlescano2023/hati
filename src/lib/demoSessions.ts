@@ -1,6 +1,7 @@
 import { buildDemoData } from './demoData';
 import { createId } from './id';
-import type { PurchaseRecord, Session } from '../types';
+import { NOT_IN_SESSION, buildCard, openLinePayments } from './collection';
+import type { Payment, PurchaseRecord, Session } from '../types';
 
 /**
  * A spread of draft and closed sessions for exercising Home and History
@@ -66,7 +67,32 @@ const SPECS: Spec[] = [
   { status: 'closed', members: 8, purchases: 6, endDaysAgo: 399, closedAfterDays: 5 },
 ];
 
+/**
+ * One closed session per Collection state, in the order the closed specs are
+ * listed: matched by the profile name "Renmar" (or Needs setup without it),
+ * part paid, fully settled, and not in the session. The time is the device's,
+ * where the server would stamp its own (A4).
+ */
+function withCollectionState(session: Session, closedIndex: number): Session {
+  const paid = (entries: Omit<Payment, 'id' | 'createdAt'>[]): Payment[] =>
+    entries.map((p) => ({ ...p, id: createId('pay'), createdAt: new Date().toISOString() }));
+
+  if (closedIndex === 1) {
+    const picked = { ...session, me: 'Renmar' };
+    const [first] = openLinePayments(buildCard(picked, null));
+    const half = first ? Math.floor(first.amountCents / 2) : 0;
+    return { ...picked, payments: half > 0 ? paid([{ ...first, amountCents: half }]) : [] };
+  }
+  if (closedIndex === 2) {
+    const picked = { ...session, me: 'Renmar' };
+    return { ...picked, payments: paid(openLinePayments(buildCard(picked, null))) };
+  }
+  if (closedIndex === 3) return { ...session, me: NOT_IN_SESSION };
+  return session;
+}
+
 export function buildDemoSessions(): Session[] {
+  let closedIndex = 0;
   return SPECS.map(({ status, members, purchases, endDaysAgo, closedAfterDays = 0 }) => {
     const demo = buildDemoData(members, 5 * purchases);
     const records = shiftDates(demo.records.slice(0, purchases), endDaysAgo);
@@ -74,7 +100,7 @@ export function buildDemoSessions(): Session[] {
     // earliest purchase by a couple of days.
     const createdDaysAgo = purchases === 0 ? 0 : endDaysAgo + records.length + 1;
 
-    return {
+    const session: Session = {
       id: createId('session'),
       status,
       createdAt: daysAgoIso(createdDaysAgo),
@@ -83,6 +109,9 @@ export function buildDemoSessions(): Session[] {
       records,
       name: null,
       activityAt: null,
+      me: null,
+      payments: [],
     };
+    return status === 'closed' ? withCollectionState(session, closedIndex++) : session;
   });
 }
