@@ -64,6 +64,11 @@ export type Session = {
   records: PurchaseRecord[];
   /** The name the user gave it, tidied; null means unnamed and titled by its dates. */
   name: string | null;
+  /**
+   * ISO timestamp of the last open or saved change, which Home sorts by; null
+   * until there is one, and Home then falls back to purchases or `createdAt`.
+   */
+  activityAt: string | null;
 };
 
 export type AppData = {

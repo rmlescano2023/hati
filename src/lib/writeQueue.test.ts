@@ -603,6 +603,7 @@ describe('revertedAny and sameSessionContent', () => {
     createdAt: '2026-11-01T10:00:00.000Z',
     closedAt: null,
     name: null,
+    activityAt: null,
     members: ['Ana', 'Ben'],
     records: [
       {
@@ -682,6 +683,13 @@ describe('revertedAny and sameSessionContent', () => {
         [session('A'), session('B')],
       ),
     ).toBe(true);
+  });
+
+  // BR-12, AC-6.6: a card's position is not content the user entered.
+  it('ignores a difference in activity time alone', () => {
+    const stamped = session('A', { activityAt: '2026-11-03T10:00:00.000Z' });
+    expect(sameSessionContent(stamped, session('A'))).toBe(true);
+    expect(check(['A'], [stamped], [session('A')])).toBe(false);
   });
 
   it('notices a changed status, member, item or amount', () => {
