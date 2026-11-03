@@ -215,9 +215,7 @@ export type Collection = {
 
 /** Finished sessions only (BR-1), sectioned and ordered as BR-17a sets out. */
 export function buildCollection(sessions: Session[], profileName: string | null): Collection {
-  const cards = sessions
-    .filter((s) => s.status === 'closed')
-    .map((s) => buildCard(s, profileName));
+  const cards = sessions.filter((s) => s.status === 'closed').map((s) => buildCard(s, profileName));
   const byFinished = (a: CollectionCard, b: CollectionCard) =>
     ms(b.session.closedAt) - ms(a.session.closedAt) || byId(a.session.id, b.session.id);
   const bySettled = (a: CollectionCard, b: CollectionCard) =>
