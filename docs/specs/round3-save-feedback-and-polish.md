@@ -2,6 +2,44 @@
 
 Status: **approved by the owner on 2026-11-02.** D1 and D2 are decided as recommended (section 12).
 
+> **Amended 2026-11-02, by the owner's decision: the header "Saving…" cue is withdrawn.** The owner
+> wants save feedback where the action happens, not in the header. The cue is removed at every width,
+> along with what only it used: `src/lib/delayedFlag.ts` and its test, `sync.pending` in the store,
+> `unconfirmed` in the hook, and the `'saving'` value of `SyncStatus`, which only `unconfirmed`
+> produced and nothing read. In its place, the message beside Save to Breakdown reads "Saving…" on
+> click and "Saved to Breakdown." only once the server confirms a save carrying that purchase, and
+> clears on a reported failure or timeout (requirements:
+> `/Users/rmlescano/.claude/jobs/12f7a81f/tmp/inline-saving-requirements.md`, branch
+> `inline-saving-message`). The withdrawn parts are marked where they appear: the cue's rows in section
+> 2, its parts of 5.A5, 5.A6, 6.A1, the `delayedFlag` tests and tester steps 1 to 6 in 8.A, the cue in
+> section 9, task 6 in section 10, D2 in section 12, and AC-3.1 to AC-3.9. The leave warning (AC-3.10)
+> stays, with the pending-writes counter that drives it. The rest of Branch A stands: the queue, the
+> 30-second deadlines, per-session errors and the reverted-edit note.
+>
+> **Follow-ups the owner approved the same day, on the same branch** (requirements: the "Delta
+> 2026-11-02 (a, b, c)" section of that file):
+> - **(a)** After 10 seconds with no outcome, "Saving…" becomes "Still saving…", in the same muted style.
+>   The 10 seconds run from the click, a new click restarts them, and leaving the tab cancels them.
+> - **(b)** A reported failure or a timeout shows "Not saved." in error colour, rather than
+>   clearing the message. Saved and Not saved are final, so a late landing never turns it into Saved.
+>   When the banner clears without a reload (a later save succeeded), the message clears to empty (the
+>   owner's answer to Q2).
+> - **(c)** Save to Breakdown is never disabled. A click with something missing saves nothing and
+>   names the first gap, checking items, then the date, then the payor. A missing date used to be
+>   reported as "Choose who paid". Each validation message goes once its gap is filled, and a change
+>   in the save state replaces it.
+> - **Shorter wording** (the owner's answer to Q1), so every message fits two lines beside the button
+>   at 320px and the row never grows: "Not saved.", "Add an item first.", "Pick a date." and
+>   "Choose who paid." "Saving…", "Still saving…" and "Saved to Breakdown." are unchanged.
+> - One always-mounted polite status region now carries every message, validation included.
+>
+> **Owner decisions after the UI re-test (2026-11-03):**
+> - The failure message is "Not saved." rather than "Not saved — see above.", which wrapped to three
+>   lines at 320px and grew the row. The banner above still explains the failure.
+> - A quick second tap is quiet. While the latest save is still "Saving…" or "Still saving…", a click that
+>   meets only the gaps the save's reset leaves (no items, the payor either way, the date kept) does
+>   nothing, so "Saving…" stays visible. Every other click validates as before.
+
 Branches, both from `origin/main` at `b153faa` and both carrying this spec:
 - **Branch A, `save-feedback`:** #3 Saving cue, #4 reverted-edit note, #5 30-second timeout, and the
   owner's Q1 fix (errors tracked per failed write).
@@ -46,6 +84,9 @@ under AC-1.10 in that spec in the same commit as this one.
 | UI | `src/components/layout/Header.tsx`, `Header.module.css` | Saving cue (6.A1) | `useSessionsStore` |
 | UI | `src/components/layout/SyncBanner.tsx`, `SyncBanner.module.css` | Reverted-edit note in the banner's slot (6.A2) | `Button`, `.banner` layout |
 | Tests | `src/lib/writeQueue.test.ts`, `src/lib/delayedFlag.test.ts` (new) | section 8.A | existing `deferred`/`flush` helpers |
+
+> **Withdrawn 2026-11-02:** the `delayedFlag.ts` and `delayedFlag.test.ts` rows, the `Header.*` row, `unconfirmed` in
+> the hook's row and `pending` in the store's row. They existed only for the header cue.
 
 ### Branch B (`polish-and-history-delete`) owns
 
@@ -233,6 +274,11 @@ const error = failures.length > 0 ? failures[failures.length - 1].message : null
 ```
 `SyncStatus` keeps its four values, so `App.tsx` and the existing `SyncBanner` check still work.
 
+> **Withdrawn 2026-11-02:** the `unconfirmed` state, its `setUnconfirmed(busy)` call in `pending`'s `onChange`, its
+> place in `status`, the `'saving'` value of `SyncStatus`, `unconfirmed` in `Result`, and `pending` in
+> the store's `sync`. `status` is now `loading ? 'loading' : failures.length > 0 ? 'error' : 'ready'`.
+> The leave prompt is unchanged.
+
 **`fail(failure)`**, one callback: `setFailures((f) => addFailure(f, failure)); setReverted(false);`. A
 new error replaces the note (AC-4.6). The updater is pure, so StrictMode running it twice is harmless.
 
@@ -335,6 +381,8 @@ about "leaves the status alone") are updated to describe the per-session rule.
 - Add the three new values to the memo's dependency list.
 
 #### 5.A6 Cue timing: `src/lib/delayedFlag.ts` (new)
+
+> **Withdrawn 2026-11-02:** this whole section. The file and its test are removed with the header cue.
 
 ```ts
 /**
@@ -443,6 +491,9 @@ glyph (`format.ts` notes this too), at about 9px.
 ### Branch A
 
 #### 6.A1 Saving cue (`Header.tsx`, `Header.module.css`)
+
+> **Withdrawn 2026-11-02:** this whole section. The header has no cue and no live region at any width. Save
+> feedback is the inline message beside Save to Breakdown instead.
 
 ```tsx
 const { sync } = useSessionsStore();
@@ -740,6 +791,10 @@ Failures:
 - A changed session that isn't in the failed set: `false`.
 - Two failed sessions, one the same and one different: `true`.
 
+> **Withdrawn 2026-11-02:** the `delayedFlag` tests below and tester steps 1 to 6. The leave check in step 6
+> stays, run with a write pending rather than with the cue showing (AC-3.10). In step 7 the banner check
+> stands, and "the cue is hidden" no longer applies.
+
 **Vitest, `src/lib/delayedFlag.test.ts` (new, fake timers):**
 - Input on for 399ms, then off: `onChange` is never called (AC-3.3).
 - On for 400ms: `onChange(true)` (AC-3.2).
@@ -855,7 +910,7 @@ Failures:
 
 For the documentation-engineer, when the owner asks:
 - `README.md`, the "Writes are optimistic" paragraph:
-  - the header's "Saving…" cue;
+  - the header's "Saving…" cue (withdrawn 2026-11-02, so not to be documented);
   - the 30-second limit on saves, creates, deletes and loads;
   - errors staying until that session saves or "Try again";
   - the reverted-edit note.
@@ -883,7 +938,7 @@ For the documentation-engineer, when the owner asks:
    Afterwards, grep for leftover `setStatus` and `setError` calls: there should be none.
 4. `SessionsStoreContext.tsx`: the `sync` type, the value and the memo dependencies.
 5. `SyncBanner.tsx` and its CSS (6.A2).
-6. `Header.tsx` and its CSS (6.A1).
+6. `Header.tsx` and its CSS (6.A1). *Withdrawn 2026-11-02 with the header cue.*
 7. Run lint, `tsc -b`, the tests and the build. Hand off to the surgeon-reviewer and the ui-ux-tester.
 
 ### Branch B: `polish-and-history-delete`
@@ -943,7 +998,7 @@ gutters and card padding.
 - **(b) Give the title 8px more on phones.** Reduce the card's side padding from 18px to 14px at ≤640px
   (6.B1). It's cheap and safe, but it changes how every card looks on a phone for a small gain.
 
-**D2. #3: where the cue sits on a phone.** **Decided: (a)** (owner, 2026-11-02): on phones the cue
+**D2. #3: where the cue sits on a phone.** *Withdrawn 2026-11-02 with the header cue.* **Decided: (a)** (owner, 2026-11-02): on phones the cue
 sits in the header's top padding above the account button, beside it on desktop, and nothing moves or
 wraps at any width when it appears or clears. The requirement's spot (in the row, left of the account
 button, with the title block shrinking) makes the header grow by a line on 396 to 451px phones when
