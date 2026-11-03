@@ -5,7 +5,8 @@ type Props = {
 };
 
 /**
- * Line icons for the tab bars, the New Session button and the rename pencils.
+ * Line icons for the tab bars, the New Session button, the rename pencils and
+ * the account menu's Profile item.
  * Stroked in currentColor, so each one takes the colour of the text beside it,
  * including a tab's active colour. Decorative: the label next to them, or the
  * button's own aria-label, carries the name.
@@ -41,6 +42,25 @@ export function HistoryIcon(props: Props) {
     <Icon {...props}>
       <circle cx="12" cy="12" r="8" />
       <path d="M12 7.5V12l3 2" />
+    </Icon>
+  );
+}
+
+/** A receipt with a tick: money that has been collected. */
+export function CollectionIcon(props: Props) {
+  return (
+    <Icon {...props}>
+      <path d="M6 3h12v18l-2-1.5-2 1.5-2-1.5-2 1.5-2-1.5L6 21Z" />
+      <path d="m9 11.5 2 2 4-4" />
+    </Icon>
+  );
+}
+
+export function ProfileIcon(props: Props) {
+  return (
+    <Icon {...props}>
+      <circle cx="12" cy="8" r="3.5" />
+      <path d="M5 20a7 7 0 0 1 14 0" />
     </Icon>
   );
 }

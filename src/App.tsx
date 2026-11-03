@@ -12,6 +12,8 @@ import { useSessionsStore } from './context/SessionsStoreContext';
 import { HomePage } from './pages/HomePage';
 import { HistoryPage } from './pages/HistoryPage';
 import { HistoryDetailPage } from './pages/HistoryDetailPage';
+import { CollectionPage } from './pages/CollectionPage';
+import { ProfileDialog } from './components/profile/ProfileDialog';
 import { OnboardingTour } from './components/onboarding/OnboardingTour';
 import { OnboardingDialog } from './components/onboarding/OnboardingDialog';
 import type { ScreenShape } from './components/onboarding/steps';
@@ -19,23 +21,28 @@ import { useOnboarding } from './hooks/useOnboarding';
 import styles from './App.module.css';
 
 /**
- * Top level is just Home and History; opening a session swaps the whole shell
- * for that session's workspace, which carries its own inner tabs.
+ * Top level is three tabs, Home, Collection and History; opening a session
+ * swaps the whole shell for that session's workspace, which carries its own
+ * inner tabs. Collection can be landed on with one session open, which is
+ * where finishing a session goes.
  */
 type Screen =
   | { kind: 'home' }
+  | { kind: 'collection'; openSessionId?: string }
   | { kind: 'history' }
   | { kind: 'historyDetail'; sessionId: string }
   | { kind: 'session'; sessionId: string; tab: SessionTabId };
 
-/** The two screens that sit under a top-level tab and keep the tab bar. */
-const TOP_LEVEL = new Set<Screen['kind']>(['home', 'history']);
+/** The three screens that sit under a top-level tab and keep the tab bar. */
+const TOP_LEVEL = new Set<Screen['kind']>(['home', 'collection', 'history']);
 
 export default function App() {
   const { sessions, createSession, deleteSession, recordOpen, sync } = useSessionsStore();
   const [screen, setScreen] = useState<Screen>({ kind: 'home' });
   /** Whether the New Session prompt is open. */
   const [naming, setNaming] = useState(false);
+  /** Whether the profile name dialog is open. */
+  const [profileOpen, setProfileOpen] = useState(false);
   const { shouldRun: firstLogin, markSeen } = useOnboarding();
 
   /**
@@ -198,7 +205,7 @@ export default function App() {
       : { kind: screen.kind === 'historyDetail' ? 'history' : screen.kind };
 
   return (
-    <PageShell header={<Header />} nav={nav}>
+    <PageShell header={<Header onOpenProfile={() => setProfileOpen(true)} />} nav={nav}>
       <OnboardingDialog
         open={phase === 'intro'}
         title="Welcome to Hati!"
@@ -247,12 +254,20 @@ export default function App() {
           }}
         />
       )}
+      {profileOpen && <ProfileDialog onClose={() => setProfileOpen(false)} />}
       <SyncBanner />
       {screen.kind === 'home' && (
         <HomePage
           onOpenSession={openFromHome}
           onNewSession={newSession}
           onPreviewTour={import.meta.env.DEV ? previewTour : undefined}
+        />
+      )}
+      {screen.kind === 'collection' && (
+        <CollectionPage
+          key={screen.openSessionId ?? ''}
+          openSessionId={screen.openSessionId}
+          onEditProfile={() => setProfileOpen(true)}
         />
       )}
       {screen.kind === 'history' && (
@@ -276,9 +291,12 @@ export default function App() {
             window.scrollTo(0, 0);
             setScreen({ kind: 'home' });
           }}
-          // Landing on History after closing is the confirmation that the
-          // session was archived rather than lost.
-          onClosed={() => setScreen({ kind: 'history' })}
+          // Landing on Collection, with the session open, is the confirmation
+          // that the numbers are final and collecting has started.
+          onClosed={() => {
+            window.scrollTo(0, 0);
+            setScreen({ kind: 'collection', openSessionId: screen.sessionId });
+          }}
         />
       )}
     </PageShell>
