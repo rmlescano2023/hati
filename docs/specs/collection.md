@@ -1,7 +1,19 @@
 # Spec: the Collection tab
 
-Status: **draft, awaiting the owner's approval.** Branch `collection`, from `origin/main` at `8b6b2ab`
+Status: **approved by the owner on 2026-11-04.** Branch `collection`, from `origin/main` at `8b6b2ab`
 (includes PR #107, activity order).
+
+Decisions recorded at approval (section 12):
+
+1. **Schema run authorised.** The owner gives the explicit OK that A15 asks for: the fullstack-developer runs
+   `npx vite-node scripts/db/apply-schema.ts` once against the shared Neon `main`, at task 1 and before editing
+   any `api/` file. The OK covers only this spec's additive statements (`users.display_name`,
+   `expense_sessions.me`, and the `session_payments` table with its index). No existing data is reset,
+   truncated, deleted or altered; if the script would do anything else, the developer stops and reports.
+2. **Deleting a session deletes its payments,** with the BR-19 warning: confirmed.
+3. **"Mark all as paid" asks for confirmation first and is all or nothing:** confirmed.
+4. **Assumptions A1 to A6:** all stand as written, including A1 (a matched Finish stores no pick) and A3
+   (Collection dates use local time).
 
 ## 1. Summary
 
