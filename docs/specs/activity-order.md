@@ -1,7 +1,16 @@
 # Spec: order In Progress cards by most recent activity
 
-Status: **awaiting the owner's approval.** Branch `activity-order`, from `origin/main` at `342f041` (includes
-PR #103).
+Status: **approved by the owner on 2026-11-03.** Branch `activity-order`, from `origin/main` at `342f041`
+(includes PR #103).
+
+Decisions recorded at approval (section 12):
+
+1. **Schema run authorised.** The fullstack-developer runs `npx vite-node scripts/db/apply-schema.ts` once
+   against the shared Neon `main`, before editing any `api/` file, and runs nothing else against the database.
+   The branch's API changes are not pushed to any Vercel deployment; deploys go through the devops-engineer.
+2. **Clock:** the device's time, capped by the server's clock, as specified.
+3. **Scroll to top on Back:** at every width.
+4. **Assumptions A1 to A4:** all stand.
 
 ## 1. Summary
 
