@@ -1,7 +1,7 @@
 import type { VercelRequest } from '@vercel/node';
 import { createPool } from '@vercel/postgres';
 import { verifyToken } from '@clerk/backend';
-import type { PurchaseRecord, Session, SessionStatus } from '../src/types';
+import type { Payment, PurchaseRecord, Session, SessionStatus } from '../src/types';
 
 /**
  * `POSTGRES_DATABASE_URL` is managed by the Vercel-Neon integration and applies
@@ -53,6 +53,7 @@ type SessionRow = {
   members: string[];
   name: string | null;
   activity_at: Date | string | null;
+  me: string | null;
 };
 
 type RecordRow = {
@@ -66,18 +67,33 @@ type RecordRow = {
   created_at: Date | string;
 };
 
+type PaymentRow = {
+  id: string;
+  session_id: string;
+  debtor: string;
+  creditor: string;
+  amount_cents: number;
+  created_at: Date | string;
+};
+
 const iso = (v: Date | string): string => (v instanceof Date ? v.toISOString() : String(v));
 
 /**
  * Reassembles the `Session[]` the client has always consumed. The response
- * contract is unchanged even though it now comes from two joined tables
- * rather than one column.
+ * contract is unchanged even though it now comes from joined tables rather
+ * than one column.
+ *
+ * `only` narrows it to one session, for the payments POST, which checks a
+ * payment against that session's settlement lines.
  */
-export async function loadSessions(userId: string): Promise<Session[]> {
+export async function loadSessions(
+  userId: string,
+  only: string | null = null,
+): Promise<Session[]> {
   const { rows: sessionRows } = await pool.sql<SessionRow>`
-    select id, status, created_at, closed_at, members, name, activity_at
+    select id, status, created_at, closed_at, members, name, activity_at, me
     from expense_sessions
-    where user_id = ${userId}
+    where user_id = ${userId} and (${only}::text is null or id = ${only})
     order by created_at`;
 
   if (sessionRows.length === 0) return [];
@@ -91,8 +107,15 @@ export async function loadSessions(userId: string): Promise<Session[]> {
            r.payors, r.items, r.created_at
     from purchase_records r
     join expense_sessions s on s.id = r.session_id
-    where s.user_id = ${userId}
+    where s.user_id = ${userId} and (${only}::text is null or s.id = ${only})
     order by r.date, r.created_at`;
+
+  const { rows: paymentRows } = await pool.sql<PaymentRow>`
+    select p.id, p.session_id, p.debtor, p.creditor, p.amount_cents, p.created_at
+    from session_payments p
+    join expense_sessions s on s.id = p.session_id
+    where s.user_id = ${userId} and (${only}::text is null or s.id = ${only})
+    order by p.created_at, p.id`;
 
   const bySession = new Map<string, PurchaseRecord[]>();
   for (const row of recordRows) {
@@ -109,6 +132,20 @@ export async function loadSessions(userId: string): Promise<Session[]> {
     else bySession.set(row.session_id, [record]);
   }
 
+  const paymentsBySession = new Map<string, Payment[]>();
+  for (const row of paymentRows) {
+    const payment: Payment = {
+      id: row.id,
+      debtor: row.debtor,
+      creditor: row.creditor,
+      amountCents: row.amount_cents,
+      createdAt: iso(row.created_at),
+    };
+    const bucket = paymentsBySession.get(row.session_id);
+    if (bucket) bucket.push(payment);
+    else paymentsBySession.set(row.session_id, [payment]);
+  }
+
   return sessionRows.map((s) => ({
     id: s.id,
     status: s.status,
@@ -118,5 +155,7 @@ export async function loadSessions(userId: string): Promise<Session[]> {
     records: bySession.get(s.id) ?? [],
     name: s.name,
     activityAt: s.activity_at === null ? null : iso(s.activity_at),
+    me: s.me,
+    payments: paymentsBySession.get(s.id) ?? [],
   }));
 }

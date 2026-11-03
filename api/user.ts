@@ -1,8 +1,10 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { ensureUser, getUserId, pool } from './_shared.js';
+import { parseProfileInput } from './_validate.js';
 
 /**
- * The account's own record, which today holds only whether onboarding is done.
+ * The account's own record: whether onboarding is done, and the profile name
+ * Collection matches against each session's members.
  *
  * `GET` is the first call the app makes after sign-in, and it upserts the
  * `users` row — until now nothing guaranteed one existed before a session was
@@ -20,10 +22,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (req.method === 'GET') {
     await ensureUser(userId);
-    const { rows } = await pool.sql`select onboarded_at from users where id = ${userId}`;
+    const { rows } = await pool.sql`
+      select onboarded_at, display_name from users where id = ${userId}`;
     const onboardedAt = rows[0]?.onboarded_at ?? null;
     return res.status(200).json({
       onboardedAt: onboardedAt === null ? null : new Date(onboardedAt).toISOString(),
+      displayName: rows[0]?.display_name ?? null,
     });
   }
 
@@ -35,6 +39,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({ onboardedAt: new Date(rows[0].onboarded_at).toISOString() });
   }
 
-  res.setHeader('Allow', 'GET, PUT');
+  if (req.method === 'PATCH') {
+    const raw = typeof req.body === 'string' ? JSON.parse(req.body || 'null') : req.body;
+    const input = parseProfileInput(raw);
+    if (!input) return res.status(400).json({ error: 'Malformed profile.' });
+
+    await ensureUser(userId);
+    // The row is the caller's own, so the id is the whole ownership check.
+    await pool.sql`update users set display_name = ${input.displayName} where id = ${userId}`;
+    return res.status(200).json({ displayName: input.displayName });
+  }
+
+  res.setHeader('Allow', 'GET, PUT, PATCH');
   return res.status(405).json({ error: `${req.method} not allowed.` });
 }
