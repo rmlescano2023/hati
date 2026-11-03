@@ -171,7 +171,7 @@ export function PurchaseItemCard() {
     return () => clearTimeout(timer);
   }, [message.status, message.save]);
 
-  // "Not saved — see above." points at the banner, so it goes when the banner
+  // "Not saved." leans on the banner to explain it, so it goes when the banner
   // goes, which a later successful save of this session does on its own.
   const bannerShown = sync.status === 'error';
   useEffect(() => {
@@ -189,9 +189,8 @@ export function PurchaseItemCard() {
   const save = () => {
     // The button is never disabled, so a click with something missing says
     // what, rather than the button just not responding.
-    const gap = firstMissing(missing);
-    if (gap) {
-      dispatch({ type: 'invalid', missing: gap });
+    if (firstMissing(missing)) {
+      dispatch({ type: 'invalid', missing });
       return;
     }
     const thisSave = (latestSave.current += 1);

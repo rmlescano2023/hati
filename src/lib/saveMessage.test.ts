@@ -10,6 +10,12 @@ import {
 } from './saveMessage';
 
 const complete: MissingFlags = { items: false, date: false, payor: false };
+/** What a successful save leaves: the form reset, so no items and no payor, but the date kept. */
+const afterReset: MissingFlags = { items: true, date: false, payor: true };
+const itemsOnly: MissingFlags = { items: true, date: false, payor: false };
+const noPayor: MissingFlags = { items: false, date: false, payor: true };
+const noDate: MissingFlags = { items: false, date: true, payor: false };
+const noItemsNoDate: MissingFlags = { items: true, date: true, payor: true };
 
 /** Runs actions from the initial state, as the component's dispatches would. */
 function run(...actions: SaveMessageAction[]): SaveMessageState {
@@ -59,9 +65,7 @@ describe('saveMessageReducer and saveMessageView', () => {
     const saved = run({ type: 'start', save: 1 }, { type: 'settled', save: 1, saved: true });
     expect(text(saveMessageReducer(saved, { type: 'slow', save: 1 }))).toBe('Saved to Breakdown.');
     const failed = run({ type: 'start', save: 1 }, { type: 'settled', save: 1, saved: false });
-    expect(text(saveMessageReducer(failed, { type: 'slow', save: 1 }))).toBe(
-      'Not saved — see above.',
-    );
+    expect(text(saveMessageReducer(failed, { type: 'slow', save: 1 }))).toBe('Not saved.');
   });
 
   it("ignores an earlier click's timer and outcome (BR-4, BR-D4)", () => {
@@ -73,7 +77,7 @@ describe('saveMessageReducer and saveMessageView', () => {
     );
     expect(text(state)).toBe('Saving…');
     expect(text(saveMessageReducer(state, { type: 'settled', save: 2, saved: false }))).toBe(
-      'Not saved — see above.',
+      'Not saved.',
     );
   });
 
@@ -83,19 +87,19 @@ describe('saveMessageReducer and saveMessageView', () => {
         run({ type: 'start', save: 1 }, { type: 'settled', save: 1, saved: false }),
         complete,
       ),
-    ).toEqual({ text: 'Not saved — see above.', tone: 'error' });
+    ).toEqual({ text: 'Not saved.', tone: 'error' });
     const late = run(
       { type: 'start', save: 1 },
       { type: 'slow', save: 1 },
       { type: 'settled', save: 1, saved: false },
     );
-    expect(text(late)).toBe('Not saved — see above.');
+    expect(text(late)).toBe('Not saved.');
   });
 
   it('keeps Saved and Not saved final, so neither turns into the other (AC-D4.4)', () => {
     const failed = run({ type: 'start', save: 1 }, { type: 'settled', save: 1, saved: false });
     expect(text(saveMessageReducer(failed, { type: 'settled', save: 1, saved: true }))).toBe(
-      'Not saved — see above.',
+      'Not saved.',
     );
     const saved = run({ type: 'start', save: 1 }, { type: 'settled', save: 1, saved: true });
     expect(text(saveMessageReducer(saved, { type: 'settled', save: 1, saved: false }))).toBe(
@@ -132,67 +136,87 @@ describe('saveMessageReducer and saveMessageView', () => {
     const saving = run({ type: 'start', save: 1 });
     expect(text(saveMessageReducer(saving, { type: 'itemAdded' }))).toBe('Saving…');
     const failed = saveMessageReducer(saving, { type: 'settled', save: 1, saved: false });
-    expect(text(saveMessageReducer(failed, { type: 'itemAdded' }))).toBe('Not saved — see above.');
+    expect(text(saveMessageReducer(failed, { type: 'itemAdded' }))).toBe('Not saved.');
   });
 
   it('shows each validation message in error colour, with the exact wording', () => {
-    const missingAll: MissingFlags = { items: true, date: true, payor: true };
-    expect(saveMessageView(run({ type: 'invalid', missing: 'items' }), missingAll)).toEqual({
+    expect(saveMessageView(run({ type: 'invalid', missing: afterReset }), afterReset)).toEqual({
       text: 'Add an item first.',
       tone: 'error',
     });
-    expect(text(run({ type: 'invalid', missing: 'date' }), missingAll)).toBe('Pick a date.');
-    expect(text(run({ type: 'invalid', missing: 'payor' }), missingAll)).toBe('Choose who paid.');
+    expect(text(run({ type: 'invalid', missing: noDate }), noDate)).toBe('Pick a date.');
+    expect(text(run({ type: 'invalid', missing: noPayor }), noPayor)).toBe('Choose who paid.');
   });
 
-  it('puts validation over the save state, which keeps running underneath (D2, AC-D6.4)', () => {
-    const missingItems: MissingFlags = { items: true, date: false, payor: true };
-    const state = run({ type: 'start', save: 1 }, { type: 'invalid', missing: 'items' });
-    expect(text(state, missingItems)).toBe('Add an item first.');
-    expect(text(saveMessageReducer(state, { type: 'clearValidation' }), missingItems)).toBe(
-      'Saving…',
-    );
+  it('ignores a quick second tap on the form the save just reset, while it is saving', () => {
+    const saving = run({ type: 'start', save: 1 });
+    expect(saveMessageReducer(saving, { type: 'invalid', missing: afterReset })).toBe(saving);
+    expect(text(saving, afterReset)).toBe('Saving…');
+    const slow = saveMessageReducer(saving, { type: 'slow', save: 1 });
+    expect(saveMessageReducer(slow, { type: 'invalid', missing: afterReset })).toBe(slow);
+    // A payor chosen since the reset leaves the same gap the reset made.
+    expect(saveMessageReducer(saving, { type: 'invalid', missing: itemsOnly })).toBe(saving);
+  });
+
+  it('still names the missing items once the save has an outcome', () => {
+    const saved = run({ type: 'start', save: 1 }, { type: 'settled', save: 1, saved: true });
+    expect(
+      text(saveMessageReducer(saved, { type: 'invalid', missing: afterReset }), afterReset),
+    ).toBe('Add an item first.');
+    const failed = run({ type: 'start', save: 1 }, { type: 'settled', save: 1, saved: false });
+    expect(
+      text(saveMessageReducer(failed, { type: 'invalid', missing: afterReset }), afterReset),
+    ).toBe('Add an item first.');
+  });
+
+  it('shows a real gap over the save state, which keeps running underneath (D2)', () => {
+    const state = run({ type: 'start', save: 1 }, { type: 'invalid', missing: noPayor });
+    expect(text(state, noPayor)).toBe('Choose who paid.');
+    expect(text(saveMessageReducer(state, { type: 'clearValidation' }), noPayor)).toBe('Saving…');
+  });
+
+  it('treats a cleared date as a real gap while saving, even with no items', () => {
+    const state = run({ type: 'start', save: 1 }, { type: 'invalid', missing: noItemsNoDate });
+    expect(text(state, noItemsNoDate)).toBe('Add an item first.');
   });
 
   it('drops validation when the save state changes (BR-D1, AC-D6.5)', () => {
-    const missingItems: MissingFlags = { items: true, date: false, payor: true };
-    const base = run({ type: 'start', save: 1 }, { type: 'invalid', missing: 'items' });
-    expect(text(saveMessageReducer(base, { type: 'slow', save: 1 }), missingItems)).toBe(
+    const base = run({ type: 'start', save: 1 }, { type: 'invalid', missing: noPayor });
+    expect(text(saveMessageReducer(base, { type: 'slow', save: 1 }), noPayor)).toBe(
       'Still saving…',
     );
+    expect(text(saveMessageReducer(base, { type: 'settled', save: 1, saved: true }), noPayor)).toBe(
+      'Saved to Breakdown.',
+    );
     expect(
-      text(saveMessageReducer(base, { type: 'settled', save: 1, saved: true }), missingItems),
-    ).toBe('Saved to Breakdown.');
-    expect(
-      text(saveMessageReducer(base, { type: 'settled', save: 1, saved: false }), missingItems),
-    ).toBe('Not saved — see above.');
+      text(saveMessageReducer(base, { type: 'settled', save: 1, saved: false }), noPayor),
+    ).toBe('Not saved.');
   });
 
   it("keeps validation over a stale click's timer or outcome", () => {
-    const missingItems: MissingFlags = { items: true, date: false, payor: true };
     const state = run(
       { type: 'start', save: 1 },
       { type: 'start', save: 2 },
-      { type: 'invalid', missing: 'items' },
+      { type: 'invalid', missing: noPayor },
       { type: 'slow', save: 1 },
       { type: 'settled', save: 1, saved: true },
     );
-    expect(text(state, missingItems)).toBe('Add an item first.');
+    expect(text(state, noPayor)).toBe('Choose who paid.');
   });
 
   it('hides validation once its item is supplied, without moving on to the next one (BR-D14)', () => {
-    const state = run({ type: 'invalid', missing: 'date' });
-    expect(text(state, { items: false, date: false, payor: true })).toBe('');
+    const state = run({ type: 'invalid', missing: { items: false, date: true, payor: true } });
+    expect(text(state, noPayor)).toBe('');
   });
 
   it('replaces validation with Saving… on a click that saves (BR-D2)', () => {
-    const state = run({ type: 'invalid', missing: 'payor' }, { type: 'start', save: 1 });
-    expect(text(state, { items: true, date: false, payor: true })).toBe('Saving…');
+    const state = run({ type: 'invalid', missing: noPayor }, { type: 'start', save: 1 });
+    expect(text(state, afterReset)).toBe('Saving…');
   });
 
   it('returns the same state for a click with nothing new, so nothing re-renders', () => {
-    const state = run({ type: 'invalid', missing: 'items' });
-    expect(saveMessageReducer(state, { type: 'invalid', missing: 'items' })).toBe(state);
+    const state = run({ type: 'invalid', missing: afterReset });
+    expect(saveMessageReducer(state, { type: 'invalid', missing: afterReset })).toBe(state);
     expect(saveMessageReducer(initialSaveMessage, { type: 'clearValidation' })).toBe(
       initialSaveMessage,
     );

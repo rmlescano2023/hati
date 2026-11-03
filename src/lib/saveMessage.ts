@@ -36,20 +36,27 @@ export type SaveMessageAction =
   /** A click with everything present. */
   | { type: 'start'; save: number }
   /** A click with something missing. Nothing is saved, and the save state carries on underneath. */
-  | { type: 'invalid'; missing: Missing }
+  | { type: 'invalid'; missing: MissingFlags }
   /** `SLOW_SAVE_MS` has passed since click `save`. */
   | { type: 'slow'; save: number }
   /** The server accepted click `save`'s purchase, or a failure was reported for it. */
   | { type: 'settled'; save: number; saved: boolean }
   /** "+ Add Item", which has always cleared the message. */
   | { type: 'itemAdded' }
-  /** The error banner has gone, so "see above" would point at nothing. */
+  /** The error banner has gone, so nothing is left explaining "Not saved." */
   | { type: 'bannerCleared' }
   | { type: 'clearValidation' };
 
 export const initialSaveMessage: SaveMessageState = { save: 0, status: 'idle', validation: null };
 
 const isWaiting = (status: SaveStatus) => status === 'saving' || status === 'stillSaving';
+
+/**
+ * A save resets the form, leaving no items and no payor but keeping the date,
+ * so a quick second tap meets exactly these gaps. Telling that tap to add an
+ * item would hide "Saving…" for no reason, so it is ignored instead.
+ */
+const onlyResetGaps = (missing: MissingFlags) => missing.items && !missing.date;
 
 /**
  * Returns `state` itself when nothing changes, so a repeated click or a stale
@@ -64,8 +71,11 @@ export function saveMessageReducer(
   switch (action.type) {
     case 'start':
       return { save: action.save, status: 'saving', validation: null };
-    case 'invalid':
-      return state.validation === action.missing ? state : { ...state, validation: action.missing };
+    case 'invalid': {
+      if (isWaiting(state.status) && onlyResetGaps(action.missing)) return state;
+      const gap = firstMissing(action.missing);
+      return state.validation === gap ? state : { ...state, validation: gap };
+    }
     case 'slow':
       return action.save === state.save && state.status === 'saving'
         ? { ...state, status: 'stillSaving', validation: null }
@@ -95,10 +105,14 @@ const SAVE_TEXT: Record<SaveStatus, string> = {
   saving: 'Saving…',
   stillSaving: 'Still saving…',
   saved: 'Saved to Breakdown.',
-  notSaved: 'Not saved — see above.',
+  notSaved: 'Not saved.',
 };
 
-/** Short enough that each fits two lines beside the button at 320px, so the row never grows. */
+/**
+ * Short enough that each fits two lines beside the button at 320px, so the
+ * row never grows. "Not saved." is shorter still, because the banner above
+ * already explains the failure.
+ */
 const VALIDATION_TEXT: Record<Missing, string> = {
   items: 'Add an item first.',
   date: 'Pick a date.',
