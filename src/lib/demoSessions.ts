@@ -82,6 +82,7 @@ export function buildDemoSessions(): Session[] {
       members: demo.members,
       records,
       name: null,
+      activityAt: null,
     };
   });
 }

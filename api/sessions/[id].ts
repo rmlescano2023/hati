@@ -1,9 +1,11 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { clampActivityAt } from '../../src/lib/activity.js';
 import { ensureUser, getUserId, ownsSession, pool } from '../_shared.js';
-import { parseSessionInput } from '../_validate.js';
+import { parseActivityInput, parseSessionInput } from '../_validate.js';
 
 /**
- * `PUT` replaces one session; `DELETE` removes it.
+ * `PUT` replaces one session; `PATCH` records that it was opened; `DELETE`
+ * removes it.
  *
  * Writes are scoped to the session named in the path, which is the point of
  * the whole redesign: editing one item no longer rewrites an account's entire
@@ -41,22 +43,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (rows.length > 0) return res.status(404).json({ error: 'No such session.' });
     }
 
+    const activityAt = clampActivityAt(session.activityAt, Date.now());
+
     const client = await pool.connect();
     try {
       await client.sql`begin`;
+      // The activity time only moves forward: `greatest` ignores a null, so an
+      // older client's write never wipes it, and a late or retried save never
+      // pulls a session down below a later open or edit (BR-7).
       await client.sql`
-        insert into expense_sessions (id, user_id, status, created_at, closed_at, members, name)
+        insert into expense_sessions (id, user_id, status, created_at, closed_at, members, name, activity_at)
         values (
           ${sessionId}, ${userId}, ${session.status},
           ${session.createdAt}, ${session.closedAt},
           ${JSON.stringify(session.members)}::jsonb,
-          ${session.name}
+          ${session.name},
+          ${activityAt}::timestamptz
         )
         on conflict (id) do update set
-          status    = excluded.status,
-          closed_at = excluded.closed_at,
-          members   = excluded.members,
-          name      = excluded.name`;
+          status      = excluded.status,
+          closed_at   = excluded.closed_at,
+          members     = excluded.members,
+          name        = excluded.name,
+          activity_at = greatest(expense_sessions.activity_at, excluded.activity_at)`;
 
       // Replacing this session's records is far smaller than rewriting the
       // account, and avoids diffing a list the client already rebuilt.
@@ -83,6 +92,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json(session);
   }
 
+  if (req.method === 'PATCH') {
+    const raw = typeof req.body === 'string' ? JSON.parse(req.body || 'null') : req.body;
+    const sent = parseActivityInput(raw);
+    if (!sent) return res.status(400).json({ error: 'An activity time is required.' });
+
+    // Covers another account's id and a session deleted since it was opened.
+    if (!(await ownsSession(userId, sessionId))) {
+      return res.status(404).json({ error: 'No such session.' });
+    }
+    // An update and never an insert, so a late open cannot bring back a
+    // deleted session (BR-13), and it carries no content to overwrite (BR-2).
+    await pool.sql`
+      update expense_sessions
+      set activity_at = greatest(activity_at, ${clampActivityAt(sent, Date.now())}::timestamptz)
+      where id = ${sessionId} and user_id = ${userId}`;
+    return res.status(204).end();
+  }
+
   if (req.method === 'DELETE') {
     if (!(await ownsSession(userId, sessionId))) {
       return res.status(404).json({ error: 'No such session.' });
@@ -92,6 +119,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(204).end();
   }
 
-  res.setHeader('Allow', 'PUT, DELETE');
+  res.setHeader('Allow', 'PUT, PATCH, DELETE');
   return res.status(405).json({ error: `${req.method} not allowed.` });
 }

@@ -164,6 +164,7 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
       members: [],
       records: [],
       name: normaliseSessionName(name ?? null),
+      activityAt: null,
     });
     return id;
   }, [addSession]);

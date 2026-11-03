@@ -91,6 +91,30 @@ describe('parseSession as the write boundary', () => {
     expect(parseSession({ ...valid, name: 'n'.repeat(200) })?.name).toBe('n'.repeat(60));
   });
 
+  it('reads an absent activity time as none, so older clients stay valid', () => {
+    expect(parseSession(valid)?.activityAt).toBeNull();
+  });
+
+  it('keeps a valid activity time', () => {
+    expect(parseSession({ ...valid, activityAt: '2026-11-03T10:00:00.000Z' })?.activityAt).toBe(
+      '2026-11-03T10:00:00.000Z',
+    );
+  });
+
+  it('accepts the session but drops an activity time it cannot read', () => {
+    for (const bad of ['x', 42, true]) {
+      const s = parseSession({ ...valid, activityAt: bad });
+      expect(s?.id).toBe('session_1');
+      expect(s?.activityAt).toBeNull();
+    }
+  });
+
+  it('normalises an activity time with an offset to UTC ISO', () => {
+    expect(parseSession({ ...valid, activityAt: '2026-11-03T18:00:00+08:00' })?.activityAt).toBe(
+      '2026-11-03T10:00:00.000Z',
+    );
+  });
+
   it('ignores an item amount that is not a finite number', () => {
     const s = parseSession({
       ...valid,
