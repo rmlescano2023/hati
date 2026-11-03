@@ -20,7 +20,7 @@ Status: **approved by the owner on 2026-11-02.** D1 and D2 are decided as recomm
 > 2026-11-02 (a, b, c)" section of that file):
 > - **(a)** After 10 seconds with no outcome, "Saving…" becomes "Still saving…", in the same muted style.
 >   The 10 seconds run from the click, a new click restarts them, and leaving the tab cancels them.
-> - **(b)** A reported failure or a timeout shows "Not saved — see above." in error colour, rather than
+> - **(b)** A reported failure or a timeout shows "Not saved." in error colour, rather than
 >   clearing the message. Saved and Not saved are final, so a late landing never turns it into Saved.
 >   When the banner clears without a reload (a later save succeeded), the message clears to empty (the
 >   owner's answer to Q2).
@@ -29,9 +29,16 @@ Status: **approved by the owner on 2026-11-02.** D1 and D2 are decided as recomm
 >   reported as "Choose who paid". Each validation message goes once its gap is filled, and a change
 >   in the save state replaces it.
 > - **Shorter wording** (the owner's answer to Q1), so every message fits two lines beside the button
->   at 320px and the row never grows: "Not saved — see above.", "Add an item first.", "Pick a date." and
+>   at 320px and the row never grows: "Not saved.", "Add an item first.", "Pick a date." and
 >   "Choose who paid." "Saving…", "Still saving…" and "Saved to Breakdown." are unchanged.
 > - One always-mounted polite status region now carries every message, validation included.
+>
+> **Owner decisions after the UI re-test (2026-11-03):**
+> - The failure message is "Not saved." rather than "Not saved — see above.", which wrapped to three
+>   lines at 320px and grew the row. The banner above still explains the failure.
+> - A quick second tap is quiet. While the latest save is still "Saving…" or "Still saving…", a click that
+>   meets only the gaps the save's reset leaves (no items, the payor either way, the date kept) does
+>   nothing, so "Saving…" stays visible. Every other click validates as before.
 
 Branches, both from `origin/main` at `b153faa` and both carrying this spec:
 - **Branch A, `save-feedback`:** #3 Saving cue, #4 reverted-edit note, #5 30-second timeout, and the
