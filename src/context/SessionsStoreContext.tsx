@@ -19,6 +19,8 @@ type SessionsStoreValue = {
   closeSession: (sessionId: string) => void;
   /** Removes a session outright. Unlike closing, nothing is kept. */
   deleteSession: (sessionId: string) => void;
+  /** Moves a draft to the top of Home because the user opened it. Silent; see BR-8. */
+  recordOpen: (sessionId: string) => void;
   addMember: (sessionId: string, rawName: string) => boolean;
   removeMember: (sessionId: string, name: string) => void;
   clearMembers: (sessionId: string) => void;
@@ -108,6 +110,7 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
     mutateSession,
     addSession,
     removeSession,
+    recordOpen,
     replaceAll,
     status,
     error,
@@ -164,6 +167,7 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
       members: [],
       records: [],
       name: normaliseSessionName(name ?? null),
+      activityAt: null,
     });
     return id;
   }, [addSession]);
@@ -340,6 +344,7 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
       renameSession,
       closeSession,
       deleteSession,
+      recordOpen,
       addMember,
       removeMember,
       clearMembers,
@@ -364,6 +369,7 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
       renameSession,
       closeSession,
       deleteSession,
+      recordOpen,
       addMember,
       removeMember,
       clearMembers,

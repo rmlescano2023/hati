@@ -4,6 +4,7 @@ import { Button } from '../components/shared/Button';
 import { ConfirmDialog } from '../components/shared/ConfirmDialog';
 import { EmptyState } from '../components/shared/EmptyState';
 import { useSessionsStore } from '../context/SessionsStoreContext';
+import { compareByRecentActivity } from '../lib/activity';
 import { deleteSessionMessage } from '../lib/sessionLabel';
 import styles from './HomePage.module.css';
 
@@ -38,8 +39,8 @@ export function HomePage({ onOpenSession, onNewSession, onPreviewTour }: Props) 
     () =>
       sessions
         .filter((s) => s.status === 'draft')
-        // Most recently started first.
-        .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+        // Most recently opened or changed first (see compareByRecentActivity).
+        .sort(compareByRecentActivity),
     [sessions],
   );
   const pendingDelete = drafts.find((s) => s.id === pendingDeleteId) ?? null;
