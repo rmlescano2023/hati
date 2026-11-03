@@ -7,6 +7,7 @@ import {
   addFailure,
   authorisedFetch,
   createPendingWrites,
+  createSaveConfirmations,
   createSaveQueue,
   failedSessionIds,
   mergeLoaded,
@@ -17,15 +18,21 @@ import {
   type Failure,
 } from '../lib/writeQueue';
 
-export type SyncStatus = 'loading' | 'ready' | 'saving' | 'error';
+export type SyncStatus = 'loading' | 'ready' | 'error';
 
 type Result = {
   sessions: Session[];
   /**
    * Apply `fn` to one session and persist just that session. Returning the
    * session unchanged makes the whole thing a no-op, network included.
+   * `onSettled` hears true once the server accepts a save carrying this edit,
+   * or false once a failure is reported for it (see `createSaveConfirmations`).
    */
-  mutateSession: (sessionId: string, fn: (session: Session) => Session) => void;
+  mutateSession: (
+    sessionId: string,
+    fn: (session: Session) => Session,
+    onSettled?: (saved: boolean) => void,
+  ) => void;
   /** Add a session locally and create it on the server in the background. */
   addSession: (session: Session) => void;
   removeSession: (sessionId: string) => void;
@@ -34,8 +41,6 @@ type Result = {
   status: SyncStatus;
   error: string | null;
   retry: () => void;
-  /** True while any save, create or delete is waiting on the server. */
-  unconfirmed: boolean;
   /** True when "Try again" replaced something whose write had failed. */
   reverted: boolean;
   /** Hides the reverted-edit note. */
@@ -104,8 +109,6 @@ export function useServerSessions(): Result {
    * is left.
    */
   const [failures, setFailures] = useState<readonly Failure[]>([]);
-  /** Mirrors `pending.busy` as state, so the Saving cue can follow it. */
-  const [unconfirmed, setUnconfirmed] = useState(false);
   const [reverted, setReverted] = useState(false);
   const [reloads, setReloads] = useState(0);
 
@@ -136,6 +139,9 @@ export function useServerSessions(): Result {
    */
   const [queue] = useState(() => createSaveQueue<Session>());
 
+  /** Who is waiting to hear whether their edit reached the server, kept in step with `queue`. */
+  const [confirmations] = useState(() => createSaveConfirmations());
+
   /**
    * Every write the server hasn't confirmed yet. The leave prompt is attached
    * only while there is one, which keeps the page eligible for the
@@ -145,7 +151,6 @@ export function useServerSessions(): Result {
     createPendingWrites((busy) => {
       if (busy) window.addEventListener('beforeunload', warnBeforeLeaving);
       else window.removeEventListener('beforeunload', warnBeforeLeaving);
-      setUnconfirmed(busy);
     }),
   );
 
@@ -240,6 +245,7 @@ export function useServerSessions(): Result {
    */
   const put = useCallback(
     async (session: Session) => {
+      confirmations.sending(session.id);
       try {
         await withDeadline(WRITE_TIMEOUT_MS, async (signal) => {
           const res = await authedFetch(
@@ -254,17 +260,22 @@ export function useServerSessions(): Result {
           if (!res.ok) throw new Error(`Could not save your changes (${res.status}).`);
         });
         setFailures((f) => resolveFailure(f, 'save', session.id));
+        confirmations.saved(session.id);
       } catch (err) {
         const timedOut = err instanceof TimeoutError;
-        if (!timedOut && queue.hasPending(session.id)) return;
+        if (!timedOut && queue.hasPending(session.id)) {
+          confirmations.superseded(session.id);
+          return;
+        }
         fail({
           kind: 'save',
           sessionId: session.id,
           message: timedOut ? SAVE_TIMEOUT : messageOf(err, 'Could not save your changes.'),
         });
+        confirmations.failed(session.id);
       }
     },
-    [authedFetch, fail, queue],
+    [authedFetch, confirmations, fail, queue],
   );
 
   const enqueueSave = useCallback(
@@ -277,20 +288,35 @@ export function useServerSessions(): Result {
   );
 
   const mutateSession = useCallback(
-    (sessionId: string, fn: (session: Session) => Session) => {
+    (
+      sessionId: string,
+      fn: (session: Session) => Session,
+      onSettled?: (saved: boolean) => void,
+    ) => {
       const prev = sessionsRef.current;
       const index = prev.findIndex((s) => s.id === sessionId);
-      if (index === -1) return;
+      // Nothing is saved in either early return, so the caller hears false
+      // rather than waiting on a save that will never come.
+      if (index === -1) {
+        onSettled?.(false);
+        return;
+      }
       const next = fn(prev[index]);
       // The store's guards return the session unchanged to mean "no-op";
       // that must not cost a round trip.
-      if (next === prev[index]) return;
+      if (next === prev[index]) {
+        onSettled?.(false);
+        return;
+      }
       const copy = [...prev];
       copy[index] = next;
       commit(copy);
+      // Before the enqueue, because an idle queue starts the save at once and
+      // the wait must join that save rather than the one after it.
+      if (onSettled) confirmations.wait(sessionId, onSettled);
       enqueueSave(next);
     },
-    [commit, enqueueSave],
+    [commit, confirmations, enqueueSave],
   );
 
   const addSession = useCallback(
@@ -436,13 +462,7 @@ export function useServerSessions(): Result {
 
   const dismissReverted = useCallback(() => setReverted(false), []);
 
-  const status: SyncStatus = loading
-    ? 'loading'
-    : failures.length > 0
-      ? 'error'
-      : unconfirmed
-        ? 'saving'
-        : 'ready';
+  const status: SyncStatus = loading ? 'loading' : failures.length > 0 ? 'error' : 'ready';
   // One banner for every failure left, with the most recent one's message.
   const error = failures.length > 0 ? failures[failures.length - 1].message : null;
 
@@ -455,7 +475,6 @@ export function useServerSessions(): Result {
     status,
     error,
     retry,
-    unconfirmed,
     reverted,
     dismissReverted,
   };

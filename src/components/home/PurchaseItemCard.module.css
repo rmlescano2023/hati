@@ -62,3 +62,8 @@
 .success {
   color: var(--accent-text);
 }
+
+/* Muted while waiting, so it doesn't read as done until it is. */
+.saving {
+  color: var(--text2);
+}

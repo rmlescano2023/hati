@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { Card } from '../shared/Card';
 import { Button } from '../shared/Button';
 import { ModeToggle } from '../shared/ModeToggle';
@@ -6,10 +6,20 @@ import { PurchaseDetailsFields } from './PurchaseDetailsFields';
 import { ItemModeFields, type ItemDraft, type ItemDraftHandlers } from './ItemModeFields';
 import { ItemStagingList } from './ItemStagingList';
 import { useAppData } from '../../context/AppDataContext';
+import { useSessionsStore } from '../../context/SessionsStoreContext';
 import { distributeRemainder, getItemTotal } from '../../lib/calculations';
 import { roundMoney, sumMoney } from '../../lib/money';
 import { todayIso } from '../../lib/format';
 import { createId } from '../../lib/id';
+import {
+  SLOW_SAVE_MS,
+  firstMissing,
+  initialSaveMessage,
+  saveMessageReducer,
+  saveMessageView,
+  type MissingFlags,
+  type SaveMessageTone,
+} from '../../lib/saveMessage';
 import type { ItemMode, PayorContribution, PayorMode, PurchaseItem } from '../../types';
 import styles from './PurchaseItemCard.module.css';
 
@@ -23,6 +33,12 @@ const EMPTY_DRAFT: ItemDraft = {
   amounts: {},
 };
 
+const TONE_CLASS: Record<SaveMessageTone, string> = {
+  muted: styles.saving,
+  accent: styles.success,
+  error: styles.error,
+};
+
 const num = (raw: string | undefined): number => {
   const parsed = Number.parseFloat(raw ?? '');
   return Number.isFinite(parsed) && parsed > 0 ? roundMoney(parsed) : 0;
@@ -30,6 +46,7 @@ const num = (raw: string | undefined): number => {
 
 export function PurchaseItemCard() {
   const { members, addRecord } = useAppData();
+  const { sync } = useSessionsStore();
 
   const [date, setDate] = useState(todayIso);
   const [payorMode, setPayorMode] = useState<PayorMode>('single');
@@ -37,8 +54,13 @@ export function PurchaseItemCard() {
   const [contributions, setContributions] = useState<Record<string, string>>({});
   const [draft, setDraft] = useState<ItemDraft>(EMPTY_DRAFT);
   const [staged, setStaged] = useState<PurchaseItem[]>([]);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [message, dispatch] = useReducer(saveMessageReducer, initialSaveMessage);
+  /**
+   * Numbers the saves from this form, so only the latest one's timer and
+   * outcome reach the message. Its save carries every earlier purchase, so its
+   * "Saved" covers them too.
+   */
+  const latestSave = useRef(0);
 
   const stagedTotal = useMemo(() => sumMoney(staged.map(getItemTotal)), [staged]);
 
@@ -122,8 +144,7 @@ export function PurchaseItemCard() {
           };
     setStaged((prev) => [...prev, item]);
     resetItemDraft();
-    setError('');
-    setSuccess('');
+    dispatch({ type: 'itemAdded' });
   };
 
   const payors: PayorContribution[] =
@@ -135,25 +156,58 @@ export function PurchaseItemCard() {
           .filter((m) => num(contributions[m]) > 0)
           .map((m) => ({ member: m, amount: num(contributions[m]) }));
 
-  const canSave = Boolean(date) && payors.length > 0 && staged.length > 0;
+  const missing: MissingFlags = {
+    items: staged.length === 0,
+    date: !date,
+    payor: payors.length === 0,
+  };
+
+  // Timed by an effect, so a newer click, an outcome or leaving the tab
+  // cancels it through the cleanup, and a stale timer can't fire at all.
+  useEffect(() => {
+    if (message.status !== 'saving') return;
+    const save = message.save;
+    const timer = setTimeout(() => dispatch({ type: 'slow', save }), SLOW_SAVE_MS);
+    return () => clearTimeout(timer);
+  }, [message.status, message.save]);
+
+  // "Not saved." leans on the banner to explain it, so it goes when the banner
+  // goes, which a later successful save of this session does on its own.
+  const bannerShown = sync.status === 'error';
+  useEffect(() => {
+    if (!bannerShown) dispatch({ type: 'bannerCleared' });
+  }, [bannerShown]);
+
+  // The view already hides a validation message once what it names is
+  // supplied. Forgetting it too stops it coming back if that is removed
+  // again before the next click.
+  const validationSupplied = message.validation !== null && !missing[message.validation];
+  useEffect(() => {
+    if (validationSupplied) dispatch({ type: 'clearValidation' });
+  }, [validationSupplied]);
 
   const save = () => {
-    if (!canSave) {
-      setError(
-        staged.length === 0
-          ? 'Add at least one item before saving.'
-          : 'Choose who paid for this purchase.',
-      );
+    // The button is never disabled, so a click with something missing says
+    // what, rather than the button just not responding.
+    if (firstMissing(missing)) {
+      dispatch({ type: 'invalid', missing });
       return;
     }
-    addRecord({ date, payorMode, payors, items: staged });
+    const thisSave = (latestSave.current += 1);
+    // First, because a save that can't start settles at once.
+    dispatch({ type: 'start', save: thisSave });
+    // After an unmount the dispatch is dropped, and a remount starts empty, so
+    // leaving the tab mid-save never brings the message back.
+    addRecord({ date, payorMode, payors, items: staged }, (saved) =>
+      dispatch({ type: 'settled', save: thisSave, saved }),
+    );
     setStaged([]);
     setSinglePayor('');
     setContributions({});
     resetItemDraft('equal');
-    setError('');
-    setSuccess('Saved to Breakdown.');
   };
+
+  const shown = saveMessageView(message, missing);
 
   return (
     <Card label="Purchase Details" className={styles.card}>
@@ -165,7 +219,7 @@ export function PurchaseItemCard() {
           payorMode={payorMode}
           onPayorModeChange={(mode) => {
             setPayorMode(mode);
-            setError('');
+            dispatch({ type: 'clearValidation' });
           }}
           singlePayor={singlePayor}
           onSinglePayorChange={setSinglePayor}
@@ -185,7 +239,7 @@ export function PurchaseItemCard() {
             value={draft.mode}
             onChange={(mode) => {
               resetItemDraft(mode);
-              setError('');
+              dispatch({ type: 'clearValidation' });
             }}
             options={[
               { value: 'equal', label: 'Equal Split' },
@@ -221,11 +275,12 @@ export function PurchaseItemCard() {
       />
 
       <div className={styles.saveRow}>
-        {error && <span className={`${styles.message} ${styles.error}`}>{error}</span>}
-        {!error && success && (
-          <span className={`${styles.message} ${styles.success}`}>{success}</span>
-        )}
-        <Button variant="primary" onClick={save} disabled={!canSave}>
+        {/* One region for every message, always mounted, so a screen reader
+            announces each change of its text once and politely. */}
+        <span className={`${styles.message} ${TONE_CLASS[shown.tone]}`} role="status">
+          {shown.text}
+        </span>
+        <Button variant="primary" onClick={save}>
           Save to Breakdown →
         </Button>
       </div>
