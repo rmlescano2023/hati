@@ -2,6 +2,7 @@ import type { AppData, PurchaseItem, PurchaseRecord, Session } from '../types';
 import { roundMoney } from './money.js';
 import { createId } from './id.js';
 import { normaliseSessionName } from './sessionName.js';
+import { parseActivityAt } from './activity.js';
 
 export const STORAGE_KEY = 'hati:data:v1';
 export const SCHEMA_VERSION = 2;
@@ -100,6 +101,7 @@ export function parseSession(raw: unknown): Session | null {
     members,
     records,
     name: normaliseSessionName(raw.name),
+    activityAt: parseActivityAt(raw.activityAt),
   };
 }
 
@@ -126,6 +128,7 @@ function migrateV1(parsed: Record<string, unknown>): Session[] {
       members,
       records,
       name: null,
+      activityAt: null,
     },
   ];
 }
