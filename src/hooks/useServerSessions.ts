@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '@clerk/clerk-react';
-import type { Session } from '../types';
+import type { NewPayment, Payment, Session } from '../types';
 import { keepOpenedActivity } from '../lib/activity';
+import { mergeServerPayments } from '../lib/collection';
 import {
   TimeoutError,
   WRITE_TIMEOUT_MS,
@@ -20,6 +21,9 @@ import {
 } from '../lib/writeQueue';
 
 export type SyncStatus = 'loading' | 'ready' | 'error';
+
+/** How one payment write ended, for a message shown where it was made. */
+export type PaymentResult = { ok: true } | { ok: false; message: string };
 
 type Result = {
   sessions: Session[];
@@ -44,6 +48,24 @@ type Result = {
    * anything read "Saving…", "Saved" or "Not saved." (BR-8, BR-9).
    */
   recordOpen: (sessionId: string) => void;
+  /**
+   * Records payments on a finished session, on screen at once and on the
+   * server in the background, all or nothing. The caller mints the ids, so a
+   * retry after a failure can reuse them and never records one twice. A
+   * failure takes them off the screen again and is reported in the banner;
+   * `onSettled` hears how it ended, with a message for the form.
+   */
+  addPayments: (
+    sessionId: string,
+    payments: NewPayment[],
+    onSettled?: (result: PaymentResult) => void,
+  ) => void;
+  /** Undoes one payment, on screen at once; a failure puts it back and is reported. */
+  removePayment: (
+    sessionId: string,
+    paymentId: string,
+    onSettled?: (result: PaymentResult) => void,
+  ) => void;
   /** Dev-only seeding: swap the whole list, session by session. */
   replaceAll: (next: Session[]) => void;
   status: SyncStatus;
@@ -60,6 +82,15 @@ const ENDPOINT = '/api/sessions';
 const SAVE_TIMEOUT = 'Saving is taking too long. Check your connection, then try again.';
 const DELETE_TIMEOUT = 'Deleting is taking too long. Check your connection, then try again.';
 const LOAD_TIMEOUT = 'Loading is taking too long. Check your connection, then try again.';
+const PAYMENT_TIMEOUT =
+  'Recording the payment is taking too long. Tap Try again to see whether it was saved.';
+const UNDO_TIMEOUT =
+  'Undoing the payment is taking too long. Tap Try again to see whether it was undone.';
+
+const PAYMENTS_ENDPOINT = '/api/payments';
+
+/** What a refused payment request may say, read only as far as it is needed. */
+type PaymentErrorBody = { error?: unknown; code?: unknown; payments?: unknown };
 
 function messageOf(err: unknown, fallback: string): string {
   return err instanceof Error ? err.message : fallback;
@@ -183,6 +214,17 @@ export function useServerSessions(): Result {
    */
   const opening = useRef(new Map<string, number>());
 
+  /**
+   * Payment writes still in flight, counted by session id. A load landing
+   * meanwhile keeps that session's on-screen copy, so an optimistic payment
+   * isn't wiped before the server has it.
+   */
+  const paying = useRef(new Map<string, number>());
+  /** Adds in flight by payment id, so an undo waits for its add to land first. */
+  const adding = useRef(new Map<string, Promise<unknown>>());
+  /** Undos in flight by payment id, kept out of a refresh after a rejected add. */
+  const removing = useRef(new Set<string>());
+
   // Signing out unmounts the provider, possibly mid-save, and the prompt must
   // not outlive it.
   useEffect(() => () => window.removeEventListener('beforeunload', warnBeforeLeaving), []);
@@ -220,7 +262,7 @@ export function useServerSessions(): Result {
           mergeLoaded(
             Array.isArray(body) ? body : [],
             before,
-            (id) => queue.isBusy(id) || creating.current.has(id),
+            (id) => queue.isBusy(id) || creating.current.has(id) || paying.current.has(id),
             (id) => deleting.current.has(id),
           ),
           before,
@@ -465,6 +507,181 @@ export function useServerSessions(): Result {
     [authedFetch, commit],
   );
 
+  /** Replaces one session's payments on screen, if the session is still there. */
+  const setPayments = useCallback(
+    (sessionId: string, fn: (payments: Payment[]) => Payment[]) => {
+      commit(
+        sessionsRef.current.map((s) =>
+          s.id === sessionId ? { ...s, payments: fn(s.payments) } : s,
+        ),
+      );
+    },
+    [commit],
+  );
+
+  /** Counts one payment write in or out of `paying`. */
+  const countPaying = useCallback((sessionId: string, step: 1 | -1) => {
+    const left = (paying.current.get(sessionId) ?? 0) + step;
+    if (left > 0) paying.current.set(sessionId, left);
+    else paying.current.delete(sessionId);
+  }, []);
+
+  const addPayments = useCallback(
+    (sessionId: string, payments: NewPayment[], onSettled?: (result: PaymentResult) => void) => {
+      if (!sessionsRef.current.some((s) => s.id === sessionId)) {
+        onSettled?.({ ok: false, message: 'This session is gone.' });
+        return;
+      }
+      const now = new Date().toISOString();
+      setPayments(sessionId, (list) => [
+        ...list,
+        ...payments.map((p) => ({ ...p, createdAt: now })),
+      ]);
+      countPaying(sessionId, 1);
+      const ids = new Set(payments.map((p) => p.id));
+
+      const work = (async () => {
+        let status: number | null = null;
+        let body: PaymentErrorBody | null = null;
+        let timedOut = false;
+        let thrown: unknown = null;
+        try {
+          // The Finish save must land first, or the server still sees a draft.
+          await creating.current.get(sessionId);
+          await queue.settled(sessionId);
+          const result = await withDeadline(WRITE_TIMEOUT_MS, async (signal) => {
+            const res = await authedFetch(
+              PAYMENTS_ENDPOINT,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sessionId, payments }),
+              },
+              signal,
+            );
+            const type = res.headers.get('content-type') ?? '';
+            const json =
+              !res.ok && type.includes('application/json')
+                ? ((await res.json()) as PaymentErrorBody)
+                : null;
+            return { status: res.status, body: json };
+          });
+          if (result.status === 201) {
+            setFailures((f) => resolveFailure(f, 'payment', sessionId));
+            onSettled?.({ ok: true });
+            return;
+          }
+          status = result.status;
+          body = result.body;
+        } catch (err) {
+          timedOut = err instanceof TimeoutError;
+          thrown = err;
+        }
+
+        // Every other ending takes the payments off again, so the figures
+        // never show money that wasn't recorded.
+        setPayments(sessionId, (list) => list.filter((p) => !ids.has(p.id)));
+        if (body?.code === 'over_remaining' && Array.isArray(body.payments)) {
+          // The line had less left than this device thought, so it shows the
+          // server's payments rather than waiting for a reload (AC-7.12).
+          const server = body.payments as Payment[];
+          setPayments(sessionId, (list) =>
+            mergeServerPayments(
+              list,
+              server,
+              (id) => adding.current.has(id) && !ids.has(id),
+              (id) => removing.current.has(id),
+            ),
+          );
+        }
+        // A session deleted meanwhile took its payments with it: nothing to report.
+        if (!sessionsRef.current.some((s) => s.id === sessionId)) return;
+
+        const refusal = status === 409 && typeof body?.error === 'string' ? body.error : null;
+        fail({
+          kind: 'payment',
+          sessionId,
+          message: timedOut
+            ? PAYMENT_TIMEOUT
+            : refusal !== null
+              ? `Payment not recorded. ${refusal}`
+              : status !== null
+                ? `Couldn't record the payment (${status}), so it was taken off. Try recording it again.`
+                : messageOf(thrown, "Couldn't record the payment."),
+        });
+        onSettled?.({
+          ok: false,
+          message:
+            refusal ??
+            (timedOut
+              ? 'This is taking too long. Check your connection and try again.'
+              : 'Not recorded. Check your connection and try again.'),
+        });
+      })().finally(() => {
+        countPaying(sessionId, -1);
+        for (const id of ids) adding.current.delete(id);
+      });
+      for (const id of ids) adding.current.set(id, work);
+      pending.track(work);
+    },
+    [authedFetch, countPaying, fail, pending, queue, setPayments],
+  );
+
+  const removePayment = useCallback(
+    (sessionId: string, paymentId: string, onSettled?: (result: PaymentResult) => void) => {
+      const payment = sessionsRef.current
+        .find((s) => s.id === sessionId)
+        ?.payments.find((p) => p.id === paymentId);
+      if (!payment) return;
+      setPayments(sessionId, (list) => list.filter((p) => p.id !== paymentId));
+      countPaying(sessionId, 1);
+      removing.current.add(paymentId);
+
+      const work = (async () => {
+        let status: number | null = null;
+        let timedOut = false;
+        try {
+          // An undo of a payment still being recorded would find nothing to
+          // delete, and the add would then land after it.
+          await adding.current.get(paymentId);
+          status = await withDeadline(WRITE_TIMEOUT_MS, async (signal) => {
+            const res = await authedFetch(
+              `${PAYMENTS_ENDPOINT}/${encodeURIComponent(paymentId)}`,
+              { method: 'DELETE' },
+              signal,
+            );
+            return res.status;
+          });
+          // Not found means there is nothing left to undo, which is done too.
+          if (status === 204 || status === 404) {
+            setFailures((f) => resolveFailure(f, 'payment', sessionId));
+            onSettled?.({ ok: true });
+            return;
+          }
+        } catch (err) {
+          timedOut = err instanceof TimeoutError;
+        }
+
+        if (!sessionsRef.current.some((s) => s.id === sessionId)) return;
+        setPayments(sessionId, (list) =>
+          list.some((p) => p.id === paymentId) ? list : [...list, payment],
+        );
+        const message = timedOut
+          ? UNDO_TIMEOUT
+          : status !== null
+            ? `Couldn't undo the payment (${status}), so it's still recorded.`
+            : "Couldn't undo the payment, so it's still recorded.";
+        fail({ kind: 'payment', sessionId, message });
+        onSettled?.({ ok: false, message });
+      })().finally(() => {
+        countPaying(sessionId, -1);
+        removing.current.delete(paymentId);
+      });
+      pending.track(work);
+    },
+    [authedFetch, countPaying, fail, pending, setPayments],
+  );
+
   const replaceAll = useCallback(
     (next: Session[]) => {
       // Dev-only, so a request per session is fine — there is no bulk
@@ -495,6 +712,22 @@ export function useServerSessions(): Result {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(session),
             });
+            // A save never carries payments, so seeded ones go through their own endpoint.
+            if (session.payments.length > 0) {
+              await authedFetch(PAYMENTS_ENDPOINT, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  sessionId: session.id,
+                  payments: session.payments.map(({ id, debtor, creditor, amountCents }) => ({
+                    id,
+                    debtor,
+                    creditor,
+                    amountCents,
+                  })),
+                }),
+              });
+            }
           }
           setFailures((f) => resolveFailure(f, 'seed', null));
         } catch (err) {
@@ -534,6 +767,8 @@ export function useServerSessions(): Result {
     addSession,
     removeSession,
     recordOpen,
+    addPayments,
+    removePayment,
     replaceAll,
     status,
     error,

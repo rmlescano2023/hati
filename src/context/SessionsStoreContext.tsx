@@ -1,11 +1,17 @@
 import { createContext, useCallback, useContext, useMemo, type ReactNode } from 'react';
-import { useServerSessions, type SyncStatus } from '../hooks/useServerSessions';
+import { useServerSessions, type PaymentResult, type SyncStatus } from '../hooks/useServerSessions';
 import { compareNames, toTitleCase } from '../lib/format';
 import { roundMoney } from '../lib/money';
 import { getItemShares } from '../lib/calculations';
 import { createId } from '../lib/id';
 import { applySessionName, normaliseSessionName } from '../lib/sessionName';
-import type { NewPurchaseRecord, PurchaseItem, PurchaseRecord, Session } from '../types';
+import type {
+  NewPayment,
+  NewPurchaseRecord,
+  PurchaseItem,
+  PurchaseRecord,
+  Session,
+} from '../types';
 
 type SessionsStoreValue = {
   sessions: Session[];
@@ -16,7 +22,26 @@ type SessionsStoreValue = {
   createSession: (name?: string | null) => string;
   /** Names or renames a draft; a blank name clears it. Closed sessions are left alone. */
   renameSession: (sessionId: string, rawName: string) => void;
-  closeSession: (sessionId: string) => void;
+  /**
+   * Finishes a draft. `me` is who the user said they are in it, or null for no
+   * pick; it travels in the same save as the finish, so neither lands without
+   * the other.
+   */
+  closeSession: (sessionId: string, me: string | null) => void;
+  /** Sets who the user is in a finished session: a member, or `NOT_IN_SESSION`. */
+  setMe: (sessionId: string, me: string) => void;
+  /** Records payments on a finished session, all or nothing; see `useServerSessions`. */
+  addPayments: (
+    sessionId: string,
+    payments: NewPayment[],
+    onSettled?: (result: PaymentResult) => void,
+  ) => void;
+  /** Undoes one payment; see `useServerSessions`. */
+  removePayment: (
+    sessionId: string,
+    paymentId: string,
+    onSettled?: (result: PaymentResult) => void,
+  ) => void;
   /** Removes a session outright. Unlike closing, nothing is kept. */
   deleteSession: (sessionId: string) => void;
   /** Moves a draft to the top of Home because the user opened it. Silent; see BR-8. */
@@ -111,6 +136,8 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
     addSession,
     removeSession,
     recordOpen,
+    addPayments,
+    removePayment,
     replaceAll,
     status,
     error,
@@ -182,11 +209,27 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
   );
 
   const closeSession = useCallback(
-    (sessionId: string) => {
+    (sessionId: string, me: string | null) => {
       updateSession(sessionId, (session) =>
         session.records.length === 0 || session.status === 'closed'
           ? session
-          : { ...session, status: 'closed', closedAt: new Date().toISOString() },
+          : {
+              ...session,
+              status: 'closed',
+              closedAt: new Date().toISOString(),
+              me: me ?? session.me,
+            },
+      );
+    },
+    [updateSession],
+  );
+
+  const setMe = useCallback(
+    (sessionId: string, me: string) => {
+      // Only a finished session has anyone to collect from, and an unchanged
+      // pick returns the session itself, which sends nothing.
+      updateSession(sessionId, (session) =>
+        session.status !== 'closed' || session.me === me ? session : { ...session, me },
       );
     },
     [updateSession],
@@ -345,6 +388,9 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
       createSession,
       renameSession,
       closeSession,
+      setMe,
+      addPayments,
+      removePayment,
       deleteSession,
       recordOpen,
       addMember,
@@ -370,6 +416,9 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
       createSession,
       renameSession,
       closeSession,
+      setMe,
+      addPayments,
+      removePayment,
       deleteSession,
       recordOpen,
       addMember,

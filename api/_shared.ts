@@ -86,10 +86,7 @@ const iso = (v: Date | string): string => (v instanceof Date ? v.toISOString() :
  * `only` narrows it to one session, for the payments POST, which checks a
  * payment against that session's settlement lines.
  */
-export async function loadSessions(
-  userId: string,
-  only: string | null = null,
-): Promise<Session[]> {
+export async function loadSessions(userId: string, only: string | null = null): Promise<Session[]> {
   const { rows: sessionRows } = await pool.sql<SessionRow>`
     select id, status, created_at, closed_at, members, name, activity_at, me
     from expense_sessions
