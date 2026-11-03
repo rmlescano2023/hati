@@ -29,6 +29,12 @@ create index if not exists expense_sessions_user_id_idx on expense_sessions (use
 -- rather than a check constraint, so the limit can change without a migration.
 alter table expense_sessions add column if not exists name text;
 
+-- When the session was last opened or changed: the moment the user acted,
+-- capped at the server's clock, and never moved backwards. Home lists drafts
+-- by it. Null means no activity recorded yet; the app then falls back to the
+-- latest purchase or the creation time, so nothing needs backfilling.
+alter table expense_sessions add column if not exists activity_at timestamptz;
+
 create table if not exists purchase_records (
   id         text primary key,          -- keeps the existing "rec_xxx" ids
   session_id text not null references expense_sessions (id) on delete cascade,

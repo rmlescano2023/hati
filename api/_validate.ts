@@ -1,3 +1,4 @@
+import { parseActivityAt } from '../src/lib/activity.js';
 import { normaliseSessionName } from '../src/lib/sessionName.js';
 import { parseSession } from '../src/lib/storage.js';
 import type { Session } from '../src/types';
@@ -26,4 +27,13 @@ export function parseSessionInput(id: string, raw: unknown): Session | null {
  */
 export function parseSessionName(raw: unknown): string | null {
   return normaliseSessionName(raw);
+}
+
+/**
+ * The activity time an open reports. It is the whole request, so unlike a
+ * field inside a session, a missing or unreadable one is a 400 rather than null.
+ */
+export function parseActivityInput(raw: unknown): string | null {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null;
+  return parseActivityAt((raw as Record<string, unknown>).activityAt);
 }

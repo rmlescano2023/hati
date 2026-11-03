@@ -32,7 +32,7 @@ type Screen =
 const TOP_LEVEL = new Set<Screen['kind']>(['home', 'history']);
 
 export default function App() {
-  const { sessions, createSession, deleteSession, sync } = useSessionsStore();
+  const { sessions, createSession, deleteSession, recordOpen, sync } = useSessionsStore();
   const [screen, setScreen] = useState<Screen>({ kind: 'home' });
   /** Whether the New Session prompt is open. */
   const [naming, setNaming] = useState(false);
@@ -75,6 +75,12 @@ export default function App() {
 
   const openSession = (sessionId: string) =>
     setScreen({ kind: 'session', sessionId, tab: 'expenses' });
+  // A card picked on Home is the one deliberate open (section 4 of the
+  // requirements). The tour's own navigation never records one (BR-14).
+  const openFromHome = (sessionId: string) => {
+    if (phase !== 'running') recordOpen(sessionId);
+    openSession(sessionId);
+  };
   const startSession = (name: string | null) => {
     const id = createSession(name);
     if (phase === 'running' && tourSession.current === null) tourSession.current = id;
@@ -244,7 +250,7 @@ export default function App() {
       <SyncBanner />
       {screen.kind === 'home' && (
         <HomePage
-          onOpenSession={openSession}
+          onOpenSession={openFromHome}
           onNewSession={newSession}
           onPreviewTour={import.meta.env.DEV ? previewTour : undefined}
         />
@@ -265,7 +271,11 @@ export default function App() {
           sessionId={screen.sessionId}
           tab={screen.tab}
           onTabChange={(tab) => setScreen({ ...screen, tab })}
-          onBack={() => setScreen({ kind: 'home' })}
+          onBack={() => {
+            // The session just used is now first on Home, so land where it is (AC-9.4).
+            window.scrollTo(0, 0);
+            setScreen({ kind: 'home' });
+          }}
           // Landing on History after closing is the confirmation that the
           // session was archived rather than lost.
           onClosed={() => setScreen({ kind: 'history' })}
