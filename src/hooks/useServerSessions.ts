@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '@clerk/clerk-react';
 import type { Session } from '../types';
+import { keepOpenedActivity } from '../lib/activity';
 import {
   TimeoutError,
   WRITE_TIMEOUT_MS,
@@ -36,6 +37,13 @@ type Result = {
   /** Add a session locally and create it on the server in the background. */
   addSession: (session: Session) => void;
   removeSession: (sessionId: string) => void;
+  /**
+   * Marks a session as just opened, on screen at once and on the server in the
+   * background. It is best effort and silent: it never joins the save queue,
+   * the leave prompt, the confirmations or the failures, so an open can't make
+   * anything read "Saving…", "Saved" or "Not saved." (BR-8, BR-9).
+   */
+  recordOpen: (sessionId: string) => void;
   /** Dev-only seeding: swap the whole list, session by session. */
   replaceAll: (next: Session[]) => void;
   status: SyncStatus;
@@ -168,6 +176,13 @@ export function useServerSessions(): Result {
    */
   const deleting = useRef(new Set<string>());
 
+  /**
+   * Opens still in flight, by session id, counted because a session can be
+   * opened again before the first request returns. A load landing meanwhile
+   * keeps their on-screen activity time (see `keepOpenedActivity`).
+   */
+  const opening = useRef(new Map<string, number>());
+
   // Signing out unmounts the provider, possibly mid-save, and the prompt must
   // not outlive it.
   useEffect(() => () => window.removeEventListener('beforeunload', warnBeforeLeaving), []);
@@ -201,11 +216,15 @@ export function useServerSessions(): Result {
         // A load never overrides a write the server hasn't confirmed, so
         // "Try again" during a save, create or delete doesn't undo it on screen.
         const before = sessionsRef.current;
-        const after = mergeLoaded(
-          Array.isArray(body) ? body : [],
+        const after = keepOpenedActivity(
+          mergeLoaded(
+            Array.isArray(body) ? body : [],
+            before,
+            (id) => queue.isBusy(id) || creating.current.has(id),
+            (id) => deleting.current.has(id),
+          ),
           before,
-          (id) => queue.isBusy(id) || creating.current.has(id),
-          (id) => deleting.current.has(id),
+          (id) => opening.current.has(id),
         );
         const rolledBack = revertedAny(revertCandidates.current, before, after, sameSessionContent);
         revertCandidates.current = new Set();
@@ -301,13 +320,16 @@ export function useServerSessions(): Result {
         onSettled?.(false);
         return;
       }
-      const next = fn(prev[index]);
+      const changed = fn(prev[index]);
       // The store's guards return the session unchanged to mean "no-op";
       // that must not cost a round trip.
-      if (next === prev[index]) {
+      if (changed === prev[index]) {
         onSettled?.(false);
         return;
       }
+      // Every saved change is activity (BR-1). The time is the edit's own, so a
+      // save that lands late still reflects when the user acted.
+      const next = { ...changed, activityAt: new Date().toISOString() };
       const copy = [...prev];
       copy[index] = next;
       commit(copy);
@@ -403,6 +425,46 @@ export function useServerSessions(): Result {
     [authedFetch, commit, fail, pending, queue],
   );
 
+  const recordOpen = useCallback(
+    (sessionId: string) => {
+      const prev = sessionsRef.current;
+      const session = prev.find((s) => s.id === sessionId);
+      if (!session) return;
+      const activityAt = new Date().toISOString();
+      commit(prev.map((s) => (s === session ? { ...session, activityAt } : s)));
+      opening.current.set(sessionId, (opening.current.get(sessionId) ?? 0) + 1);
+      void (async () => {
+        try {
+          // A create still in flight lands first, so the open finds its row.
+          await creating.current.get(sessionId);
+          // The response isn't read: any status, a 404 for a session deleted
+          // meanwhile included, is the end of it.
+          await withDeadline(WRITE_TIMEOUT_MS, (signal) =>
+            authedFetch(
+              `${ENDPOINT}/${encodeURIComponent(sessionId)}`,
+              {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ activityAt }),
+                // Lets an open already on its way finish if the tab closes.
+                keepalive: true,
+              },
+              signal,
+            ),
+          );
+        } catch {
+          // An open is best effort and never visible, so a failure is neither
+          // reported nor retried (BR-8). The next load shows the server's order.
+        } finally {
+          const left = (opening.current.get(sessionId) ?? 1) - 1;
+          if (left > 0) opening.current.set(sessionId, left);
+          else opening.current.delete(sessionId);
+        }
+      })();
+    },
+    [authedFetch, commit],
+  );
+
   const replaceAll = useCallback(
     (next: Session[]) => {
       // Dev-only, so a request per session is fine — there is no bulk
@@ -471,6 +533,7 @@ export function useServerSessions(): Result {
     mutateSession,
     addSession,
     removeSession,
+    recordOpen,
     replaceAll,
     status,
     error,
