@@ -52,6 +52,15 @@ export function LineRow({ sessionId, line, failed, onFailed, onPaid }: Props) {
   const submitted = useRef(false);
   const input = useRef<HTMLInputElement>(null);
   const messageId = useId();
+  // Whether the row is on screen, so a refusal arriving after it has gone is
+  // reported in the banner instead of into state nobody sees.
+  const mounted = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   // Which payments the line has, so a change to them can be noticed. Sorted,
   // because a reload re-stamps times with the server's and can reorder them.
@@ -101,17 +110,15 @@ export function LineRow({ sessionId, line, failed, onFailed, onPaid }: Props) {
     onFailed(null);
   };
 
-  const record = (id: string, amountCents: number, onFailure?: (message: string) => void) => {
+  /** `onFailure` returns whether it showed the message, as `addPayments` asks. */
+  const record = (id: string, amountCents: number, onFailure?: (message: string) => boolean) => {
     onPaid();
     addPayments(
       sessionId,
       [{ id, debtor: line.debtor, creditor: line.creditor, amountCents }],
       // Only the form has somewhere to show a refusal; Mark fully paid leaves
       // it to the banner.
-      onFailure &&
-        ((result) => {
-          if (!result.ok) onFailure(result.message);
-        }),
+      onFailure && ((result) => (result.ok ? undefined : onFailure(result.message))),
     );
   };
 
@@ -127,7 +134,10 @@ export function LineRow({ sessionId, line, failed, onFailed, onPaid }: Props) {
     onFailed(null);
     record(id, parsed.cents, (message) => {
       submitted.current = false;
+      // Kept by the page even when this row isn't on screen, so the amount
+      // comes back with the line; the banner covers the message then.
       onFailed({ id, amountText, message });
+      return mounted.current;
     });
   };
 

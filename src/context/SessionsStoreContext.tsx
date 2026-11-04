@@ -34,7 +34,7 @@ type SessionsStoreValue = {
   addPayments: (
     sessionId: string,
     payments: NewPayment[],
-    onSettled?: (result: PaymentResult) => void,
+    onSettled?: (result: PaymentResult) => boolean | void,
   ) => void;
   /** Undoes one payment; see `useServerSessions`. */
   removePayment: (

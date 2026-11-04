@@ -53,15 +53,15 @@ type Result = {
    * server in the background, all or nothing. The caller mints the ids, so a
    * retry after a failure can reuse them and never records one twice. A
    * failure takes them off the screen again and is reported in the banner;
-   * `onSettled` hears how it ended, with a message for the form. A refusal
-   * the caller listens for, such as a line already paid in full, is only the
-   * caller's to show: it is said where it was made, and saying it twice adds
-   * nothing.
+   * `onSettled` hears how it ended, with a message for the form. A refusal,
+   * such as a line already paid in full, skips the banner only when
+   * `onSettled` returns true to say it showed the message itself, so one is
+   * never lost to a form that has gone from the screen.
    */
   addPayments: (
     sessionId: string,
     payments: NewPayment[],
-    onSettled?: (result: PaymentResult) => void,
+    onSettled?: (result: PaymentResult) => boolean | void,
   ) => void;
   /** Undoes one payment, on screen at once; a failure puts it back and is reported. */
   removePayment: (
@@ -530,7 +530,11 @@ export function useServerSessions(): Result {
   }, []);
 
   const addPayments = useCallback(
-    (sessionId: string, payments: NewPayment[], onSettled?: (result: PaymentResult) => void) => {
+    (
+      sessionId: string,
+      payments: NewPayment[],
+      onSettled?: (result: PaymentResult) => boolean | void,
+    ) => {
       const session = sessionsRef.current.find((s) => s.id === sessionId);
       if (!session) {
         onSettled?.({ ok: false, message: 'This session is gone.' });
@@ -601,10 +605,19 @@ export function useServerSessions(): Result {
         if (!sessionsRef.current.some((s) => s.id === sessionId)) return;
 
         const refusal = status === 409 && typeof body?.error === 'string' ? body.error : null;
-        // The user is at the form they just saved, so a refusal shows there
-        // alone. A failure of the request itself still goes to the banner, which
-        // stays in view and offers "Try again".
-        if (refusal === null || !onSettled) {
+        const shownByCaller =
+          onSettled?.({
+            ok: false,
+            message:
+              refusal ??
+              (timedOut
+                ? 'This is taking too long. Check your connection and try again.'
+                : 'Not recorded. Check your connection and try again.'),
+          }) === true;
+        // A refusal shown on the form the user just saved isn't repeated. Any
+        // other failure, or a refusal whose form is gone, goes to the banner,
+        // which stays in view and offers "Try again".
+        if (refusal === null || !shownByCaller) {
           fail({
             kind: 'payment',
             sessionId,
@@ -617,14 +630,6 @@ export function useServerSessions(): Result {
                   : messageOf(thrown, "Couldn't record the payment."),
           });
         }
-        onSettled?.({
-          ok: false,
-          message:
-            refusal ??
-            (timedOut
-              ? 'This is taking too long. Check your connection and try again.'
-              : 'Not recorded. Check your connection and try again.'),
-        });
       })().finally(() => {
         countPaying(sessionId, -1);
         for (const id of ids) adding.current.delete(id);
