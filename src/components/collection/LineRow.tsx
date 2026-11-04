@@ -60,7 +60,11 @@ export function LineRow({ sessionId, line, failed, onFailed, onPaid }: Props) {
     if (failed) setText(failed.amountText);
   }
 
-  const showForm = open || failed !== undefined;
+  // A line paid in full, from here or another device, has nothing left to
+  // record, so its form closes and a refusal shows as the line's state.
+  const paidUp = line.remainingCents === 0;
+  if (open && paidUp) setOpen(false);
+  const showForm = (open || failed !== undefined) && !paidUp;
   useEffect(() => {
     if (showForm) input.current?.focus();
   }, [showForm]);
@@ -122,6 +126,12 @@ export function LineRow({ sessionId, line, failed, onFailed, onPaid }: Props) {
         <span>{progress}</span>
         <span className={`${styles.chip} ${styles[line.status]}`}>{STATUS_LABEL[line.status]}</span>
       </div>
+
+      {paidUp && failed && (
+        <p role="alert" className={styles.error}>
+          {failed.message}
+        </p>
+      )}
 
       {showForm ? (
         <form
