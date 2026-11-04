@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '@clerk/clerk-react';
 import type { NewPayment, Payment, Session } from '../types';
 import { keepOpenedActivity } from '../lib/activity';
-import { mergeServerPayments } from '../lib/collection';
+import { mergeServerPayments, newPayments } from '../lib/collection';
 import {
   TimeoutError,
   WRITE_TIMEOUT_MS,
@@ -528,17 +528,17 @@ export function useServerSessions(): Result {
 
   const addPayments = useCallback(
     (sessionId: string, payments: NewPayment[], onSettled?: (result: PaymentResult) => void) => {
-      if (!sessionsRef.current.some((s) => s.id === sessionId)) {
+      const session = sessionsRef.current.find((s) => s.id === sessionId);
+      if (!session) {
         onSettled?.({ ok: false, message: 'This session is gone.' });
         return;
       }
-      const now = new Date().toISOString();
-      setPayments(sessionId, (list) => [
-        ...list,
-        ...payments.map((p) => ({ ...p, createdAt: now })),
-      ]);
+      // The whole request is still sent, since the server skips what it has,
+      // but only what this call put on screen is ever taken off again.
+      const added = newPayments(session.payments, payments, new Date().toISOString());
+      setPayments(sessionId, (list) => [...list, ...added]);
       countPaying(sessionId, 1);
-      const ids = new Set(payments.map((p) => p.id));
+      const ids = new Set(added.map((p) => p.id));
 
       const work = (async () => {
         let status: number | null = null;

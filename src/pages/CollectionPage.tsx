@@ -133,7 +133,12 @@ export function CollectionPage({ openSessionId, onEditProfile }: Props) {
             return next;
           })
         }
-        failed={(lineKey) => failed.get(`${id}|${lineKey}`)}
+        failed={(lineKey) => {
+          const entry = failed.get(`${id}|${lineKey}`);
+          // A payment that landed after all, shown by a reload, is no longer a
+          // failure, so its form doesn't reopen to be recorded again.
+          return entry && !card.session.payments.some((p) => p.id === entry.id) ? entry : undefined;
+        }}
         onFailed={(lineKey, entry) =>
           setFailed((current) => {
             const key = `${id}|${lineKey}`;

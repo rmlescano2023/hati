@@ -6,6 +6,7 @@ import {
   markAllMessage,
   matchMember,
   mergeServerPayments,
+  newPayments,
   openLinePayments,
   parsePaymentAmount,
   resolveMe,
@@ -432,5 +433,30 @@ describe('mergeServerPayments', () => {
 
   it('does not duplicate an in-flight add the server already has', () => {
     expect(mergeServerPayments([a], [a], (id) => id === 'pay_a', none)).toEqual([a]);
+  });
+});
+
+describe('newPayments', () => {
+  const at = '2026-11-04T07:00:00.000Z';
+  const stored = pay('pay_a', 'Ana', 'Renmar', 100, '2026-11-03T00:00:00.000Z');
+
+  it('stamps payments that are not on screen yet', () => {
+    expect(
+      newPayments([], [{ id: 'pay_b', debtor: 'Cara', creditor: 'Renmar', amountCents: 200 }], at),
+    ).toEqual([pay('pay_b', 'Cara', 'Renmar', 200, at)]);
+  });
+
+  // A retry of a payment that did land, shown again by a reload, must not show twice.
+  it('leaves out a payment whose id is already there', () => {
+    const retry = { id: 'pay_a', debtor: 'Ana', creditor: 'Renmar', amountCents: 100 };
+    expect(newPayments([stored], [retry], at)).toEqual([]);
+  });
+
+  it('keeps the new ones of a batch that is partly there already', () => {
+    const batch = [
+      { id: 'pay_a', debtor: 'Ana', creditor: 'Renmar', amountCents: 100 },
+      { id: 'pay_c', debtor: 'Cara', creditor: 'Renmar', amountCents: 300 },
+    ];
+    expect(newPayments([stored], batch, at).map((p) => p.id)).toEqual(['pay_c']);
   });
 });

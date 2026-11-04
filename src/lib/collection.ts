@@ -279,6 +279,21 @@ export function markAllMessage(card: CollectionCard): string {
 }
 
 /**
+ * The payments of a request that aren't on screen yet, stamped with the
+ * device's time. A retry reuses its id, and if the first attempt landed after
+ * all, a reload already shows it, so adding it again would show it twice. Only
+ * these are taken off again if the request fails: the others are the server's.
+ */
+export function newPayments(
+  existing: Payment[],
+  incoming: NewPayment[],
+  createdAt: string,
+): Payment[] {
+  const have = new Set(existing.map((p) => p.id));
+  return incoming.filter((p) => !have.has(p.id)).map((p) => ({ ...p, createdAt }));
+}
+
+/**
  * A session's payments after the server refused an add because the line had
  * less left than the device thought: the server's list, minus any undo still
  * in flight, plus any other add still in flight that the server hasn't got yet.
