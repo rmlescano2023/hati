@@ -65,7 +65,8 @@ function summaryDetail(card: Card): string[] {
         .join(' · '),
     ];
   }
-  if (card.me.kind === 'notInSession') return ["You're not in this session"];
+  // The "You're not in this session · Change" line under it already says so.
+  if (card.me.kind === 'notInSession') return [];
   if (card.lineCount === 0) return ["Nothing to collect. You're even with everyone."];
   return [
     `Settled ${formatLocalDate(card.settledAt)}`,
