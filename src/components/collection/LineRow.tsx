@@ -106,9 +106,12 @@ export function LineRow({ sessionId, line, failed, onFailed, onPaid }: Props) {
     addPayments(
       sessionId,
       [{ id, debtor: line.debtor, creditor: line.creditor, amountCents }],
-      (result) => {
-        if (!result.ok) onFailure?.(result.message);
-      },
+      // Only the form has somewhere to show a refusal; Mark fully paid leaves
+      // it to the banner.
+      onFailure &&
+        ((result) => {
+          if (!result.ok) onFailure(result.message);
+        }),
     );
   };
 

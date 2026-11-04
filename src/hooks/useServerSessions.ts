@@ -53,7 +53,10 @@ type Result = {
    * server in the background, all or nothing. The caller mints the ids, so a
    * retry after a failure can reuse them and never records one twice. A
    * failure takes them off the screen again and is reported in the banner;
-   * `onSettled` hears how it ended, with a message for the form.
+   * `onSettled` hears how it ended, with a message for the form. A refusal
+   * the caller listens for, such as a line already paid in full, is only the
+   * caller's to show: it is said where it was made, and saying it twice adds
+   * nothing.
    */
   addPayments: (
     sessionId: string,
@@ -598,17 +601,22 @@ export function useServerSessions(): Result {
         if (!sessionsRef.current.some((s) => s.id === sessionId)) return;
 
         const refusal = status === 409 && typeof body?.error === 'string' ? body.error : null;
-        fail({
-          kind: 'payment',
-          sessionId,
-          message: timedOut
-            ? PAYMENT_TIMEOUT
-            : refusal !== null
-              ? `Payment not recorded. ${refusal}`
-              : status !== null
-                ? `Couldn't record the payment (${status}), so it was taken off. Try recording it again.`
-                : messageOf(thrown, "Couldn't record the payment."),
-        });
+        // The user is at the form they just saved, so a refusal shows there
+        // alone. A failure of the request itself still goes to the banner, which
+        // stays in view and offers "Try again".
+        if (refusal === null || !onSettled) {
+          fail({
+            kind: 'payment',
+            sessionId,
+            message: timedOut
+              ? PAYMENT_TIMEOUT
+              : refusal !== null
+                ? `Payment not recorded. ${refusal}`
+                : status !== null
+                  ? `Couldn't record the payment (${status}), so it was taken off. Try recording it again.`
+                  : messageOf(thrown, "Couldn't record the payment."),
+          });
+        }
         onSettled?.({
           ok: false,
           message:
