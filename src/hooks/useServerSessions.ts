@@ -228,6 +228,16 @@ export function useServerSessions(): Result {
   /** Undos in flight by payment id, kept out of a refresh after a rejected add. */
   const removing = useRef(new Set<string>());
 
+  /**
+   * Sessions with a payment, undo or save that settled after the current load
+   * was sent. The server read that load's copy before the write landed, so
+   * applying it would hide a payment the server has, or bring back one it
+   * deleted. Their on-screen copy, which already shows the outcome, is kept
+   * until the next load. Collection stays usable during "Try again", which is
+   * what makes this window reachable.
+   */
+  const settledDuringLoad = useRef(new Set<string>());
+
   // Signing out unmounts the provider, possibly mid-save, and the prompt must
   // not outlive it.
   useEffect(() => () => window.removeEventListener('beforeunload', warnBeforeLeaving), []);
@@ -250,6 +260,7 @@ export function useServerSessions(): Result {
 
     (async () => {
       setLoading(true);
+      settledDuringLoad.current.clear();
       try {
         // The deadline covers the body too, so a late result is never applied.
         const body = await withDeadline(WRITE_TIMEOUT_MS, async (signal) => {
@@ -265,7 +276,11 @@ export function useServerSessions(): Result {
           mergeLoaded(
             Array.isArray(body) ? body : [],
             before,
-            (id) => queue.isBusy(id) || creating.current.has(id) || paying.current.has(id),
+            (id) =>
+              queue.isBusy(id) ||
+              creating.current.has(id) ||
+              paying.current.has(id) ||
+              settledDuringLoad.current.has(id),
             (id) => deleting.current.has(id),
           ),
           before,
@@ -324,6 +339,7 @@ export function useServerSessions(): Result {
           if (!res.ok) throw new Error(`Could not save your changes (${res.status}).`);
         });
         setFailures((f) => resolveFailure(f, 'save', session.id));
+        settledDuringLoad.current.add(session.id);
         confirmations.saved(session.id);
       } catch (err) {
         const timedOut = err instanceof TimeoutError;
@@ -631,6 +647,7 @@ export function useServerSessions(): Result {
           });
         }
       })().finally(() => {
+        settledDuringLoad.current.add(sessionId);
         countPaying(sessionId, -1);
         for (const id of ids) adding.current.delete(id);
       });
@@ -687,6 +704,7 @@ export function useServerSessions(): Result {
         fail({ kind: 'payment', sessionId, message });
         onSettled?.({ ok: false, message });
       })().finally(() => {
+        settledDuringLoad.current.add(sessionId);
         countPaying(sessionId, -1);
         removing.current.delete(paymentId);
       });
