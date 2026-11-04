@@ -83,12 +83,18 @@ export function CollectionPage({ openSessionId, onEditProfile }: Props) {
             You: <strong>{profile.displayName}</strong>
           </span>
           <span aria-hidden="true">·</span>
-          <Button variant="ghost" size="sm" aria-label="Edit your name" onClick={onEditProfile}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="link-action"
+            aria-label="Edit your name"
+            onClick={onEditProfile}
+          >
             Edit
           </Button>
         </>
       ) : (
-        <Button variant="ghost" size="sm" onClick={onEditProfile}>
+        <Button variant="ghost" size="sm" className="link-action" onClick={onEditProfile}>
           Add your name
         </Button>
       )}

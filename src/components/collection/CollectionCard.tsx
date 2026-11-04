@@ -183,6 +183,7 @@ function YouAre({ card, title }: { card: Card; title: string }) {
       <Button
         variant="ghost"
         size="sm"
+        className="link-action"
         aria-label={`Change who you are in ${title}`}
         onClick={() => setChanging(true)}
       >

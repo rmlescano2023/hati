@@ -74,6 +74,7 @@ export function FinishSessionDialog({ members, onCancel, onConfirm }: Props) {
             <Button
               variant="ghost"
               size="sm"
+              className="link-action"
               onClick={() => {
                 setValue(match);
                 setPickerOpen(true);
