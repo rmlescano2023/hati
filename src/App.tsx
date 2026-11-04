@@ -255,7 +255,7 @@ export default function App() {
         />
       )}
       {profileOpen && <ProfileDialog onClose={() => setProfileOpen(false)} />}
-      <SyncBanner />
+      <SyncBanner sticky={screen.kind === 'collection'} />
       {screen.kind === 'home' && (
         <HomePage
           onOpenSession={openFromHome}

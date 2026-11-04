@@ -27,3 +27,12 @@
   color: var(--text2);
   margin-right: auto;
 }
+
+/* Collection only: pinned to the top of the screen while it scrolls. It keeps
+   its place in the page's flow, so nothing around it moves. */
+.sticky {
+  position: sticky;
+  top: calc(env(safe-area-inset-top) + 8px);
+  z-index: 10;
+  box-shadow: var(--shadow-md);
+}
