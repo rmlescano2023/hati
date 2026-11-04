@@ -28,7 +28,19 @@ export function ModalDialog({ labelledBy, onCancel, children }: Props) {
     const dialog = ref.current;
     // Guarded because StrictMode runs this twice, and `showModal` throws on a
     // dialog that is already open.
-    if (dialog && !dialog.open) dialog.showModal();
+    if (!dialog || dialog.open) return;
+    dialog.showModal();
+    // `showModal` focuses the first focusable element, which in a radio group
+    // is its first radio even when another one is chosen. Tab would land on
+    // the chosen one, so the dialog starts there too.
+    const first = document.activeElement;
+    if (first instanceof HTMLInputElement && first.type === 'radio' && !first.checked) {
+      first.form
+        ?.querySelector<HTMLInputElement>(
+          `input[type="radio"][name="${CSS.escape(first.name)}"]:checked`,
+        )
+        ?.focus();
+    }
   }, []);
 
   useEffect(() => {
