@@ -185,9 +185,17 @@ export default function App() {
     />
   );
 
+  // Whether a load has ever landed. Set while rendering rather than in an
+  // effect, so the render that follows the first load already knows.
+  const [hasLoaded, setHasLoaded] = useState(false);
+  if (!hasLoaded && sync.status !== 'loading') setHasLoaded(true);
+
   // Nothing can be shown until the first load lands; an empty app would read
-  // as lost data rather than as data still on its way.
-  if (sync.status === 'loading') {
+  // as lost data rather than as data still on its way. A later reload on
+  // Collection, from "Try again" after a failed payment, keeps the page up, so
+  // its open cards and the amount typed into a refused form survive and can be
+  // saved again once the server's copy shows the payment wasn't recorded.
+  if (sync.status === 'loading' && !(hasLoaded && screen.kind === 'collection')) {
     return (
       <PageShell header={<Header />}>
         <div className={styles.loading} role="status">
