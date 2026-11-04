@@ -53,12 +53,29 @@ export function LineRow({ sessionId, line, failed, onFailed, onPaid }: Props) {
   const input = useRef<HTMLInputElement>(null);
   const messageId = useId();
 
+  // Which payments the line has, so a change to them can be noticed. Sorted,
+  // because a reload re-stamps times with the server's and can reorder them.
+  const paymentsKey = line.payments
+    .map((p) => p.id)
+    .sort()
+    .join(' ');
+
   // A failure reported after the form closed reopens it with what was typed.
+  // The payments it was refused against are noted at the same time.
   const [seenFailed, setSeenFailed] = useState(failed);
+  const [failedAgainst, setFailedAgainst] = useState(paymentsKey);
   if (failed !== seenFailed) {
     setSeenFailed(failed);
+    setFailedAgainst(paymentsKey);
     if (failed) setText(failed.amountText);
   }
+
+  // Once the line's payments change, by a payment, Mark all or an undo, the
+  // refusal no longer describes it, so its message and amount are dropped
+  // rather than coming back with the form.
+  useEffect(() => {
+    if (failed && failedAgainst !== paymentsKey) onFailed(null);
+  }, [failed, failedAgainst, onFailed, paymentsKey]);
 
   // A line paid in full, from here or another device, has nothing left to
   // record, so its form closes and a refusal shows as the line's state.
@@ -73,6 +90,8 @@ export function LineRow({ sessionId, line, failed, onFailed, onPaid }: Props) {
 
   const openForm = () => {
     submitted.current = false;
+    // A fresh start: no message or amount from an earlier refusal.
+    if (failed) onFailed(null);
     setText((line.remainingCents / 100).toFixed(2));
     setOpen(true);
   };
