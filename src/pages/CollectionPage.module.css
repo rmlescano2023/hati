@@ -14,6 +14,13 @@
   color: var(--text2);
 }
 
+/* "Add your name" starts its line, so its padding and border are dropped on
+   the left to line its text up with "You: Renmar · Edit" and the cards. */
+.you > button:first-child {
+  padding-left: 0;
+  border-left-width: 0;
+}
+
 .you strong {
   font-weight: 600;
   color: var(--text);
