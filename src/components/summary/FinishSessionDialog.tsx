@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '../shared/Button';
 import { ModalDialog } from '../shared/ModalDialog';
 import { MePicker, offersRemember } from '../collection/MePicker';
@@ -30,10 +30,21 @@ export function FinishSessionDialog({ members, onCancel, onConfirm }: Props) {
   const [value, setValue] = useState<string | null>(null);
   const [remember, setRemember] = useState(true);
   const picking = pickerOpen || match === null;
+  const form = useRef<HTMLFormElement>(null);
+
+  // "Change" disappears as the picker opens, which would drop keyboard focus
+  // onto the page, so it moves to the chosen radio, or the first one.
+  useEffect(() => {
+    const el = form.current;
+    if (!pickerOpen || !el || el.contains(document.activeElement)) return;
+    const radios = el.querySelectorAll<HTMLInputElement>('input[type="radio"]');
+    ([...radios].find((r) => r.checked) ?? radios[0])?.focus();
+  }, [pickerOpen]);
 
   return (
     <ModalDialog labelledBy="finish-title" onCancel={onCancel}>
       <form
+        ref={form}
         className={confirmStyles.body}
         onSubmit={(e) => {
           e.preventDefault();
