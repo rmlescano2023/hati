@@ -53,6 +53,7 @@ function Chevron({ open }: { open: boolean }) {
 /** The part of the summary after the dates, which depends on the section. */
 function summaryDetail(card: Card): string[] {
   const { owedToYou, youOwe } = card;
+  if (card.bucket === 'needsSetup') return [];
   if (card.bucket === 'outstanding') {
     return [
       `${card.settledLineCount} of ${card.lineCount} settled`,
@@ -78,28 +79,35 @@ function summaryDetail(card: Card): string[] {
 }
 
 /**
- * One finished session on Collection. A Needs setup card asks who the user is
- * and nothing else; the others summarise what is left or what was settled, and
- * expand to the lines themselves. There is deliberately no delete here
- * (AC-13.5): deleting a session belongs to History.
+ * One finished session on Collection. A Needs setup card expands to the
+ * question of who the user is and nothing else; the others summarise what is
+ * left or what was settled, and expand to the lines themselves. Every card
+ * starts collapsed, so a few unplaced sessions don't push the rest of the page
+ * out of sight on a phone. A settled card with no lines has nothing to expand,
+ * so it has no toggle. There is deliberately no delete here (AC-13.5):
+ * deleting a session belongs to History.
  */
 export function CollectionCard({ card, expanded, onToggle, failed, onFailed, onPaid }: Props) {
   const { session } = card;
   const title = sessionDisplayTitle(session);
   const finished = `Finished ${formatLocalDate(session.closedAt ?? session.createdAt)}`;
   const bodyId = useId();
+  const setup = card.bucket === 'needsSetup';
+  const expandable = setup || card.lineCount > 0;
 
-  if (card.bucket === 'needsSetup') {
-    return (
-      <article id={`collection-${session.id}`} className={styles.card}>
-        <div className={styles.titles}>
-          <h3 className={styles.title}>{title}</h3>
-          <span className={styles.meta}>{finished}</span>
-        </div>
-        <NeedsSetup card={card} />
-      </article>
-    );
-  }
+  const summary = (
+    <span className={styles.titles}>
+      <span className={styles.title}>{title}</span>
+      <span className={styles.meta}>{finished}</span>
+      {summaryDetail(card)
+        .filter((part) => part !== '')
+        .map((part) => (
+          <span key={part} className={styles.detail}>
+            {part}
+          </span>
+        ))}
+    </span>
+  );
 
   const groups: { heading: string; lines: CollectionLine[] }[] = [
     { heading: 'Owed to you', lines: card.owedToYou },
@@ -109,31 +117,31 @@ export function CollectionCard({ card, expanded, onToggle, failed, onFailed, onP
   return (
     <article id={`collection-${session.id}`} className={styles.card}>
       <h3 className={styles.headerHeading}>
-        <button
-          type="button"
-          className={styles.header}
-          aria-expanded={expanded}
-          aria-controls={bodyId}
-          onClick={onToggle}
-        >
-          <span className={styles.titles}>
-            <span className={styles.title}>{title}</span>
-            <span className={styles.meta}>{finished}</span>
-            {summaryDetail(card)
-              .filter((part) => part !== '')
-              .map((part) => (
-                <span key={part} className={styles.detail}>
-                  {part}
-                </span>
-              ))}
-          </span>
-          <Chevron open={expanded} />
-        </button>
+        {expandable ? (
+          <button
+            type="button"
+            className={styles.header}
+            aria-expanded={expanded}
+            aria-controls={bodyId}
+            onClick={onToggle}
+          >
+            {summary}
+            <Chevron open={expanded} />
+          </button>
+        ) : (
+          <span className={`${styles.header} ${styles.static}`}>{summary}</span>
+        )}
       </h3>
 
-      <YouAre card={card} title={title} />
+      {!setup && <YouAre card={card} title={title} />}
 
-      {expanded && (
+      {expandable && expanded && setup && (
+        <div id={bodyId} className={styles.body}>
+          <NeedsSetup card={card} />
+        </div>
+      )}
+
+      {expandable && expanded && !setup && (
         <div id={bodyId} className={styles.body}>
           {groups
             .filter((g) => g.lines.length > 0)
