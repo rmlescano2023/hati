@@ -87,6 +87,8 @@ export function LineRow({ sessionId, line, failed, onFailed, onPaid }: Props) {
   const parsed = parsePaymentAmount(text, line.remainingCents);
   // While the refused amount is unchanged, the server's refusal already says
   // why ("Only ₱50.00 is left on this line."), so the local check stays quiet.
+  // Once it is edited, the refusal no longer describes what is typed, so it
+  // goes and the local check speaks instead.
   const serverSaysSo = failed !== undefined && text === failed.amountText;
 
   const openForm = () => {
@@ -200,7 +202,7 @@ export function LineRow({ sessionId, line, failed, onFailed, onPaid }: Props) {
           <p id={messageId} className={styles.message}>
             {!parsed.ok && !serverSaysSo && parsed.message}
           </p>
-          {failed && (
+          {failed && serverSaysSo && (
             <p role="alert" className={styles.error}>
               {failed.message}
             </p>
