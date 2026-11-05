@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { clampActivityAt } from '../../src/lib/activity.js';
-import { ensureUser, getUserId, ownsSession, pool } from '../_shared.js';
+import { getUserId, ownsSession, pool } from '../_shared.js';
 import { parseActivityInput, parseSessionInput } from '../_validate.js';
 
 /**
@@ -33,39 +33,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const session = parseSessionInput(sessionId, raw);
     if (!session) return res.status(400).json({ error: 'Malformed session.' });
 
-    await ensureUser(userId);
-
-    const existing = await ownsSession(userId, sessionId);
-    // A session id belonging to someone else must not be creatable here —
-    // only the owner, or a first write for a session this user just created.
-    if (!existing) {
-      const { rows } = await pool.sql`select 1 from expense_sessions where id = ${sessionId}`;
-      if (rows.length > 0) return res.status(404).json({ error: 'No such session.' });
-    }
-
     const activityAt = clampActivityAt(session.activityAt, Date.now());
 
     const client = await pool.connect();
     try {
       await client.sql`begin`;
+      // An update and never an insert: a save from a tab that still shows a
+      // deleted session must not create it again, so only `POST /api/sessions`
+      // creates. Ownership is part of the `where`, so another account's id and
+      // a deleted one are both simply not found. The update also locks the
+      // row, so a concurrent delete either lands first and this is a 404, or
+      // waits for this save and removes the session after it.
+      //
       // The activity time only moves forward: `greatest` ignores a null, so an
       // older client's write never wipes it, and a late or retried save never
       // pulls a session down below a later open or edit (BR-7).
-      await client.sql`
-        insert into expense_sessions (id, user_id, status, created_at, closed_at, members, name, activity_at)
-        values (
-          ${sessionId}, ${userId}, ${session.status},
-          ${session.createdAt}, ${session.closedAt},
-          ${JSON.stringify(session.members)}::jsonb,
-          ${session.name},
-          ${activityAt}::timestamptz
-        )
-        on conflict (id) do update set
-          status      = excluded.status,
-          closed_at   = excluded.closed_at,
-          members     = excluded.members,
-          name        = excluded.name,
-          activity_at = greatest(expense_sessions.activity_at, excluded.activity_at)`;
+      const { rowCount } = await client.sql`
+        update expense_sessions set
+          status      = ${session.status},
+          closed_at   = ${session.closedAt},
+          members     = ${JSON.stringify(session.members)}::jsonb,
+          name        = ${session.name},
+          activity_at = greatest(activity_at, ${activityAt}::timestamptz)
+        where id = ${sessionId} and user_id = ${userId}`;
+      if (rowCount === 0) {
+        await client.sql`rollback`;
+        return res.status(404).json({ error: 'No such session.' });
+      }
 
       // Replacing this session's records is far smaller than rewriting the
       // account, and avoids diffing a list the client already rebuilt.
