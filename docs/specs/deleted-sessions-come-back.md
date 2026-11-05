@@ -1,8 +1,15 @@
 # Spec: deleted sessions come back
 
-Status: **draft, awaiting the owner's approval.** Branch `fix-deleted-sessions`, from `origin/main` at
+Status: **approved by the owner on 2026-11-06.** Branch `fix-deleted-sessions`, from `origin/main` at
 `8b6b2ab` (includes PR #107). This is a bug fix, so it came to the tech lead directly rather than through
 the business analyst. It ships on its own, separately from Collection.
+
+Decisions recorded at approval (section 12):
+
+1. **The note after "Try again": keep it.** Once "Try again" removes a session deleted elsewhere, the
+   existing note "Some recent changes weren't saved. Showing your last saved version." still appears, as
+   recommended. No change to `revertedAny` or its caller.
+2. **Approval:** the spec is approved as written.
 
 ## 1. Summary
 
