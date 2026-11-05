@@ -23,7 +23,14 @@ import {
 export type SyncStatus = 'loading' | 'ready' | 'error';
 
 /** How one payment write ended, for a message shown where it was made. */
-export type PaymentResult = { ok: true } | { ok: false; message: string };
+export type PaymentResult =
+  | { ok: true }
+  /** `payments` is the session's as they stand after the failure, reverted or refreshed. */
+  | { ok: false; message: string; payments: Payment[] };
+
+/** The payments a session has on screen, or none once it has gone. */
+const paymentsOf = (sessions: Session[], sessionId: string): Payment[] =>
+  sessions.find((s) => s.id === sessionId)?.payments ?? [];
 
 type Result = {
   sessions: Session[];
@@ -553,7 +560,7 @@ export function useServerSessions(): Result {
     ) => {
       const session = sessionsRef.current.find((s) => s.id === sessionId);
       if (!session) {
-        onSettled?.({ ok: false, message: 'This session is gone.' });
+        onSettled?.({ ok: false, message: 'This session is gone.', payments: [] });
         return;
       }
       // The whole request is still sent, since the server skips what it has,
@@ -629,6 +636,7 @@ export function useServerSessions(): Result {
               (timedOut
                 ? 'This is taking too long. Check your connection and try again.'
                 : 'Not recorded. Check your connection and try again.'),
+            payments: paymentsOf(sessionsRef.current, sessionId),
           }) === true;
         // A refusal shown on the form the user just saved isn't repeated. Any
         // other failure, or a refusal whose form is gone, goes to the banner,
@@ -702,7 +710,7 @@ export function useServerSessions(): Result {
             ? `Couldn't undo the payment (${status}), so it's still recorded.`
             : "Couldn't undo the payment, so it's still recorded.";
         fail({ kind: 'payment', sessionId, message });
-        onSettled?.({ ok: false, message });
+        onSettled?.({ ok: false, message, payments: paymentsOf(sessionsRef.current, sessionId) });
       })().finally(() => {
         settledDuringLoad.current.add(sessionId);
         countPaying(sessionId, -1);

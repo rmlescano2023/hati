@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CollectionCard } from '../components/collection/CollectionCard';
 import type { FailedPayment } from '../components/collection/LineRow';
 import { ProfileBanner } from '../components/profile/ProfileBanner';
@@ -9,6 +9,7 @@ import { useSessionsStore } from '../context/SessionsStoreContext';
 import {
   buildCollection,
   formatCents,
+  pairPaymentIds,
   type Bucket,
   type CollectionCard as Card,
 } from '../lib/collection';
@@ -41,6 +42,45 @@ export function CollectionPage({ openSessionId, onEditProfile }: Props) {
   // Keyed by session and line, so a failed form survives its card moving
   // between sections as the figures revert.
   const [failed, setFailed] = useState(new Map<string, FailedPayment>());
+
+  const cards = useMemo(
+    () =>
+      new Map(
+        [...collection.needsSetup, ...collection.outstanding, ...collection.settled].map((c) => [
+          c.session.id,
+          c,
+        ]),
+      ),
+    [collection],
+  );
+  /**
+   * Whether a failed payment still describes its line: the line is still
+   * there and has the payments it was refused against. A later payment, Mark
+   * all, an undo, or the refused payment turning out to have landed after
+   * all, each changes them, and the refusal then goes.
+   */
+  const isLive = useCallback(
+    (key: string, entry: FailedPayment) => {
+      const cut = key.indexOf('|');
+      const card = cards.get(key.slice(0, cut));
+      const line =
+        card && [...card.owedToYou, ...card.youOwe].find((l) => l.key === key.slice(cut + 1));
+      return (
+        line !== undefined &&
+        pairPaymentIds(line.payments, line.debtor, line.creditor) === entry.against
+      );
+    },
+    [cards],
+  );
+
+  // Dead ones are dropped from the page's state as well as from the screen,
+  // wherever their card is, open, collapsed or in a closed Settled section.
+  useEffect(() => {
+    setFailed((current) => {
+      const next = new Map([...current].filter(([key, entry]) => isLive(key, entry)));
+      return next.size === current.size ? current : next;
+    });
+  }, [isLive]);
   const [settledOpen, setSettledOpen] = useState(false);
   const [announcement, setAnnouncement] = useState('');
   const settledToggle = useRef<HTMLButtonElement>(null);
@@ -140,10 +180,11 @@ export function CollectionPage({ openSessionId, onEditProfile }: Props) {
           })
         }
         failed={(lineKey) => {
-          const entry = failed.get(`${id}|${lineKey}`);
-          // A payment that landed after all, shown by a reload, is no longer a
-          // failure, so its form doesn't reopen to be recorded again.
-          return entry && !card.session.payments.some((p) => p.id === entry.id) ? entry : undefined;
+          const key = `${id}|${lineKey}`;
+          const entry = failed.get(key);
+          // Checked here too, so a dead one never shows for the render
+          // before the effect above drops it.
+          return entry && isLive(key, entry) ? entry : undefined;
         }}
         onFailed={(lineKey, entry) =>
           setFailed((current) => {

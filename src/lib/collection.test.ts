@@ -8,6 +8,7 @@ import {
   mergeServerPayments,
   newPayments,
   openLinePayments,
+  pairPaymentIds,
   parsePaymentAmount,
   resolveMe,
   settlementPairs,
@@ -458,5 +459,22 @@ describe('newPayments', () => {
       { id: 'pay_c', debtor: 'Cara', creditor: 'Renmar', amountCents: 300 },
     ];
     expect(newPayments([stored], batch, at).map((p) => p.id)).toEqual(['pay_c']);
+  });
+});
+
+describe('pairPaymentIds', () => {
+  const a = pay('pay_a', 'Ana', 'Renmar', 100, '2026-11-04T00:00:00.000Z');
+  const b = pay('pay_b', 'Ana', 'Renmar', 100, '2026-11-03T00:00:00.000Z');
+  const other = pay('pay_c', 'Cara', 'Renmar', 100);
+
+  it('names one pair’s payments, whatever their order', () => {
+    expect(pairPaymentIds([a, other, b], 'Ana', 'Renmar')).toBe('pay_a pay_b');
+    expect(pairPaymentIds([b, a], 'Ana', 'Renmar')).toBe('pay_a pay_b');
+  });
+
+  it('changes when the pair gets a payment, and not for another pair', () => {
+    const before = pairPaymentIds([a], 'Ana', 'Renmar');
+    expect(pairPaymentIds([a, b], 'Ana', 'Renmar')).not.toBe(before);
+    expect(pairPaymentIds([a, other], 'Ana', 'Renmar')).toBe(before);
   });
 });

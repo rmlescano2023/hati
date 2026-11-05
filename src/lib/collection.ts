@@ -294,6 +294,19 @@ export function newPayments(
 }
 
 /**
+ * Which payments one pair has, as a string that changes exactly when they do.
+ * Sorted, because a reload re-stamps times with the server's and can reorder
+ * them. A refusal notes it, so the refusal is dropped once the line moves on.
+ */
+export function pairPaymentIds(payments: Payment[], debtor: string, creditor: string): string {
+  return payments
+    .filter((p) => p.debtor === debtor && p.creditor === creditor)
+    .map((p) => p.id)
+    .sort()
+    .join(' ');
+}
+
+/**
  * A session's payments after the server refused an add because the line had
  * less left than the device thought: the server's list, minus any undo still
  * in flight, plus any other add still in flight that the server hasn't got yet.

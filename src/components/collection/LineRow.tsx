@@ -4,6 +4,7 @@ import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { useSessionsStore } from '../../context/SessionsStoreContext';
 import {
   formatCents,
+  pairPaymentIds,
   parsePaymentAmount,
   type CollectionLine,
   type LineStatus,
@@ -16,8 +17,12 @@ import styles from './LineRow.module.css';
 /**
  * A payment that didn't record, kept by the page rather than the row so the
  * form survives its card moving between sections as the figures revert.
+ * `against` is the line's payments when it was refused (see `pairPaymentIds`):
+ * once they change, the refusal no longer describes the line and is dropped.
+ * It lives here rather than in the row because a row mounts afresh whenever
+ * its card moves section, and would then note the changed payments as new.
  */
-export type FailedPayment = { id: string; amountText: string; message: string };
+export type FailedPayment = { id: string; amountText: string; message: string; against: string };
 
 type Props = {
   sessionId: string;
@@ -62,29 +67,13 @@ export function LineRow({ sessionId, line, failed, onFailed, onPaid }: Props) {
     };
   }, []);
 
-  // Which payments the line has, so a change to them can be noticed. Sorted,
-  // because a reload re-stamps times with the server's and can reorder them.
-  const paymentsKey = line.payments
-    .map((p) => p.id)
-    .sort()
-    .join(' ');
-
   // A failure reported after the form closed reopens it with what was typed.
-  // The payments it was refused against are noted at the same time.
+  // The page drops it once the line's payments change (see `FailedPayment`).
   const [seenFailed, setSeenFailed] = useState(failed);
-  const [failedAgainst, setFailedAgainst] = useState(paymentsKey);
   if (failed !== seenFailed) {
     setSeenFailed(failed);
-    setFailedAgainst(paymentsKey);
     if (failed) setText(failed.amountText);
   }
-
-  // Once the line's payments change, by a payment, Mark all or an undo, the
-  // refusal no longer describes it, so its message and amount are dropped
-  // rather than coming back with the form.
-  useEffect(() => {
-    if (failed && failedAgainst !== paymentsKey) onFailed(null);
-  }, [failed, failedAgainst, onFailed, paymentsKey]);
 
   // A line paid in full, from here or another device, has nothing left to
   // record, so its form closes and a refusal shows as the line's state.
@@ -111,14 +100,19 @@ export function LineRow({ sessionId, line, failed, onFailed, onPaid }: Props) {
   };
 
   /** `onFailure` returns whether it showed the message, as `addPayments` asks. */
-  const record = (id: string, amountCents: number, onFailure?: (message: string) => boolean) => {
+  const record = (
+    id: string,
+    amountCents: number,
+    onFailure?: (message: string, payments: Payment[]) => boolean,
+  ) => {
     onPaid();
     addPayments(
       sessionId,
       [{ id, debtor: line.debtor, creditor: line.creditor, amountCents }],
       // Only the form has somewhere to show a refusal; Mark fully paid leaves
       // it to the banner.
-      onFailure && ((result) => (result.ok ? undefined : onFailure(result.message))),
+      onFailure &&
+        ((result) => (result.ok ? undefined : onFailure(result.message, result.payments))),
     );
   };
 
@@ -132,11 +126,16 @@ export function LineRow({ sessionId, line, failed, onFailed, onPaid }: Props) {
     const amountText = text;
     setOpen(false);
     onFailed(null);
-    record(id, parsed.cents, (message) => {
+    record(id, parsed.cents, (message, payments) => {
       submitted.current = false;
       // Kept by the page even when this row isn't on screen, so the amount
       // comes back with the line; the banner covers the message then.
-      onFailed({ id, amountText, message });
+      onFailed({
+        id,
+        amountText,
+        message,
+        against: pairPaymentIds(payments, line.debtor, line.creditor),
+      });
       return mounted.current;
     });
   };
