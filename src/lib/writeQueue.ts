@@ -223,6 +223,29 @@ export async function authorisedFetch(
   });
 }
 
+/** What a save says when its session has gone from the server (404). */
+export const DELETED_ELSEWHERE = 'This session was deleted on another device.';
+
+/** The banner message for a save the server refused with `status`. */
+export function saveFailedMessage(status: number): string {
+  return status === 404 ? DELETED_ELSEWHERE : `Could not save your changes (${status}).`;
+}
+
+/**
+ * Sends a save only once the session's row can exist. A save never creates a
+ * session, so it waits for a create still in flight, and `send` is told to
+ * create it first when that create failed. `createFailed` is read after the
+ * wait, so a create that fails while the save waits is retried as well.
+ */
+export async function saveOnceCreated(
+  created: Promise<unknown> | undefined,
+  createFailed: () => boolean,
+  send: (createFirst: boolean) => Promise<void>,
+): Promise<void> {
+  await created;
+  await send(createFailed());
+}
+
 export type FailureKind = 'save' | 'delete' | 'load' | 'seed';
 
 /**

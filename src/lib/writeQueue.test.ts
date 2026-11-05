@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Session } from '../types';
 import {
+  DELETED_ELSEWHERE,
   TimeoutError,
   WRITE_TIMEOUT_MS,
   addFailure,
@@ -13,6 +14,8 @@ import {
   resolveFailure,
   revertedAny,
   sameSessionContent,
+  saveFailedMessage,
+  saveOnceCreated,
   withDeadline,
   type Failure,
 } from './writeQueue';
@@ -701,5 +704,63 @@ describe('revertedAny and sameSessionContent', () => {
     if (item.mode === 'equal') item.totalPrice = 120;
     expect(sameSessionContent(base, priced)).toBe(false);
     expect(sameSessionContent(base, { ...base, records: base.records.slice(1) })).toBe(false);
+  });
+});
+
+describe('saveOnceCreated', () => {
+  it('sends at once, without a create, when none is in flight', async () => {
+    const send = vi.fn(async () => {});
+    await saveOnceCreated(undefined, () => false, send);
+    expect(send).toHaveBeenCalledWith(false);
+  });
+
+  it('holds the save until the create in flight settles', async () => {
+    const create = deferred();
+    const send = vi.fn(async () => {});
+    const save = saveOnceCreated(create.promise, () => false, send);
+    await flush();
+    expect(send).not.toHaveBeenCalled();
+
+    create.resolve();
+    await save;
+    expect(send).toHaveBeenCalledWith(false);
+  });
+
+  it('sends the create again when the awaited create failed', async () => {
+    // The hook's create never rejects; it records the failure instead, so the
+    // flag only turns true while the save is waiting.
+    const create = deferred();
+    let failed = false;
+    const send = vi.fn(async () => {});
+    const save = saveOnceCreated(create.promise, () => failed, send);
+
+    failed = true;
+    create.resolve();
+    await save;
+    expect(send).toHaveBeenCalledWith(true);
+  });
+
+  it('passes on a failed send, so the save reports it', async () => {
+    const err = new Error('Could not save your changes (500).');
+    await expect(
+      saveOnceCreated(
+        undefined,
+        () => false,
+        async () => {
+          throw err;
+        },
+      ),
+    ).rejects.toBe(err);
+  });
+});
+
+describe('saveFailedMessage', () => {
+  it('says a 404 session was deleted on another device', () => {
+    expect(saveFailedMessage(404)).toBe(DELETED_ELSEWHERE);
+    expect(DELETED_ELSEWHERE).toBe('This session was deleted on another device.');
+  });
+
+  it('gives any other status as a plain save failure', () => {
+    expect(saveFailedMessage(500)).toBe('Could not save your changes (500).');
   });
 });
