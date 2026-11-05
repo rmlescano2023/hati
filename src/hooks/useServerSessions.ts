@@ -15,6 +15,8 @@ import {
   resolveFailure,
   revertedAny,
   sameSessionContent,
+  saveFailedMessage,
+  saveOnceCreated,
   withDeadline,
   type Failure,
 } from '../lib/writeQueue';
@@ -171,6 +173,12 @@ export function useServerSessions(): Result {
   const creating = useRef(new Map<string, Promise<unknown>>());
 
   /**
+   * Sessions whose create failed. A save never creates a session, so the next
+   * save of one of these sends the create again first.
+   */
+  const uncreated = useRef(new Set<string>());
+
+  /**
    * Deletes still in flight, by session id. A load that lands before the
    * server has applied one would otherwise show the deleted session again.
    */
@@ -266,18 +274,39 @@ export function useServerSessions(): Result {
     async (session: Session) => {
       confirmations.sending(session.id);
       try {
-        await withDeadline(WRITE_TIMEOUT_MS, async (signal) => {
-          const res = await authedFetch(
-            `${ENDPOINT}/${encodeURIComponent(session.id)}`,
-            {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(session),
-            },
-            signal,
-          );
-          if (!res.ok) throw new Error(`Could not save your changes (${res.status}).`);
-        });
+        // The create has its own deadline, so only this save's own requests are timed.
+        await saveOnceCreated(
+          creating.current.get(session.id),
+          () => uncreated.current.has(session.id),
+          (createFirst) =>
+            withDeadline(WRITE_TIMEOUT_MS, async (signal) => {
+              if (createFirst) {
+                // Safe to repeat: a create that did land after all makes this a no-op.
+                const created = await authedFetch(
+                  ENDPOINT,
+                  {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: session.id, name: session.name }),
+                  },
+                  signal,
+                );
+                if (!created.ok) throw new Error(saveFailedMessage(created.status));
+                // The row exists now, even if the save below fails.
+                uncreated.current.delete(session.id);
+              }
+              const res = await authedFetch(
+                `${ENDPOINT}/${encodeURIComponent(session.id)}`,
+                {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(session),
+                },
+                signal,
+              );
+              if (!res.ok) throw new Error(saveFailedMessage(res.status));
+            }),
+        );
         setFailures((f) => resolveFailure(f, 'save', session.id));
         confirmations.saved(session.id);
       } catch (err) {
@@ -363,8 +392,9 @@ export function useServerSessions(): Result {
             if (!res.ok) throw new Error(`Could not create the session (${res.status}).`);
           });
         } catch (err) {
-          // Filed as a save, because a later save of this session creates the
-          // row too and so resolves it.
+          // Filed as a save, because the next save of this session sends the
+          // create again before saving, and its success resolves this failure.
+          uncreated.current.add(session.id);
           fail({
             kind: 'save',
             sessionId: session.id,
