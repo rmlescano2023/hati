@@ -47,6 +47,11 @@ already safe. Sessions aren't kept in browser storage, so a reload replays nothi
   session was deleted still leaves an empty draft behind. `POST` keeps `on conflict do nothing` and has no
   way to tell this case apart without a tombstone, which the owner declined. This needs a create slower
   than 30 seconds, followed by a delete within that time.
+  - **A second way to the same gap.** Device B's create takes over 30 seconds but lands, so B counts it as
+    failed and puts the id in `uncreated`. Device A then deletes the session. B edits it, so B's save sends
+    the `POST` again, which inserts, and then the `PUT`. The session comes back with B's full content.
+  - It is the same class as the first: a create can't tell a session never made from one deleted since, and
+    telling them apart needs the tombstone the owner declined. Accepted on the same terms.
 
 ## 2. Layers touched
 
