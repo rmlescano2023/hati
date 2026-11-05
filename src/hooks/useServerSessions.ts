@@ -357,6 +357,9 @@ export function useServerSessions(): Result {
         });
         setFailures((f) => resolveFailure(f, 'save', session.id));
         settledDuringLoad.current.add(session.id);
+        // A save that lands carries every earlier edit, so an earlier failure
+        // on this session has nothing left to roll back.
+        revertCandidates.current.delete(session.id);
         confirmations.saved(session.id);
       } catch (err) {
         const timedOut = err instanceof TimeoutError;
