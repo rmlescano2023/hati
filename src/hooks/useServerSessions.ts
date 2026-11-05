@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '@clerk/clerk-react';
 import type { NewPayment, Payment, Session } from '../types';
 import { keepOpenedActivity } from '../lib/activity';
+import { sessionDisplayTitle } from '../lib/sessionLabel';
 import { mergeServerPayments, newPayments } from '../lib/collection';
 import {
   TimeoutError,
@@ -28,6 +29,15 @@ export type PaymentResult =
   | { ok: true }
   /** `payments` is the session's as they stand after the failure, reverted or refreshed. */
   | { ok: false; message: string; payments: Payment[] };
+
+/**
+ * What a refused request was, for a banner read away from the line: the pair
+ * for one payment, or just the session for Mark all.
+ */
+const refusedWhat = (payments: NewPayment[], title: string): string =>
+  payments.length === 1
+    ? `Payment from ${payments[0].debtor} to ${payments[0].creditor} in “${title}”`
+    : `Payments in “${title}”`;
 
 /** The payments a session has on screen, or none once it has gone. */
 const paymentsOf = (sessions: Session[], sessionId: string): Payment[] =>
@@ -638,7 +648,8 @@ export function useServerSessions(): Result {
           );
         }
         // A session deleted meanwhile took its payments with it: nothing to report.
-        if (!sessionsRef.current.some((s) => s.id === sessionId)) return;
+        const current = sessionsRef.current.find((s) => s.id === sessionId);
+        if (!current) return;
 
         const refusal = status === 409 && typeof body?.error === 'string' ? body.error : null;
         const shownByCaller =
@@ -661,7 +672,7 @@ export function useServerSessions(): Result {
             message: timedOut
               ? PAYMENT_TIMEOUT
               : refusal !== null
-                ? `Payment not recorded. ${refusal}`
+                ? `${refusedWhat(payments, sessionDisplayTitle(current))} not recorded. ${refusal}`
                 : status !== null
                   ? `Couldn't record the payment (${status}), so it was taken off. Try recording it again.`
                   : messageOf(thrown, "Couldn't record the payment."),
