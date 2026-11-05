@@ -422,8 +422,9 @@ export function useServerSessions(): Result {
       const remove = (async () => {
         try {
           await creating.current.get(sessionId);
-          // A save that lands after the delete would insert the session
-          // again, so the delete waits for the session's saves as well.
+          // So a save can't land after the delete, where it would be refused as
+          // deleted elsewhere, or re-create a session whose create failed, the
+          // delete waits for the session's saves as well.
           await queue.settled(sessionId);
           // Only the request itself is timed. The waits above are other
           // writes' attempts, each with its own deadline.
@@ -507,8 +508,9 @@ export function useServerSessions(): Result {
       const seed = (async () => {
         try {
           for (const old of prev) {
-            // As with a single delete, a save landing afterwards would bring
-            // the old session back.
+            // As with a single delete, a save landing afterwards would be
+            // refused as deleted elsewhere, or re-create a session whose
+            // create failed.
             await queue.settled(old.id);
             await authedFetch(`${ENDPOINT}/${encodeURIComponent(old.id)}`, {
               method: 'DELETE',
