@@ -12,6 +12,7 @@ import {
   createSaveConfirmations,
   createSaveQueue,
   failedSessionIds,
+  keepLocalPayments,
   mergeLoaded,
   resolveFailure,
   revertedAny,
@@ -279,16 +280,25 @@ export function useServerSessions(): Result {
         // A load never overrides a write the server hasn't confirmed, so
         // "Try again" during a save, create or delete doesn't undo it on screen.
         const before = sessionsRef.current;
+        // A session whose save had failed takes the server's copy even when a
+        // payment settled on it during this load, so its rollback is applied
+        // and reported; only its payments come from the screen.
+        const rollingBack = (id: string) =>
+          settledDuringLoad.current.has(id) && revertCandidates.current.has(id);
         const after = keepOpenedActivity(
-          mergeLoaded(
-            Array.isArray(body) ? body : [],
+          keepLocalPayments(
+            mergeLoaded(
+              Array.isArray(body) ? body : [],
+              before,
+              (id) =>
+                queue.isBusy(id) ||
+                creating.current.has(id) ||
+                paying.current.has(id) ||
+                (settledDuringLoad.current.has(id) && !rollingBack(id)),
+              (id) => deleting.current.has(id),
+            ),
             before,
-            (id) =>
-              queue.isBusy(id) ||
-              creating.current.has(id) ||
-              paying.current.has(id) ||
-              settledDuringLoad.current.has(id),
-            (id) => deleting.current.has(id),
+            rollingBack,
           ),
           before,
           (id) => opening.current.has(id),

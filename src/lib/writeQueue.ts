@@ -169,6 +169,25 @@ export function mergeLoaded<S extends { id: string }>(
 }
 
 /**
+ * The loaded list with the on-screen payments of the sessions `keep` names,
+ * and the server's copy of everything else about them. A session whose save
+ * failed must take the server's copy, so its rollback is shown and reported,
+ * while a payment or undo that settled during that same load must not be
+ * hidden or brought back by it.
+ */
+export function keepLocalPayments<S extends { id: string; payments: unknown }>(
+  loaded: S[],
+  local: S[],
+  keep: (id: string) => boolean,
+): S[] {
+  const localById = new Map(local.map((s) => [s.id, s]));
+  return loaded.map((s) => {
+    const mine = keep(s.id) ? localById.get(s.id) : undefined;
+    return mine ? { ...s, payments: mine.payments } : s;
+  });
+}
+
+/**
  * How long one save, create, delete or load may take, token fetch included.
  * Local saves take 5 to 10 seconds, so this leaves room without leaving the
  * user to wait minutes on a request that is never coming back.

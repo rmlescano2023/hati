@@ -9,6 +9,7 @@ import {
   createSaveConfirmations,
   createSaveQueue,
   failedSessionIds,
+  keepLocalPayments,
   mergeLoaded,
   resolveFailure,
   revertedAny,
@@ -727,5 +728,28 @@ describe('revertedAny and sameSessionContent', () => {
       ],
     });
     expect(sameSessionContent(base, paid)).toBe(true);
+  });
+});
+
+describe('keepLocalPayments', () => {
+  type S = { id: string; me: string | null; payments: string[] };
+
+  it('takes the server copy but the on-screen payments for the sessions named', () => {
+    const server: S[] = [
+      { id: 'A', me: null, payments: [] },
+      { id: 'B', me: null, payments: [] },
+    ];
+    const local: S[] = [
+      { id: 'A', me: 'Ana', payments: ['pay_1'] },
+      { id: 'B', me: 'Ben', payments: ['pay_2'] },
+    ];
+    const result = keepLocalPayments(server, local, (id) => id === 'A');
+    expect(result[0]).toEqual({ id: 'A', me: null, payments: ['pay_1'] });
+    expect(result[1]).toBe(server[1]);
+  });
+
+  it('leaves a session with no on-screen copy as the server sent it', () => {
+    const server: S[] = [{ id: 'A', me: null, payments: ['pay_1'] }];
+    expect(keepLocalPayments(server, [], () => true)[0]).toBe(server[0]);
   });
 });
