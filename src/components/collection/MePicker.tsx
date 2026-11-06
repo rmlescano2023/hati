@@ -1,6 +1,6 @@
 import { useId } from 'react';
 import { useProfile } from '../../context/ProfileContext';
-import { NOT_IN_SESSION } from '../../lib/collection';
+import { NOT_IN_SESSION, rememberOffer } from '../../lib/collection';
 import { sortNames } from '../../lib/format';
 import styles from './MePicker.module.css';
 
@@ -15,24 +15,6 @@ type Props = {
 };
 
 /**
- * Whether to offer "Remember as my name": only while no profile name is set
- * and a member is chosen (AC-4.4, AC-4.5). Callers use it to decide whether
- * the checkbox's value counts, since it is only meaningful while shown.
- */
-// eslint-disable-next-line react-refresh/only-export-components
-export function offersRemember(
-  profile: { status: string; displayName: string | null },
-  value: string | null,
-): boolean {
-  return (
-    profile.status === 'ready' &&
-    profile.displayName === null &&
-    value !== null &&
-    value !== NOT_IN_SESSION
-  );
-}
-
-/**
  * Which member the user is in a session, or that they aren't in it at all. Used
  * by the Finish dialog, a Needs setup card and "Change"; the choice is optional
  * wherever it appears, so nothing is preselected unless the caller says so.
@@ -40,6 +22,7 @@ export function offersRemember(
 export function MePicker({ legend, members, value, onChange, remember, onRememberChange }: Props) {
   const profile = useProfile();
   const name = useId();
+  const offer = rememberOffer(profile, value);
   const options = [
     ...sortNames(members).map((m) => ({ value: m, label: m })),
     { value: NOT_IN_SESSION, label: "I'm not in this session" },
@@ -62,14 +45,18 @@ export function MePicker({ legend, members, value, onChange, remember, onRemembe
           </label>
         ))}
       </fieldset>
-      {offersRemember(profile, value) && (
+      {offer !== null && (
         <label className={styles.option}>
           <input
             type="checkbox"
             checked={remember}
             onChange={(e) => onRememberChange(e.target.checked)}
           />
-          <span className={styles.optionLabel}>Remember as my name</span>
+          <span className={styles.optionLabel}>
+            {offer === 'name'
+              ? 'Remember as my name'
+              : `Remember “${value}” as another name for me`}
+          </span>
         </label>
       )}
     </div>

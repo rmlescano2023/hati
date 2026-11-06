@@ -46,8 +46,7 @@ export type StoredProfile = { displayName: string | null; nicknames: string[] };
 
 /** A profile write: set either field or both, or add one other name (BR-N11). */
 export type ProfileUpdate =
-  | { displayName?: string | null; nicknames?: string[] }
-  | { addNickname: string };
+  { displayName?: string | null; nicknames?: string[] } | { addNickname: string };
 
 /**
  * What a write leaves stored, or null when an add would go past the limit.

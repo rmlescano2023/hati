@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Button } from '../shared/Button';
 import { useAppData } from '../../context/AppDataContext';
 import { useProfile } from '../../context/ProfileContext';
-import { NOT_IN_SESSION } from '../../lib/collection';
 import { FinishSessionDialog } from './FinishSessionDialog';
 import styles from './CloseSessionButton.module.css';
 
@@ -36,8 +35,8 @@ export function CloseSessionButton({ onClosed }: { onClosed: () => void }) {
             setConfirming(false);
             closeSession(me);
             // Not awaited: the session is finished either way, and a failed
-            // save shows on Collection's "You:" line (A2).
-            if (remember && me !== null && me !== NOT_IN_SESSION) void profile.save(me);
+            // save shows in Collection's alert strip (A2).
+            if (remember !== null && me !== null) void profile.remember(me, remember);
             onClosed();
           }}
         />

@@ -4,10 +4,18 @@
   flex-wrap: wrap;
   gap: 8px 12px;
   padding: 10px 14px;
-  margin-bottom: 1rem;
   border: 1px solid rgba(229, 103, 90, 0.4);
   border-radius: var(--radius-sm);
   background: var(--danger-bg);
+}
+
+/* Holds one strip or two, so a sync failure and a name that couldn't be saved
+   stack rather than overlap. */
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 1rem;
 }
 
 .message {
@@ -34,5 +42,8 @@
   position: sticky;
   top: calc(env(safe-area-inset-top) + 8px);
   z-index: 10;
+}
+
+.sticky > .banner {
   box-shadow: var(--shadow-md);
 }

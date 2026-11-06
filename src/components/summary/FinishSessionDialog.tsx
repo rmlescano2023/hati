@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '../shared/Button';
 import { ModalDialog } from '../shared/ModalDialog';
-import { MePicker, offersRemember } from '../collection/MePicker';
+import { MePicker } from '../collection/MePicker';
 import { useProfile } from '../../context/ProfileContext';
-import { matchMember } from '../../lib/collection';
+import { matchMember, rememberOffer, type RememberOffer } from '../../lib/collection';
 import confirmStyles from '../shared/ConfirmDialog.module.css';
 import styles from './FinishSessionDialog.module.css';
 
@@ -11,10 +11,10 @@ type Props = {
   members: string[];
   onCancel: () => void;
   /**
-   * `me` is the pick to store, or null for none; `remember` is whether to save
-   * it as the profile name, already false wherever the checkbox wasn't shown.
+   * `me` is the pick to store, or null for none; `remember` is the offer to act
+   * on, or null: wherever the checkbox wasn't shown or was unticked.
    */
-  onConfirm: (me: string | null, remember: boolean) => void;
+  onConfirm: (me: string | null, remember: RememberOffer | null) => void;
 };
 
 /**
@@ -25,7 +25,7 @@ type Props = {
  */
 export function FinishSessionDialog({ members, onCancel, onConfirm }: Props) {
   const profile = useProfile();
-  const match = profile.status === 'ready' ? matchMember(members, profile.displayName) : null;
+  const match = profile.status === 'ready' ? matchMember(members, profile) : null;
   const [pickerOpen, setPickerOpen] = useState(false);
   const [value, setValue] = useState<string | null>(null);
   const [remember, setRemember] = useState(true);
@@ -48,10 +48,10 @@ export function FinishSessionDialog({ members, onCancel, onConfirm }: Props) {
         className={confirmStyles.body}
         onSubmit={(e) => {
           e.preventDefault();
-          // A shown match stores no pick, so the session follows the profile
-          // name from then on (A1). An open picker stores what it holds.
-          if (picking) onConfirm(value, remember && offersRemember(profile, value));
-          else onConfirm(null, false);
+          // A shown match stores no pick, so the session follows the user's
+          // names from then on (A1). An open picker stores what it holds.
+          if (picking) onConfirm(value, remember ? rememberOffer(profile, value) : null);
+          else onConfirm(null, null);
         }}
       >
         <h2 id="finish-title" className={confirmStyles.title}>

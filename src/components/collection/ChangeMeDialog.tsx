@@ -3,9 +3,9 @@ import { Button } from '../shared/Button';
 import { ModalDialog } from '../shared/ModalDialog';
 import { useProfile } from '../../context/ProfileContext';
 import { useSessionsStore } from '../../context/SessionsStoreContext';
-import { NOT_IN_SESSION, type Me } from '../../lib/collection';
+import { NOT_IN_SESSION, rememberOffer, type Me } from '../../lib/collection';
 import type { Session } from '../../types';
-import { MePicker, offersRemember } from './MePicker';
+import { MePicker } from './MePicker';
 import confirmStyles from '../shared/ConfirmDialog.module.css';
 import styles from './ChangeMeDialog.module.css';
 
@@ -36,7 +36,8 @@ export function ChangeMeDialog({ session, me, onClose }: Props) {
           e.preventDefault();
           if (value === null) return;
           setMe(session.id, value);
-          if (remember && offersRemember(profile, value)) void profile.save(value);
+          const offer = rememberOffer(profile, value);
+          if (remember && offer !== null) void profile.remember(value, offer);
           onClose();
         }}
       >

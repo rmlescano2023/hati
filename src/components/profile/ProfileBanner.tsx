@@ -29,7 +29,7 @@ export function ProfileBanner() {
         if (saving || normaliseProfileName(draft) === null) return;
         setSaving(true);
         setFailed(false);
-        const ok = await save(draft);
+        const ok = await save({ displayName: draft });
         // A success unmounts the banner, since the name is now set.
         setSaving(false);
         if (!ok) setFailed(true);
