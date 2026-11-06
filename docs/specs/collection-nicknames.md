@@ -1221,3 +1221,324 @@ There are no blocking questions. To confirm, or to overrule, at approval:
    for small text, as are "Outstanding" and "Settled". *Recommendation:* accept for now. Raising `.heading` to
    `--text2` (6.36:1) would fix all of them, but it changes Home and History too, so it's a separate change if
    you want it.
+
+### 13.7 Owner review, round 2 follow-up: items 9 to 11
+
+**Approved on 2026-11-06, from 13.6:**
+- Section 13 (`74f7ded`) is approved, and the keep-in-view scroll in R2-5 stays.
+- **13.6 point 1 is accepted:** a stored list longer than 3 stays readable, and adds are refused.
+- **13.6 point 2 is replaced by item 9:** a nickname-only match is confirmed, not placed silently.
+- **13.6 point 3 is replaced by item 11:** the headings are brightened now.
+
+Where 13.7 differs from 13.1 to 13.6, 13.7 wins. No schema or API change is needed.
+
+#### What it replaces
+
+| Earlier text | Now |
+|---|---|
+| AC-N1.2, AC-N3.1 and AC-N3.4 (a nickname match places the session automatically, with or without a profile name) | A nickname-only match goes to Needs setup with that member preselected (R2-9). |
+| AC-N3.5, and `collection.md` AC-4.2 ("Collecting as **X** · Change") | The line is gone. A profile match just finishes, and a nickname-only match preselects in the picker (R2-10). |
+| AC-N1.3 ("a pick of a known name is quiet"), AC-N1.9 and AC-R2-4.3 (the line follows the names) | Every stored pick shows its "You are X · Change" line. Only an automatic profile-name match is quiet (R2-9, BR-N5 as re-checked below). |
+| AC-R2-4.1 | Amended: "a card placed automatically by the profile name" is quiet; a stored pick is not. |
+| AC-N4.2's "every other session … leaves Needs setup on its own", and E8 | After the save, those sessions stay in Needs setup, now with the member preselected. |
+| AC-N3.6 | Amended: removing a nickname takes the preselect off its Needs setup cards; confirmed sessions are stored picks, so they stay where they are. |
+| E1, E7, and the first three bullets of 13.5 (the ordering trap) | See "Risks" below: a nickname now never places a session without a tap. |
+| `HomePage.module.css` `.heading` colour `--text3`, and 13.6 point 3 | `--text2` (R2-11). |
+
+#### BR-N5 re-checked: when the "You are X · Change" line shows
+
+Once a nickname match is confirmed, it's a stored pick. Removing the name in Profile no longer moves it, so Change
+on the card is the only way to undo a wrong confirmation. That's the owner's own round 2 reason for keeping the
+line on one-off picks. So the rule becomes:
+
+| How "me" was resolved | Line | How a mistake is fixed |
+|---|---|---|
+| Automatic match on the profile name (no pick stored) | none (quiet) | rename in Profile, as decided in round 2 |
+| Any stored pick: a confirmed nickname, a one-off, or a member matching the profile name (for example after two profile hits) | "You are **X** · Change" | Change |
+| "I'm not in this session" | "You're not in this session · Change" | Change |
+
+Without this, a confirmed "Pao" card would have no line and no Change. A wrong confirmation could then never be
+undone anywhere in the app, and its payments would sit on the wrong lines. This is listed for confirmation in
+"Decisions" below.
+
+#### R2-9. A nickname-only match needs confirming
+
+**`src/lib/collection.ts`:**
+
+- **`matchMember`** keeps its rules (profile name first; nicknames only when the profile name matches no member;
+  one hit or none). It now says which kind of hit it found:
+
+  ```ts
+  /** One member matched by the user's names, and by which: only a profile-name hit places a session. */
+  export type Match = { member: string; via: 'profile' | 'nickname' };
+
+  export function matchMember(members: string[], names: KnownNames): Match | null
+  ```
+
+  - It returns `{ member, via: 'profile' }` on one profile hit.
+  - It returns `{ member, via: 'nickname' }` on no profile hit and one nickname hit.
+  - It returns null otherwise.
+  - Its doc comment adds: "A nickname hit is only a suggestion, confirmed by the user, because a friend can share
+    the nickname (owner, round 2)."
+- **`Me`:**
+
+  ```ts
+  export type Me =
+    | { kind: 'member'; name: string; picked: boolean }
+    /** `suggested`: the one member matched by a nickname alone, preselected for the user to confirm. */
+    | { kind: 'unknown'; suggested: string | null }
+    | { kind: 'notInSession' };
+  ```
+
+  `recognised` is removed. Its only reader was the card's `quiet`, which becomes `!picked` (below).
+- **`resolveMe`:**
+  - The order is unchanged: an explicit pick, then the match, then unknown.
+  - A profile match gives `{ kind: 'member', name, picked: false }`.
+  - A nickname match gives `{ kind: 'unknown', suggested: member }`.
+  - No match gives `{ kind: 'unknown', suggested: null }`.
+  - Its doc comment becomes: "BR-N4: an explicit pick, then a profile-name match, then unknown (Needs setup), with
+    a nickname match as the suggestion."
+- **New:**
+
+  ```ts
+  /** The question a Needs setup card or the Finish picker asks about a nickname match. */
+  export const nicknamePrompt = (member: string): string => `You go by “${member}” — is that you here?`;
+  ```
+
+  It names the member as it appears in the session, which is the radio being confirmed.
+- **Unchanged:**
+  - `buildCard` and `buildCollection`. A suggested card is `needsSetup`, so it has no lines and stays out of the
+    strip's totals.
+  - `isKnownName` and `rememberOffer`. A preselected nickname member is already known, so there's no checkbox.
+    Choosing another, unknown member shows the checkbox, ticked (N-A1).
+
+**`CollectionCard.tsx`:**
+
+- `const quiet = card.me.kind === 'member' && !card.me.picked;`. The comment becomes: "Only a card placed
+  automatically by the profile name says nothing about who the user is; every stored pick keeps its line, since
+  Change is the only way to undo one (BR-N5, round 2)."
+- `{!setup && !quiet && <YouAre … />}` is otherwise as in R2-4.
+- **`NeedsSetup`:**
+  - `const suggested = card.me.kind === 'unknown' ? card.me.suggested : null`.
+  - The choice state starts at `null`, meaning untouched, and the selection is `const selected = choice ?? suggested`.
+    A suggestion that arrives or goes while the card is open (a remember saving, a name removed) is then followed
+    until the user taps a radio.
+  - The legend is `suggested !== null ? nicknamePrompt(suggested) : 'Which one are you?'`.
+  - `MePicker` gets `value={selected}`.
+  - The primary button reads "Yes, that's me" while `selected !== null && selected === suggested`, and "Confirm"
+    otherwise. It's disabled while `selected === null`.
+  - On press, `setMe(card.session.id, selected)` plus the existing remember rule. The pick is stored, so the
+    session never asks again.
+
+**Acceptance criteria:**
+
+- **AC-R2-9.1.**
+  - Given the profile name is "Paolo", "Pao" is saved, and a finished session has Ana and Pao with no pick,
+  - Then its card is in Needs setup, not Outstanding or Settled,
+  - And it's not counted in the strip, which says "Not counting 1 session that needs setup",
+  - And, expanded, it asks "You go by “Pao” — is that you here?" with Pao preselected and the button "Yes, that's
+    me",
+  - And no Remember checkbox shows.
+- **AC-R2-9.2.**
+  - Given AC-R2-9.1,
+  - When I press "Yes, that's me",
+  - Then the session is placed as Pao (Outstanding or Settled), and `me` is stored as "Pao",
+  - And its card shows "You are **Pao** · Change",
+  - And it never returns to Needs setup, even if "Pao" is later removed.
+- **AC-R2-9.3.**
+  - Given AC-R2-9.1,
+  - When I select Ana, or "I'm not in this session",
+  - Then the button reads "Confirm",
+  - And for Ana, an unknown member, "Remember “Ana” as another name for me" shows, ticked,
+  - And Confirm stores that choice.
+- **AC-R2-9.4.**
+  - Given no profile name and "Pao" saved,
+  - Then a session with Pao behaves as AC-R2-9.1: it's suggested, never placed automatically.
+- **AC-R2-9.5.**
+  - Given the profile name matches no member and two members match nicknames (for example Pao and Red), or two
+    members match the profile name,
+  - Then the card is in Needs setup with nothing preselected and "Which one are you?" (AC-N3.3).
+- **AC-R2-9.6.**
+  - Given a session with Paolo and Pao,
+  - Then it's placed automatically as Paolo, with no line (Q1 unchanged).
+- **AC-R2-9.7.**
+  - Given Needs setup cards for sessions N2 and N3, both with a "Pao", and no "Pao" saved,
+  - When I confirm Pao on N2 with the box ticked and the save succeeds,
+  - Then N3 stays in Needs setup, now preselected on Pao with the prompt,
+  - And N2 shows "You are **Pao** · Change".
+- **AC-R2-9.8.**
+  - Given a suggested card,
+  - When "Pao" is removed in Profile,
+  - Then the card stays in Needs setup, with nothing preselected and "Which one are you?".
+  - Confirmed Pao sessions are unchanged.
+- **AC-R2-9.9.** Given an automatic profile-name match, the card has no line (AC-R2-4.1 as amended). Given any
+  stored pick, including one of the profile-name member, the card shows "You are **X** · Change".
+
+#### R2-10. The Finish dialog has no "Collecting as X · Change" line
+
+**`src/components/summary/FinishSessionDialog.tsx`:**
+
+- **State:**
+  - `match = profile.status === 'ready' ? matchMember(members, profile) : null`.
+  - `const [value, setValue] = useState<string | null>(null)`, where null means untouched.
+  - `const suggested = match?.via === 'nickname' ? match.member : null`.
+  - `const selected = value ?? suggested`.
+  - `const picking = value !== null || match?.via !== 'profile'`. A choice made stands even if a profile match
+    loads afterwards, as today.
+- **With `picking` false (a profile match):** no picker and no line. Just the title, the message and the actions.
+  Finish calls `onConfirm(null, null)`, so no pick is stored (A1).
+- **With `picking` true:** `MePicker` with `value={selected}`, and the legend
+  `suggested !== null ? nicknamePrompt(suggested) : 'Which one are you?'`.
+  - Finish calls `onConfirm(selected, remember ? rememberOffer(profile, selected) : null)`.
+  - With the nickname member left preselected, that stores it as the pick. This counts as the confirmation
+    (assumption kept).
+  - The Remember checkbox follows `rememberOffer`, as today.
+- **Delete:**
+  - `pickerOpen` and its `useEffect` (the focus move existed only because Change disappeared);
+  - the `useEffect` and `useRef` imports, if they're now unused;
+  - the "Collecting as" block and its `Button` import, if unused;
+  - `.collecting` and `.collecting strong` in `FinishSessionDialog.module.css`.
+- **Doc comment:** "…a profile-name match finishes without asking; otherwise the picker asks, preselecting a
+  nickname match, and the choice can be left for later."
+- `CloseSessionButton` is unchanged.
+
+**Acceptance criteria:**
+
+- **AC-R2-10.1.**
+  - Given the profile name matches exactly one member,
+  - When I press Finish Session,
+  - Then the dialog shows no "Collecting as" line and no picker,
+  - And finishing stores no pick, and the card lands placed and quiet.
+- **AC-R2-10.2.**
+  - Given no member matches the profile name or a nickname,
+  - Then the picker shows "Which one are you?" with nothing preselected, and Remember as today (AC-N4.4,
+    AC-N4.7).
+- **AC-R2-10.3.**
+  - Given the only match is through "Pao",
+  - Then the picker asks "You go by “Pao” — is that you here?" with Pao preselected and no checkbox,
+  - And Finish stores `me = 'Pao'`, so Collection opens on that card placed, showing "You are **Pao** · Change".
+  - Choosing another member or "I'm not in this session" stores that instead.
+- **AC-R2-10.4.**
+  - Given two nickname hits,
+  - Then nothing is preselected.
+
+#### R2-11. Brighter section headings
+
+- **Change:** in `src/pages/HomePage.module.css`, `.heading { color: var(--text2); }`, replacing `var(--text3)`.
+  - Size, weight, letter-spacing, uppercase and margins are unchanged.
+  - This is an existing token: `--text2` #9ba1ac on the page background `--bg` #14161a measures **6.98:1**, which
+    passes AA for small text. `--text3` measured 3.74:1. Nothing is added to `tokens.css`.
+- **Every place that uses the class.** All of these change, at every width, on desktop and phone:
+
+  | Screen | Heading | File |
+  |---|---|---|
+  | Home | "In Progress" | `src/pages/HomePage.tsx:73` |
+  | History | "Closed Sessions" | `src/pages/HistoryPage.tsx:45` |
+  | Collection | "Summary" (R2-8) | `src/pages/CollectionPage.tsx` |
+  | Collection | "Needs setup (N)" | `src/pages/CollectionPage.tsx:212` |
+  | Collection | "Outstanding (N)" | `src/pages/CollectionPage.tsx:219` |
+  | Collection | "Settled (N)", the heading around the toggle, which inherits the colour | `src/pages/CollectionPage.tsx`, with `styles.settledHeading` and `.settledToggle` |
+
+- **The Settled toggle's hover:** in `CollectionPage.module.css`, `.settledToggle:hover { color: var(--text2); }`
+  becomes `var(--text)`, so hover still visibly brightens it.
+- **Not changed:** these are different styles, not section headings on Home, History or Collection:
+  - the card-internal uppercase labels in `Card.module.css`, `BreakdownGroup`, `NetBalanceCards`, `OwedMatrix`
+    and others;
+  - `HistoryDetailPage.module.css` `.heading`, which is the session title;
+  - the global `.sec-label` in `src/styles/global.css`, which nothing uses. It's pre-existing dead code, noted
+    and left in place.
+- **Tour:** no `data-tour` attribute is on or around these headings except Home's `session-list` on the list below
+  "In Progress". It doesn't move, because only a colour changes.
+- **AC-R2-11.1.** At 375px and 1280px, each heading in the table renders in `--text2`, and measures at least
+  4.5:1 against the page background.
+- **AC-R2-11.2.** Nothing else about Home or History changes: size, spacing, position and the tour's highlights.
+
+#### Tests
+
+**Vitest, `src/lib/collection.test.ts`** (written first, watched failing):
+
+- **`matchMember`:** every existing expectation becomes a `Match`, for example
+  `{ member: 'Renmar', via: 'profile' }`. Add:
+  - A nickname-only hit is `via: 'nickname'`.
+  - With names(null, "Pao") the hit is `via: 'nickname'`.
+  - Two nickname hits are null.
+- **`resolveMe`:**
+  - A profile match is `{ kind: 'member', name, picked: false }`.
+  - A nickname match is `{ kind: 'unknown', suggested: 'Pao' }`.
+  - No match is `{ kind: 'unknown', suggested: null }`.
+  - A stored pick of "Pao" is `{ kind: 'member', name: 'Pao', picked: true }`.
+  - Remove every `recognised` expectation.
+- **`buildCollection`:**
+  - With names("Paolo", "Pao"), the [Ana, Pao] session is in `needsSetup` with `suggested: 'Pao'` and isn't in
+    the totals (AC-R2-9.1).
+  - With `me: 'Pao'` stored, it's outstanding, and it stays so when "Pao" is removed (AC-R2-9.2).
+  - [Paolo, Pao] stays placed as Paolo (AC-R2-9.6).
+  - Removing "Pao" turns `suggested` to null (AC-R2-9.8).
+  - The AC-N1.9 case ("turns a one-off pick into a recognised one") is deleted.
+- **`nicknamePrompt('Pao')`** gives "You go by “Pao” — is that you here?".
+- **`rememberOffer`:** unchanged; its known-member cases already cover the preselected nickname.
+- **Also unchanged:** `profileName.test.ts`, `apiValidation.test.ts` and `demoData.test.ts`. `steps.test.ts` and
+  `targets.test.ts` must pass.
+
+**Reviewer:**
+- `recognised` is gone everywhere.
+- `pickerOpen` and its effect are gone, with no orphaned imports.
+- `.collecting` is removed.
+- The only colour change is `.heading` and the toggle's hover.
+- No `data-tour` changes.
+
+**ui-ux-tester:** run at 375px and 1280px. These replace or extend the 13.3 rows.
+
+| # | Steps | ACs |
+|---|---|---|
+| T-N1 | **Amended:**<br>- N1 (Ana, Paolo) is placed with no line.<br>- N4 (Paolo, Pao) is placed as Paolo with no line.<br>- N5 with a Carlo pick shows "You are **Carlo** · Change".<br>- A not-in-session card shows its line. | R2-4.2, R2-9.6, R2-9.9 |
+| T-N2 | **Replaced:**<br>1. With no other names, N2 (Ana, Pao) and N3 (Ben, Pao) are in Needs setup with nothing preselected.<br>2. On N2, select Pao: the ticked "Remember “Pao” as another name for me" shows. Confirm.<br>3. N2 shows "You are **Pao** · Change".<br>4. N3 stays in Needs setup, now asking "You go by “Pao” — is that you here?" with Pao preselected, "Yes, that's me", and no checkbox.<br>5. Press "Yes, that's me": N3 is placed and shows its line.<br>6. On a fresh "UI test N7" (Ana, Pao), select Ana: the button reads "Confirm" and the checkbox offers Ana. | R2-9.1 to R2-9.3, R2-9.7, N4.1, N4.10 |
+| T-N3 | **Amended:**<br>- Remove "Pao" in Profile: N2 and N3 stay placed, with their lines. A still-unconfirmed Pao card loses its preselect.<br>- Adding or removing Carlo no longer changes N5's line. | R2-9.2, R2-9.8 |
+| T-N4 | **Replaced:**<br>- Finish a draft containing "Paolo": no "Collecting as" line and no picker. It lands placed and quiet.<br>- Finish one with Ana and Pao, "Pao" saved: the prompt with Pao preselected and no checkbox. Finish: the card is placed as Pao, with its line.<br>- Finish one with Ana and Zed: "Which one are you?" with nothing preselected; select Zed and the ticked box saves Zed.<br>- With the profile name cleared: "Remember as my name".<br>- Pao and Red both saved, in a draft with both: nothing preselected. | R2-10.1 to R2-10.4, N4.4, N4.7 |
+| T-N11 | **New, headings:**<br>- On Home, History and Collection, at 375px and 1280px, every heading in the R2-11 table is the lighter grey. Measure one in DevTools: at least 4.5:1.<br>- The Settled toggle still brightens on hover.<br>- Preview Tour: the Home steps highlight as before. | R2-11.1, R2-11.2 |
+
+#### Tasks
+
+Round 2 isn't built yet, so build 13.4 and 13.7 together, in this order:
+
+1. 13.4 steps 1 and 2 (tests, and the limit), with the 13.7 Vitest changes added to step 1.
+   → Verify: `npm test` fails on exactly the new cases before the code, and passes after.
+2. **R2-9 logic** in `collection.ts`: `Match`, `matchMember`, `Me` without `recognised`, `resolveMe` and
+   `nicknamePrompt`.
+   → Verify: `npm test` passes; `npx tsc -b` fails only at the callers.
+3. 13.4 step 3 (Profile: R2-1 and R2-2).
+4. **Cards:**
+   - 13.4 step 4 (R2-4, R2-6 and R2-7), with `quiet` as `!picked`;
+   - then `NeedsSetup`: `suggested`, `selected`, the legend and the button label.
+5. **Finish:** R2-10 in `FinishSessionDialog.tsx` and its CSS.
+6. **Page:** 13.4 step 5 (R2-5, R2-7 and R2-8), then R2-11 in `HomePage.module.css` and `.settledToggle:hover`.
+7. 13.4 steps 6 and 7: the full check with real results, then the owner's check at `http://localhost:3000` before
+   the reviewer and the tester.
+
+#### Risks and size
+
+- **Mistakes are now fixable everywhere.**
+  - A nickname never places a session without a tap.
+  - Every confirmed or picked session keeps "You are X · Change".
+  - The round-1 risk of a friend called Pao being taken for the user (E1) needs a deliberate "Yes, that's me", so
+    the ordering trap in 13.5 no longer applies.
+  - What's left is the profile-name case: a namesake in a session the user isn't in is fixed by a temporary rename,
+    as decided in round 2.
+- **More taps.**
+  - Each nickname session needs one confirm, and it stays out of the totals until then.
+  - That's the owner's trade for not guessing.
+- **Code churn.**
+  - `Me` and `matchMember` change shape. `tsc` flags every caller, and Vitest covers the logic.
+- **Size: small** (about 6 more files). **Risk: low.**
+
+#### Decisions for the owner
+
+No blocking questions. To confirm, or to overrule, at approval:
+
+1. **The line on stored picks.** A confirmed nickname, and any other stored pick, shows "You are **X** · Change",
+   so a wrong confirmation can always be undone. Only an automatic profile-name match is quiet. *Recommendation:*
+   accept. Otherwise a mistaken "Yes, that's me" could never be undone.
+2. **The button label.** It reads "Yes, that's me" only while the preselected member is still selected, and
+   "Confirm" for any other choice, including "I'm not in this session". *Recommendation:* accept.
+3. **The Finish dialog uses the same prompt** as Needs setup for a nickname-only match. *Recommendation:* accept,
+   for consistency.
