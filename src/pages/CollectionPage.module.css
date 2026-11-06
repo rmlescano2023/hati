@@ -1,36 +1,3 @@
-.top {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-bottom: 1rem;
-}
-
-.you {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px;
-  font-size: 13px;
-  color: var(--text2);
-}
-
-/* "Add your name" starts its line, so its padding and border are dropped on
-   the left to line its text up with "You: Renmar · Edit" and the cards. */
-.you > button:first-child {
-  padding-left: 0;
-  border-left-width: 0;
-}
-
-.you strong {
-  font-weight: 600;
-  color: var(--text);
-}
-
-.alert {
-  font-size: 12px;
-  color: var(--danger-text);
-}
-
 .loadError {
   display: flex;
   flex-direction: column;
@@ -61,8 +28,7 @@
 }
 
 .tileLabel {
-  font-size: 12px;
-  color: var(--text2);
+  font-size: 14px;
 }
 
 .tileAmount {

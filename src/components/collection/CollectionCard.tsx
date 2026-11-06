@@ -7,6 +7,7 @@ import {
   formatCents,
   markAllMessage,
   openLinePayments,
+  rememberOffer,
   type CollectionCard as Card,
   type CollectionLine,
 } from '../../lib/collection';
@@ -15,7 +16,8 @@ import { createId } from '../../lib/id';
 import { sessionDisplayTitle } from '../../lib/sessionLabel';
 import { ChangeMeDialog } from './ChangeMeDialog';
 import { LineRow, type FailedPayment } from './LineRow';
-import { MePicker, offersRemember } from './MePicker';
+import { DirectionLabel } from './DirectionLabel';
+import { MePicker } from './MePicker';
 import styles from './CollectionCard.module.css';
 
 type Props = {
@@ -55,15 +57,7 @@ function summaryDetail(card: Card): string[] {
   const { owedToYou, youOwe } = card;
   if (card.bucket === 'needsSetup') return [];
   if (card.bucket === 'outstanding') {
-    return [
-      `${card.settledLineCount} of ${card.lineCount} settled`,
-      [
-        owedToYou.length > 0 && `Owed to you ${formatCents(card.owedToYouRemainingCents)}`,
-        youOwe.length > 0 && `You owe ${formatCents(card.youOweRemainingCents)}`,
-      ]
-        .filter(Boolean)
-        .join(' · '),
-    ];
+    return [`${card.settledLineCount} of ${card.lineCount} settled`];
   }
   // The "You're not in this session · Change" line under it already says so.
   if (card.me.kind === 'notInSession') return [];
@@ -77,6 +71,31 @@ function summaryDetail(card: Card): string[] {
       .filter(Boolean)
       .join(' · '),
   ];
+}
+
+/**
+ * What is left on each side of an Outstanding card, coloured and with an arrow
+ * like the strip and the group headings. No hints here: the strip at the top
+ * of the page explains the arrows once, and they would wrap this to several
+ * lines on a phone. Each side wraps as a whole, never mid-amount.
+ */
+function MoneySummary({ card }: { card: Card }) {
+  const { owedToYou, youOwe } = card;
+  return (
+    <span className={styles.money}>
+      {owedToYou.length > 0 && (
+        <DirectionLabel direction="owedToYou">{` ${formatCents(card.owedToYouRemainingCents)}`}</DirectionLabel>
+      )}
+      {owedToYou.length > 0 && youOwe.length > 0 && (
+        <span aria-hidden="true" className={styles.sep}>
+          ·
+        </span>
+      )}
+      {youOwe.length > 0 && (
+        <DirectionLabel direction="youOwe">{` ${formatCents(card.youOweRemainingCents)}`}</DirectionLabel>
+      )}
+    </span>
+  );
 }
 
 /**
@@ -95,6 +114,9 @@ export function CollectionCard({ card, expanded, onToggle, failed, onFailed, onP
   const bodyId = useId();
   const setup = card.bucket === 'needsSetup';
   const expandable = setup || card.lineCount > 0;
+  // A card placed by one of the user's own names doesn't say who they are on
+  // every card; it only offers "Not you? Change" (BR-N5).
+  const quiet = card.me.kind === 'member' && card.me.recognised;
 
   const summary = (
     <span className={styles.titles}>
@@ -107,12 +129,13 @@ export function CollectionCard({ card, expanded, onToggle, failed, onFailed, onP
             {part}
           </span>
         ))}
+      {card.bucket === 'outstanding' && <MoneySummary card={card} />}
     </span>
   );
 
-  const groups: { heading: string; lines: CollectionLine[] }[] = [
-    { heading: 'Owed to you', lines: card.owedToYou },
-    { heading: 'You owe', lines: card.youOwe },
+  const groups: { direction: CollectionLine['direction']; lines: CollectionLine[] }[] = [
+    { direction: 'owedToYou', lines: card.owedToYou },
+    { direction: 'youOwe', lines: card.youOwe },
   ];
 
   return (
@@ -134,7 +157,8 @@ export function CollectionCard({ card, expanded, onToggle, failed, onFailed, onP
         )}
       </h3>
 
-      {!setup && <YouAre card={card} title={title} />}
+      {/* A quiet card's line waits at the bottom of its expanded body; with no body, it stays here. */}
+      {!setup && (!quiet || !expandable) && <YouAre card={card} title={title} quiet={quiet} />}
 
       {expandable && expanded && setup && (
         <div id={bodyId} className={styles.body}>
@@ -147,8 +171,10 @@ export function CollectionCard({ card, expanded, onToggle, failed, onFailed, onP
           {groups
             .filter((g) => g.lines.length > 0)
             .map((group) => (
-              <section key={group.heading} className={styles.group}>
-                <h4 className={styles.groupHeading}>{group.heading}</h4>
+              <section key={group.direction} className={styles.group}>
+                <h4 className={styles.groupHeading}>
+                  <DirectionLabel direction={group.direction} hint="inline" />
+                </h4>
                 {group.lines.map((line) => (
                   <LineRow
                     key={line.key}
@@ -162,34 +188,57 @@ export function CollectionCard({ card, expanded, onToggle, failed, onFailed, onP
               </section>
             ))}
           {card.bucket === 'outstanding' && <MarkAll card={card} title={title} onPaid={onPaid} />}
+          {quiet && <YouAre card={card} title={title} quiet />}
         </div>
       )}
     </article>
   );
 }
 
-/** "You are Renmar · Change", visible collapsed too, so a wrong match is easy to spot (AC-5.4). */
-function YouAre({ card, title }: { card: Card; title: string }) {
+/**
+ * Who the user is in the session. Spelled out on the card for a one-off pick
+ * or "not in this session"; a card placed by one of the user's own names only
+ * offers "Not you? Change", once expanded, since repeating their own name on
+ * every card is noise (US-N1).
+ */
+function YouAre({ card, title, quiet }: { card: Card; title: string; quiet: boolean }) {
   const [changing, setChanging] = useState(false);
   return (
     <div className={styles.youAre}>
-      {card.me.kind === 'member' ? (
-        <span>
-          You are <strong>{card.me.name}</strong>
-        </span>
+      {quiet && card.me.kind === 'member' ? (
+        <>
+          <span>Not you?</span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="link-action"
+            aria-label={`Change who you are in ${title}. Now: ${card.me.name}`}
+            onClick={() => setChanging(true)}
+          >
+            Change
+          </Button>
+        </>
       ) : (
-        <span>You&apos;re not in this session</span>
+        <>
+          {card.me.kind === 'member' ? (
+            <span>
+              You are <strong>{card.me.name}</strong>
+            </span>
+          ) : (
+            <span>You&apos;re not in this session</span>
+          )}
+          <span aria-hidden="true">·</span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="link-action"
+            aria-label={`Change who you are in ${title}`}
+            onClick={() => setChanging(true)}
+          >
+            Change
+          </Button>
+        </>
       )}
-      <span aria-hidden="true">·</span>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="link-action"
-        aria-label={`Change who you are in ${title}`}
-        onClick={() => setChanging(true)}
-      >
-        Change
-      </Button>
       {changing && (
         <ChangeMeDialog session={card.session} me={card.me} onClose={() => setChanging(false)} />
       )}
@@ -221,7 +270,8 @@ function NeedsSetup({ card }: { card: Card }) {
           onClick={() => {
             if (choice === null) return;
             setMe(card.session.id, choice);
-            if (remember && offersRemember(profile, choice)) void profile.save(choice);
+            const offer = rememberOffer(profile, choice);
+            if (remember && offer !== null) void profile.remember(choice, offer);
           }}
         >
           Confirm

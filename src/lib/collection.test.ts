@@ -244,7 +244,10 @@ describe('buildCard', () => {
   });
 
   it('marks a part payment Partial and keeps the line first (AC-7.2)', () => {
-    const card = buildCard(tripA({ payments: [pay('pay_1', 'Ana', 'Renmar', 10000)] }), names('Renmar'));
+    const card = buildCard(
+      tripA({ payments: [pay('pay_1', 'Ana', 'Renmar', 10000)] }),
+      names('Renmar'),
+    );
     const [ana] = card.owedToYou;
     expect(ana.other).toBe('Ana');
     expect(ana.status).toBe('partial');
@@ -272,7 +275,10 @@ describe('buildCard', () => {
   });
 
   it('sorts a paid line after an unpaid one (BR-17a)', () => {
-    const card = buildCard(tripA({ payments: [pay('pay_1', 'Ana', 'Renmar', 30000)] }), names('Renmar'));
+    const card = buildCard(
+      tripA({ payments: [pay('pay_1', 'Ana', 'Renmar', 30000)] }),
+      names('Renmar'),
+    );
     expect(card.owedToYou.map((l) => l.other)).toEqual(['Cara', 'Ana']);
   });
 
@@ -306,7 +312,10 @@ describe('buildCard', () => {
   });
 
   it('neither counts nor shows a payment whose pair is not a line (BR-15)', () => {
-    const card = buildCard(tripA({ payments: [pay('pay_x', 'Ana', 'Ben', 5000)] }), names('Renmar'));
+    const card = buildCard(
+      tripA({ payments: [pay('pay_x', 'Ana', 'Ben', 5000)] }),
+      names('Renmar'),
+    );
     expect(card.receivedCents).toBe(0);
     expect(card.paidOutCents).toBe(0);
     expect([...card.owedToYou, ...card.youOwe].flatMap((l) => l.payments)).toEqual([]);
@@ -323,7 +332,10 @@ describe('buildCard', () => {
   });
 
   it('shows an overpaid line as Paid with nothing left (BR-15)', () => {
-    const card = buildCard(tripA({ payments: [pay('pay_1', 'Ana', 'Renmar', 35000)] }), names('Renmar'));
+    const card = buildCard(
+      tripA({ payments: [pay('pay_1', 'Ana', 'Renmar', 35000)] }),
+      names('Renmar'),
+    );
     const ana = card.owedToYou.find((l) => l.other === 'Ana')!;
     expect(ana.status).toBe('paid');
     expect(ana.remainingCents).toBe(0);
@@ -516,7 +528,10 @@ describe('parsePaymentAmount', () => {
 
 describe('openLinePayments (US-8b)', () => {
   it('gives one entry per open line at what is left on it', () => {
-    const card = buildCard(tripA({ payments: [pay('pay_1', 'Ana', 'Renmar', 10000)] }), names('Renmar'));
+    const card = buildCard(
+      tripA({ payments: [pay('pay_1', 'Ana', 'Renmar', 10000)] }),
+      names('Renmar'),
+    );
     expect(openLinePayments(card)).toEqual([
       { debtor: 'Ana', creditor: 'Renmar', amountCents: 20000 },
       { debtor: 'Cara', creditor: 'Renmar', amountCents: 30000 },
@@ -525,7 +540,10 @@ describe('openLinePayments (US-8b)', () => {
   });
 
   it('leaves out a paid line', () => {
-    const card = buildCard(tripA({ payments: [pay('pay_1', 'Ana', 'Renmar', 30000)] }), names('Renmar'));
+    const card = buildCard(
+      tripA({ payments: [pay('pay_1', 'Ana', 'Renmar', 30000)] }),
+      names('Renmar'),
+    );
     expect(openLinePayments(card).map((p) => p.debtor)).toEqual(['Cara', 'Renmar']);
   });
 });

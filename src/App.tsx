@@ -263,7 +263,10 @@ export default function App() {
         />
       )}
       {profileOpen && <ProfileDialog onClose={() => setProfileOpen(false)} />}
-      <SyncBanner sticky={screen.kind === 'collection'} />
+      <SyncBanner
+        sticky={screen.kind === 'collection'}
+        showProfileError={screen.kind === 'collection'}
+      />
       {screen.kind === 'home' && (
         <HomePage
           onOpenSession={openFromHome}
@@ -275,7 +278,6 @@ export default function App() {
         <CollectionPage
           key={screen.openSessionId ?? ''}
           openSessionId={screen.openSessionId}
-          onEditProfile={() => setProfileOpen(true)}
         />
       )}
       {screen.kind === 'history' && (

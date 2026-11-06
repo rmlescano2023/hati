@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CollectionCard } from '../components/collection/CollectionCard';
+import { DirectionLabel } from '../components/collection/DirectionLabel';
 import type { FailedPayment } from '../components/collection/LineRow';
 import { ProfileBanner } from '../components/profile/ProfileBanner';
 import { Button } from '../components/shared/Button';
@@ -20,7 +21,6 @@ import styles from './CollectionPage.module.css';
 type Props = {
   /** The session just finished, landed on open (AC-4.9). */
   openSessionId?: string;
-  onEditProfile: () => void;
 };
 
 /**
@@ -28,12 +28,13 @@ type Props = {
  * place come first, so they get set up; then what is still outstanding, with
  * its totals; then what is settled, collapsed out of the way.
  */
-export function CollectionPage({ openSessionId, onEditProfile }: Props) {
+export function CollectionPage({ openSessionId }: Props) {
   const { sessions } = useSessionsStore();
   const profile = useProfile();
   const collection = useMemo(
-    () => buildCollection(sessions, profile.displayName),
-    [sessions, profile.displayName],
+    () =>
+      buildCollection(sessions, { displayName: profile.displayName, nicknames: profile.nicknames }),
+    [sessions, profile.displayName, profile.nicknames],
   );
 
   const [open, setOpen] = useState<Set<string>>(
@@ -115,32 +116,6 @@ export function CollectionPage({ openSessionId, onEditProfile }: Props) {
     buckets.current = next;
   }, [collection]);
 
-  const youLine = (
-    <div className={styles.you}>
-      {profile.displayName !== null ? (
-        <>
-          <span>
-            You: <strong>{profile.displayName}</strong>
-          </span>
-          <span aria-hidden="true">·</span>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="link-action"
-            aria-label="Edit your name"
-            onClick={onEditProfile}
-          >
-            Edit
-          </Button>
-        </>
-      ) : (
-        <Button variant="ghost" size="sm" className="link-action" onClick={onEditProfile}>
-          Add your name
-        </Button>
-      )}
-    </div>
-  );
-
   if (profile.status === 'loading') {
     return (
       <div className={appStyles.loading} role="status">
@@ -205,15 +180,6 @@ export function CollectionPage({ openSessionId, onEditProfile }: Props) {
 
   return (
     <>
-      <div className={styles.top}>
-        {youLine}
-        {profile.saveError !== null && (
-          <p role="alert" className={styles.alert}>
-            {profile.saveError}
-          </p>
-        )}
-      </div>
-
       {total === 0 ? (
         <EmptyState
           title="Nothing to collect yet"
@@ -225,11 +191,11 @@ export function CollectionPage({ openSessionId, onEditProfile }: Props) {
 
           <div className={styles.strip}>
             <div className={styles.tile}>
-              <span className={styles.tileLabel}>Owed to you</span>
+              <DirectionLabel direction="owedToYou" hint="stacked" className={styles.tileLabel} />
               <span className={styles.tileAmount}>{formatCents(collection.owedToYouCents)}</span>
             </div>
             <div className={styles.tile}>
-              <span className={styles.tileLabel}>You owe</span>
+              <DirectionLabel direction="youOwe" hint="stacked" className={styles.tileLabel} />
               <span className={styles.tileAmount}>{formatCents(collection.youOweCents)}</span>
             </div>
           </div>
