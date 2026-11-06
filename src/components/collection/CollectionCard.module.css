@@ -60,19 +60,35 @@
 }
 
 .money {
+  display: block;
+  font-size: 13px;
+  /* The dot sits in the second side's left padding, which the row pulls out
+     to the left by the same amount. When that side wraps to a new line its
+     dot lands outside this box and is clipped, so none is left dangling at
+     the end of the line above. */
+  overflow: hidden;
+}
+
+.moneyRow {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 2px 6px;
-  font-size: 13px;
+  gap: 2px 0;
+  margin-left: -16px;
 }
 
 /* A side wraps as a whole, never mid-amount. */
-.money > * {
+.side {
+  position: relative;
+  padding-left: 16px;
   white-space: nowrap;
 }
 
 .sep {
+  position: absolute;
+  left: 0;
+  width: 16px;
+  text-align: center;
   color: var(--text3);
 }
 

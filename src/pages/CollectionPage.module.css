@@ -102,4 +102,11 @@
   .tile {
     padding: 12px;
   }
+
+  /* A tile is about 142px wide inside its padding, and 18px mono leaves a
+     seven-figure total no room, so it would break mid-number. A little
+     smaller keeps it whole. */
+  .tileAmount {
+    font-size: 16px;
+  }
 }

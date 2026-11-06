@@ -77,23 +77,30 @@ function summaryDetail(card: Card): string[] {
  * What is left on each side of an Outstanding card, coloured and with an arrow
  * like the strip and the group headings. No hints here: the strip at the top
  * of the page explains the arrows once, and they would wrap this to several
- * lines on a phone. Each side wraps as a whole, never mid-amount.
+ * lines on a phone. Each side wraps as a whole, never mid-amount, and the dot
+ * between them belongs to the second side, so it can never end a line.
  */
 function MoneySummary({ card }: { card: Card }) {
   const { owedToYou, youOwe } = card;
   return (
     <span className={styles.money}>
-      {owedToYou.length > 0 && (
-        <DirectionLabel direction="owedToYou">{` ${formatCents(card.owedToYouRemainingCents)}`}</DirectionLabel>
-      )}
-      {owedToYou.length > 0 && youOwe.length > 0 && (
-        <span aria-hidden="true" className={styles.sep}>
-          ·
-        </span>
-      )}
-      {youOwe.length > 0 && (
-        <DirectionLabel direction="youOwe">{` ${formatCents(card.youOweRemainingCents)}`}</DirectionLabel>
-      )}
+      <span className={styles.moneyRow}>
+        {owedToYou.length > 0 && (
+          <span className={styles.side}>
+            <DirectionLabel direction="owedToYou">{` ${formatCents(card.owedToYouRemainingCents)}`}</DirectionLabel>
+          </span>
+        )}
+        {youOwe.length > 0 && (
+          <span className={styles.side}>
+            {owedToYou.length > 0 && (
+              <span aria-hidden="true" className={styles.sep}>
+                ·
+              </span>
+            )}
+            <DirectionLabel direction="youOwe">{` ${formatCents(card.youOweRemainingCents)}`}</DirectionLabel>
+          </span>
+        )}
+      </span>
     </span>
   );
 }
