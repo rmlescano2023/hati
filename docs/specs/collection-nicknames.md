@@ -42,8 +42,8 @@ Because of Q1, BR-N3, E2 and E7 read as follows:
 
 **Assumptions** (veto any before approving):
 
-- **N-A1.** The "Remember" checkbox state is per picker. It starts ticked each time a picker opens or its
-  selection changes to a member that can be remembered (BR-N10).
+- **N-A1.** The "Remember" checkbox state is per picker. It starts ticked each time a picker opens, and an untick
+  holds until that picker closes. It does not re-tick when the selection changes (BR-N10).
 - **N-A2.** A failed remember says so on Collection only, and the message persists until a profile save succeeds
   or the user dismisses it. The Profile dialog and the banner keep their own inline errors and no longer set it.
 - **N-A3.** The amounts in the strip stay in the neutral `--text` colour. Only the label, arrow and hint are

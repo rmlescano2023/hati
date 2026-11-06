@@ -275,10 +275,7 @@ export default function App() {
         />
       )}
       {screen.kind === 'collection' && (
-        <CollectionPage
-          key={screen.openSessionId ?? ''}
-          openSessionId={screen.openSessionId}
-        />
+        <CollectionPage key={screen.openSessionId ?? ''} openSessionId={screen.openSessionId} />
       )}
       {screen.kind === 'history' && (
         <HistoryPage

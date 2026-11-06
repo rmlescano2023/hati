@@ -85,7 +85,10 @@ function withCollectionState(session: Session, closedIndex: number): Session {
   }
   if (closedIndex === 2) {
     const picked = { ...session, me: 'Renmar' };
-    return { ...picked, payments: paid(openLinePayments(buildCard(picked, { displayName: null, nicknames: [] }))) };
+    return {
+      ...picked,
+      payments: paid(openLinePayments(buildCard(picked, { displayName: null, nicknames: [] }))),
+    };
   }
   if (closedIndex === 3) return { ...session, me: NOT_IN_SESSION };
   return session;
