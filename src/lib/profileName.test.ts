@@ -91,14 +91,19 @@ describe('applyProfileUpdate (BR-N7, BR-N11, BR-N13)', () => {
   });
 
   it('refuses an add past the limit, but not a duplicate at the limit', () => {
-    const ten = Array.from({ length: NICKNAMES_MAX }, (_, i) => `Name${String.fromCharCode(97 + i)}`);
+    const ten = Array.from(
+      { length: NICKNAMES_MAX },
+      (_, i) => `Name${String.fromCharCode(97 + i)}`,
+    );
     const full = { displayName: 'Paolo', nicknames: ten };
     expect(applyProfileUpdate(full, { addNickname: 'Pao' })).toBeNull();
     expect(applyProfileUpdate(full, { addNickname: 'namea' })).toEqual(full);
   });
 
   it('adds with no profile name (E4)', () => {
-    expect(applyProfileUpdate({ displayName: null, nicknames: [] }, { addNickname: 'Pao' })).toEqual({
+    expect(
+      applyProfileUpdate({ displayName: null, nicknames: [] }, { addNickname: 'Pao' }),
+    ).toEqual({
       displayName: null,
       nicknames: ['Pao'],
     });

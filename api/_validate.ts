@@ -1,9 +1,5 @@
 import { parseActivityAt } from '../src/lib/activity.js';
-import {
-  NICKNAMES_MAX,
-  normaliseProfileName,
-  type ProfileUpdate,
-} from '../src/lib/profileName.js';
+import { NICKNAMES_MAX, normaliseProfileName, type ProfileUpdate } from '../src/lib/profileName.js';
 import { normaliseSessionName } from '../src/lib/sessionName.js';
 import { parseSession } from '../src/lib/storage.js';
 import type { NewPayment, Session } from '../src/types';
