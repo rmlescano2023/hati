@@ -1,7 +1,8 @@
 # Spec: Collection follow-up — quieter "who you are", nicknames, clearer money labels
 
 Status: **draft, awaiting the owner's approval.** Branch `collection` (unshipped). A follow-up to
-`docs/specs/collection.md`; where the two differ, this one wins for the parts it names.
+`docs/specs/collection.md`; where the two differ, this one wins for the parts it names. **Section 13 (owner
+review, round 2) amends sections 1 to 12. Where they differ, section 13 wins.**
 
 ## 1. Summary
 
@@ -911,3 +912,312 @@ Technical choices made here, no input needed:
 - The row lock plus a client-side chain, rather than a version column.
 - `rememberOffer` moves into `src/lib/collection.ts` so it can be unit tested.
 - `DirectionLabel` is the single source of the words, arrows and colours.
+
+## 13. Owner review, round 2
+
+The owner checked the build at `77026ee` and settled these eight refinements in Plan Mode on 2026-11-06 (brief:
+`peaceful-coalescing-karp.md`, items 1 to 7; item 8 was added afterwards). The business-analyst was skipped this
+round, at the owner's choice. This section changes the code as built at `77026ee`, and it also replaces the
+sections and acceptance criteria named below. No schema or API shape changes. The only server change is the limit.
+
+### 13.1 What it replaces
+
+| Earlier text | Now |
+|---|---|
+| N-A4 (the dialog keeps the title "Your name") | The title is "Profile" (R2-1). |
+| `collection.md` AC-2.2 and the chip in its section 6 `ProfileNameField` (the "Use {first name}" suggestion) | Removed (R2-2). |
+| BR-N7, E6, AC-N4.6 (limit bullet), AC-N5.6, and every "10" in sections 4 to 6 and 8 | The limit is **3** (R2-3). |
+| AC-N1.4, AC-N1.5, AC-N1.6; the "Quiet" rows of the identity-line table in section 6; the "Not you?" variant of `YouAre` | Removed. A recognised card shows no identity line and no Change (R2-4). |
+| AC-N1.9 ("…and 'Not you? Change' appears inside it") | The line disappears and nothing replaces it. Removing the name brings the line back, as before. |
+| `collection.md` AC-6.6 and its page state "`open: Set<string>` … Several can be open at once" | One card at a time (R2-5). |
+| AC-N6.2 and the Settled summary in `collection.md` section 6 | The money line shows only while the card is collapsed (R2-6). |
+| AC-N6.3 (the hints in the group headings) and AC-N6.4's screen-reader example for the headings | The headings have no hints (R2-7). The strip keeps its hints, and AC-N6.1 is unchanged. |
+| `collection.md` section 6, "Strip" | A "Summary" heading goes above it (R2-8). |
+| Section 11, first risk row ("Not you? Change sits in every recognised card") | See 13.5. |
+
+### 13.2 Changes, item by item, with acceptance criteria
+
+**R2-1. The Profile dialog is titled "Profile".** (`src/components/profile/ProfileDialog.tsx`)
+
+- Both `<h2 id="profile-title">` elements change from "Your name" to "Profile": the one in the loading and error
+  states, and the one in `ProfileForm`.
+- The field keeps its "Your name" label. `ProfileBanner`'s "What should Hati call you?" is unchanged.
+- **AC-R2-1.1.**
+  - Given the Profile dialog opens from the avatar menu, in any state (loading, error, ready),
+  - Then its title reads "Profile",
+  - And the dialog's accessible name is "Profile",
+  - And the name field's label still reads "Your name".
+
+**R2-2. No "Use {first name}" button.** (`src/components/profile/ProfileNameField.tsx`)
+
+- Delete the `suggestion` constant and the chip block (`{suggestion !== null && … }`).
+- Delete the imports this leaves unused: `useUser` from `@clerk/clerk-react`, `Button`, and
+  `normaliseProfileName`. `PROFILE_NAME_MAX` stays.
+- `@clerk/clerk-react` stays in `package.json`, because the rest of the app uses it.
+- The doc comment becomes: "The profile name's field, shared by the dialog and Collection's nudge. It asks for the
+  name the group typed into its member lists, which may not be the one the account was signed up with (BR-3)."
+- **AC-R2-2.1.**
+  - Given the Profile dialog, or the "What should Hati call you?" banner,
+  - Then no "Use …" button shows, whatever the account's first name,
+  - And the field, its helper text and Save work as before.
+
+**R2-3. At most 3 other names.**
+
+Change these:
+- `src/lib/profileName.ts`: `NICKNAMES_MAX = 3`. The doc comment is unchanged.
+- `api/user.ts`: the 409 body's error reads `` `You can keep up to ${NICKNAMES_MAX} other names.` ``, so it no
+  longer hardcodes 10. Import `NICKNAMES_MAX` from `'../src/lib/profileName.js'`.
+- `src/context/ProfileContext.tsx`: the `too_many_names` message reads
+  `` `“${name}” wasn't saved: you already have ${NICKNAMES_MAX} other names. Remove one in Profile to make room.` ``,
+  with the same import.
+
+These already follow the constant, so they need no change: `parseProfileInput`'s cap, `applyProfileUpdate`'s
+`>=` check, `rememberOffer`, and the dialog's Add guard and note ("You can keep up to 3 other names.").
+
+**A stored list longer than 3** (recommendation, not an owner question):
+- **It stays readable.** Matching reads every stored name, and nothing trims it, so the change is
+  non-destructive.
+- **Adds are refused:**
+  - The server's add path returns 409, because of the `>=` check.
+  - Pickers offer no checkbox, because `rememberOffer` requires `length < NICKNAMES_MAX`.
+  - The dialog's "Add a name" is disabled, with the note.
+- **A name-only PATCH** (the banner, "Remember as my name", an old tab) keeps the whole list, because
+  `cleanNicknames` doesn't cap it.
+- **Known gap:** the dialog's Save sends the full list, so `parseProfileInput` refuses more than 3 with a 400. The
+  user sees the generic "Couldn't save your profile…" until they remove names down to 3.
+
+I recommend no extra UI or migration for this. Per the brief, the only account that used other names was reset to
+`[]`, and nothing in the app can create a longer list after this change. A dedicated message would be handling for
+a state that can't occur, which CLAUDE.md rules out.
+
+- **AC-R2-3.1.** Given 3 other names are saved, then in the Profile dialog "Add a name" is disabled with "You can
+  keep up to 3 other names.", and no add field shows.
+- **AC-R2-3.2.** Given 3 other names and a profile name, when I select an unknown member in any picker, then no
+  "Remember “X” as another name for me" checkbox shows. Without a profile name, "Remember as my name" still shows
+  (AC-N4.7).
+- **AC-R2-3.3.** Given 2 other names, when I add a third, then it's saved and "Add a name" becomes disabled with
+  the note.
+- **AC-R2-3.4.** A `PATCH /api/user` with 4 `nicknames` is a 400 `Malformed profile.`, and an `addNickname` onto 3
+  stored is a 409 `{ error: 'You can keep up to 3 other names.', code: 'too_many_names' }`.
+- **AC-R2-3.5.** Given a stored list of more than 3 (a fixture only), then every name in it still matches, a
+  name-only update keeps all of them, and an add is refused.
+
+**R2-4. No "Not you? Change".** (`src/components/collection/CollectionCard.tsx`)
+
+- **`YouAre`:**
+  - Drop the `quiet` prop and the "Not you?" branch, so it renders only today's line: "You are **X** · Change" or
+    "You're not in this session · Change", with `aria-label={`Change who you are in ${title}`}` and
+    `ChangeMeDialog`.
+  - Its doc comment becomes: "Who the user is in the session, spelled out only for a one-off pick or 'not in this
+    session', since Change is the only way to undo those. A card placed by one of the user's own names says
+    nothing; a wrong match there is fixed by editing the names in Profile."
+- **The card:**
+  - Render `{!setup && !quiet && <YouAre card={card} title={title} />}` in today's place, visible collapsed too.
+  - Delete the `{quiet && <YouAre … quiet />}` line at the end of the body.
+  - The `quiet` comment becomes: "A card placed by one of the user's own names doesn't say who they are (BR-N5)."
+- `Me.recognised` and `resolveMe` are unchanged. `ChangeMeDialog` is unchanged and still used.
+- **AC-R2-4.1.**
+  - Given a card placed by the profile name or another name, or picked as one of them,
+  - Then it shows no identity line and no Change control: collapsed, expanded, or as a Settled card with no lines.
+- **AC-R2-4.2.**
+  - Given a one-off pick or "I'm not in this session",
+  - Then the card shows "You are **X** · Change" or "You're not in this session · Change" exactly as before,
+    collapsed and expanded,
+  - And Change opens "Who are you in this session?" (AC-N1.7, AC-N1.8 unchanged).
+- **AC-R2-4.3.**
+  - Given a one-off "Carlo" card,
+  - When "Carlo" is added in Profile,
+  - Then its line disappears with no reload. When it's removed again, the line comes back (AC-N1.9 as amended).
+
+**R2-5. One card open at a time.** (`src/pages/CollectionPage.tsx`)
+
+- **State:**
+  - Replace `open: Set<string>` with `const [openId, setOpenId] = useState<string | null>(openSessionId ?? null)`.
+  - `expanded={openId === id}`.
+  - `onToggle={() => { toggled.current = true; setOpenId((current) => (current === id ? null : id)); }}`.
+- **Comment on the state:** "One card at a time: opening one closes the other, so the page never grows into
+  several long bodies on a phone (owner, round 2)."
+- **Keep the opened card in view.** Closing a long card above the one tapped moves the tapped card up the page, by
+  the closed body's height, and possibly out of view. Safari has no scroll anchoring to correct that.
+  - Add `const toggled = useRef(false)` and an effect on `[openId]`.
+  - If `toggled.current`, reset it. Then, when `openId !== null` and
+    `document.getElementById(`collection-${openId}`)?.getBoundingClientRect().top < 0`, call
+    `scrollIntoView({ block: 'start' })` on that element.
+  - It runs only after a tap, so the landing scroll and re-sorts are left alone.
+- **Landing from Finish** already starts with that one card open; its effect is unchanged.
+- **Moving between sections:** a card that moves stays the open one, because it's tracked by id. Needs setup cards
+  follow the same rule.
+- **Failed payment forms:** keyed by session and line as before, so a failed form on a card that was closed in the
+  meantime reappears when that card is opened again. Its failure also shows in the pinned strip. A failure never
+  reopens its card, which would close the one being used.
+- **AC-R2-5.1.** Given card A is expanded, when I expand card B, then A collapses and only B is expanded,
+  whichever sections A and B are in.
+- **AC-R2-5.2.** Given B is expanded, when I tap B's header, then B collapses and no card is expanded.
+- **AC-R2-5.3.** Given I finish a session, when Collection opens, then only that card is expanded (AC-4.9
+  otherwise unchanged).
+- **AC-R2-5.4.** Given A, expanded, sits above B, at 375px, when I expand B, then B's header is on screen
+  afterwards, not scrolled off the top.
+- **AC-R2-5.5.** `aria-expanded` is true on the open card's header only.
+
+**R2-6. The money line shows only while collapsed.** (`CollectionCard.tsx`)
+
+- **Outstanding:** `{card.bucket === 'outstanding' && !expanded && <MoneySummary card={card} />}`. "N of M
+  settled" stays in both states.
+- **Settled:** `summaryDetail(card, expanded)`. The settled branch returns `Settled <date>`, and adds the
+  "Received ₱X · Paid ₱Y" part only when `!expanded`. "Nothing to collect…" and the not-in-session case are
+  unchanged, and those cards can't expand anyway.
+- The expanded body shows the same figures per line, which is why the summary can drop them.
+- **AC-R2-6.1.** Given an Outstanding card, when it's collapsed, then the coloured "↓ Owed to you ₱X · ↑ You owe
+  ₱Y" line shows; when it's expanded, that line is gone and "N of M settled" stays.
+- **AC-R2-6.2.** Given a Settled card with lines, when it's collapsed, then "Settled <date>" and "Received ₱X ·
+  Paid ₱Y" show; when it's expanded, only "Settled <date>" does.
+- **AC-R2-6.3.** Collapsing brings the line back, unchanged, with the `77026ee` wrapping intact: a side never
+  wraps mid-amount, and no dot ends a line.
+
+**R2-7. No hints in the group headings.** (`CollectionCard.tsx`, `DirectionLabel.tsx`, `CollectionPage.tsx`)
+
+- Each heading becomes `<h4 className={styles.groupHeading}><DirectionLabel direction={group.direction} /></h4>`.
+  It stays 14px, coloured, with its arrow and in sentence case.
+- **`DirectionLabel`:**
+  - With `'inline'` now unused, `hint` becomes `hint?: boolean`, documented as "Shows the hint under the label: the
+    totals strip only."
+  - The class is `hint && styles.stacked`.
+  - Its doc comment says the hint appears only in the strip.
+- **`CollectionPage`:** the two tiles pass `hint` instead of `hint="stacked"`.
+- No CSS changes.
+- **AC-R2-7.1.**
+  - Given an expanded card,
+  - Then its headings read "↓ Owed to you" in green and "↑ You owe" in amber, with no "they pay you" or "you pay
+    them",
+  - And a screen reader reads "Owed to you" and "You owe".
+- **AC-R2-7.2.** The totals strip still shows both hints under their labels (AC-N6.1).
+
+**R2-8. A "Summary" heading above the totals strip.** (`CollectionPage.tsx`)
+
+- Wrap the strip and its "Not counting …" note in `<section>`, opened by
+  `<h2 className={homeStyles.heading}>Summary</h2>`.
+  - It's the same element and class as "Needs setup (N)", "Outstanding (N)" and "Settled (N)", with no count.
+  - `h2` keeps the order: page sections are `h2`, cards `h3` and groups `h4`.
+- **Spacing:**
+  - The section gets no class. It's the first section, and `styles.section`'s `margin-top: 1.5rem` exists to
+    separate a section from the one above.
+  - The heading's own `margin: 0 0 0.75rem` puts the same gap between it and the tiles as between the other
+    headings and their cards.
+  - The gap down to the next section stays the next section's 1.5rem.
+  - When `ProfileBanner` shows, it stays above the Summary section, with its own 1.25rem margin.
+- The empty state shows no strip, so no Summary heading.
+- No new CSS. Both widths use the same class, so 375px and 1280px match the other headings. The heading's
+  `--text3` colour is the existing headings' (3.41:1, below AA for small text). It's matched as asked, and not
+  changed here.
+- **Tour:** none. The page has no `data-tour` target. `nav-collection` is in the tab bar, outside the page
+  content, so a heading above the strip can't move or cover it.
+- **AC-R2-8.1.**
+  - Given Collection with finished sessions,
+  - Then a "Summary" heading sits directly above the two tiles, styled and spaced like "Outstanding (N)", with no
+    count,
+  - And it's an `h2` like the other section headings.
+- **AC-R2-8.2.** Given the empty state, then no Summary heading shows.
+- **AC-R2-8.3.** At 375px and at 1280px, the strip still sits side by side under the heading, and the tour's
+  Collection step still highlights the Collection tab.
+
+### 13.3 Test updates
+
+**Vitest** (written first, watched failing):
+- **`src/lib/profileName.test.ts`:**
+  - Add `it('keeps at most 3 other names')` asserting `NICKNAMES_MAX` is 3.
+  - The existing limit case builds its list from `NICKNAMES_MAX`; rename `ten` to `full`.
+  - **New, a stored list of 5 (AC-R2-3.5):**
+    - `applyProfileUpdate(five, { addNickname: 'Pao' })` is null.
+    - `applyProfileUpdate(five, { displayName: 'Paolo' })` keeps all 5.
+    - An add of one of the 5 is unchanged, not null.
+- **`src/lib/apiValidation.test.ts`:**
+  - `eleven` becomes `Array.from({ length: NICKNAMES_MAX + 1 }, …)` (4 entries) and stays rejected.
+  - Add a case where `{ nicknames: ['a', 'b', 'c'] }` is accepted (AC-R2-3.4).
+- **`src/lib/collection.test.ts`:**
+  - "stops offering another name at ten" becomes "at the limit", built from `NICKNAMES_MAX`.
+  - Add a case where a 5-name list still gives null.
+  - Add a case where `matchMember` matches a member against the 5th of 5 stored names (AC-R2-3.5).
+- **UI items R2-1, R2-2 and R2-4 to R2-8** have no Vitest coverage, because the suite has no component tests. The
+  ui-ux-tester and the reviewer check them.
+- **Unchanged, and must pass:** `steps.test.ts`, `targets.test.ts`, `apiImports.test.ts` (which now reaches
+  `profileName.js` from `api/user.ts`) and the rest.
+
+**Reviewer (surgeon-reviewer):**
+- Every changed line traces to R2-1 to R2-8.
+- No orphans: `useUser`, `Button` and `normaliseProfileName` in `ProfileNameField`; the `quiet` prop; `'inline'`;
+  `Set` in `CollectionPage`, if it's no longer used.
+- No "10" is left in limit messages.
+- No `data-tour` changes and no new mobile CSS.
+- Also review the `77026ee` wrap fixes, which haven't been reviewed yet.
+
+**ui-ux-tester walkthrough:** run at 375px, then 1280px. The section 8 setup applies, with at most 3 other names.
+
+| # | Change | ACs |
+|---|---|---|
+| T-N1 | **Replaced:**<br>- N1, N4 and N6 show no identity line and no Change, collapsed or expanded (N6 has no toggle).<br>- N5 with a one-off Carlo pick shows "You are **Carlo** · Change", collapsed and expanded, and Change opens the dialog.<br>- A not-in-session card shows its line. | R2-4.1, R2-4.2 |
+| T-N3 | **Amended:**<br>- Adding Carlo removes N5's line with no reload, and no "Not you?" appears.<br>- Removing Carlo brings it back.<br>- The rest is unchanged. | R2-4.3, N3.6 |
+| T-N6 | **Amended:**<br>- The title reads "Profile".<br>- There's no "Use …" button in the dialog or in the banner (clear the profile name to see the banner).<br>- After a third name, "Add a name" is disabled with "You can keep up to 3 other names.".<br>- 10 names are no longer reachable, so drop the 375×667 scroll check.<br>- The rest is unchanged. | R2-1.1, R2-2.1, R2-3.1, R2-3.3, N5.x |
+| T-N7 | **Amended:**<br>- The expanded headings read "↓ Owed to you" and "↑ You owe" with no hints.<br>- The strip keeps its hints.<br>- An expanded Outstanding card shows no money line, but keeps "N of M settled".<br>- An expanded Settled card shows no "Received · Paid".<br>- Collapsed, both show again, and the `77026ee` wrapping holds: ₱1,000,000.00 whole, no dangling dot at 375px. | R2-6.x, R2-7.x, N6.1 |
+| T-N4 | **Amended:** with 3 other names saved and a profile name, the Finish picker shows no "Remember “Zed”…" for an unknown member. | R2-3.2 |
+| T-N9 | **New, one open card:**<br>- Expand A, then B: A collapses.<br>- Tap B: nothing is open.<br>- Expand a long A, scroll down, then expand B below it: B's header stays on screen.<br>- Finish a session: only its card is open on landing.<br>- Check `aria-expanded` on each header. | R2-5.1 to R2-5.5 |
+| T-N10 | **New, Summary heading:**<br>- "SUMMARY", in the same uppercase grey style as "OUTSTANDING (N)", sits above the tiles, with the same gap above the tiles as the Outstanding heading has above its cards.<br>- It's an `h2` in the accessibility tree.<br>- It's absent in the empty state.<br>- With the banner showing, it's below the banner.<br>- Preview Tour: the Collection step highlights the Collection tab. | R2-8.1 to R2-8.3 |
+| T-N8 | **Amended:** two quick Confirms for "Pao" and "Paoie", starting from 1 saved name: both end up saved (3 in all). | N4.8 |
+
+### 13.4 Tasks for the fullstack-developer
+
+No schema run is needed this round.
+
+1. **Tests first.** Add the 13.3 Vitest changes.
+   → Verify: `npm test` fails on exactly those.
+2. **Limit.** Set `NICKNAMES_MAX = 3`, and change the messages in `api/user.ts` and `ProfileContext.tsx` to use the
+   constant.
+   → Verify: `npm test` passes, and `npx tsc -b` passes.
+3. **Profile.** R2-1 (`ProfileDialog` title) and R2-2 (`ProfileNameField` chip and orphaned imports).
+4. **Cards.**
+   1. R2-4: `YouAre` and the card.
+   2. R2-6: `MoneySummary` and `summaryDetail(card, expanded)`.
+   3. R2-7: the headings, then `DirectionLabel`'s `hint?: boolean`.
+5. **Page.** R2-5 (`openId`, `toggled` and the keep-in-view effect), R2-7 (the tiles pass `hint`) and R2-8 (the
+   Summary section).
+6. **Full check.** `npm run lint`, `npx tsc -b`, `npm test` (including `steps.test.ts` and `targets.test.ts`) and
+   `npm run build`, with the real results reported.
+7. **Owner check.** Give the owner `http://localhost:3000` and the branch, then wait for their "go" before handing
+   over to the surgeon-reviewer and the ui-ux-tester. Those two also cover the `77026ee` wrap fixes.
+
+### 13.5 Risks, size and a consequence to note
+
+- **A wrong automatic match now has no per-card fix.** The owner's call is that it's fixed in Profile, which
+  works:
+  - Remove the other name, or change the profile name.
+  - The session drops to Needs setup, and the right pick goes in there.
+- **One ordering trap.** Say a friend called "Pao" is in a session the user isn't in, and that session was placed
+  by the user's other name "Pao":
+  1. After removing "Pao", the user should first pick "I'm not in this session" on that session,
+  2. and only then re-pick "Pao", with the box ticked, elsewhere.
+
+  Done the other way round, the ticked box re-adds "Pao" before the friend's session has a pick, and that session
+  matches again. Picks persist, so the right order fixes it for good.
+- **The same trap with the profile name.** A wrong match by the profile name itself, where a namesake is in a
+  session the user isn't in, needs a temporary rename. That briefly sends every session matched only by the
+  profile name to Needs setup; they come back when the name is restored.
+- These are rare, because they need a namesake in a session the user isn't in, but they're the cost of removing
+  Change. See 13.6.
+- **Other risks:**
+  - **The opened card scrolling out of view:** guarded by the keep-in-view effect, and checked in T-N9.
+  - **Orphaned code:** covered by the reviewer's checklist.
+- **Size: small.** About 10 files, with no schema change, no API shape change and no new dependency. **Risk:
+  low.**
+
+### 13.6 Decisions for the owner
+
+There are no blocking questions. To confirm, or to overrule, at approval:
+
+1. **A stored list of more than 3 names** stays readable, is never trimmed, and refuses adds, with no special
+   dialog message (13.2, R2-3). *Recommendation:* accept. No such list exists.
+2. **No per-card fix for a wrong match** (13.5). It's what you decided. The workaround is the ordering above.
+   *Recommendation:* accept as decided. If testers trip over it, the smallest fix would be to bring back Change
+   inside the expanded card only.
+3. **The "Summary" heading uses the existing section-heading style,** which is uppercase grey at 3.41:1, below AA
+   for small text, as are "Outstanding" and "Settled". *Recommendation:* accept for now. Raising `.heading` to
+   `--text2` (6.36:1) would fix all of them, but it changes Home and History too, so it's a separate change if
+   you want it.
