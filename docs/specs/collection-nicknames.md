@@ -1443,8 +1443,10 @@ The owner checked the round 2 build and asked for these. Where they differ from 
      looked faded on an open card, so hovering it changes nothing.
    - The text, chips and buttons inside sit on `--surface` as before, so their contrast is unchanged. The
      `--shadow-md` lift is faint on the near-black page, so the outline does most of the work.
-   - Because the hover is plain `:hover`, on a touch screen a card that has just been closed by a tap can keep
-     the hover look until the next tap elsewhere. Home has the same behaviour.
+   - The hover rule is wrapped in `@media (hover: hover)`, on Collection's `.clickable:hover` and on Home's
+     `.card:hover`, so a tap on a touch screen no longer leaves `:hover` stuck on a card (owner, on the first
+     version, which used a plain `:hover`). The open card's outline doesn't depend on hover. Home's `.delete`
+     hover and focus-visible rule is left alone: it isn't a card hover, and a tap on it opens a confirmation.
 2. **At the nickname limit the Profile dialog hides the add controls.** Once 3 other names are listed, the "Add a
    name" button and the add field and its Add button are not rendered at all, not disabled. The note reads
    "You can keep up to 3 nicknames only." (the number is `NICKNAMES_MAX`), replacing "You can keep up to 3 other

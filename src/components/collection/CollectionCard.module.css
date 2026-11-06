@@ -14,10 +14,14 @@
 }
 
 /* Follows Home's In Progress cards: a collapsed card that can open gets the
-   green outline and lighter fill on hover. */
-.clickable:hover {
-  border-color: var(--accent-text);
-  background: var(--surface2);
+   green outline and lighter fill on hover. Only where a pointer can really
+   hover: on a touch screen a tap leaves :hover stuck on the card until the next
+   tap elsewhere. */
+@media (hover: hover) {
+  .clickable:hover {
+    border-color: var(--accent-text);
+    background: var(--surface2);
+  }
 }
 
 /* The one open card has the same outline and a lift, but no lighter fill, so
