@@ -6,6 +6,7 @@ import { useSessionsStore } from '../../context/SessionsStoreContext';
 import {
   formatCents,
   markAllMessage,
+  nicknamePrompt,
   openLinePayments,
   rememberOffer,
   type CollectionCard as Card,
@@ -52,24 +53,29 @@ function Chevron({ open }: { open: boolean }) {
   );
 }
 
-/** The part of the summary after the dates, which depends on the section. */
-function summaryDetail(card: Card): string[] {
+/**
+ * The part of the summary after the dates, which depends on the section. The
+ * money figures show only while collapsed: expanded, every line shows its own.
+ */
+function summaryDetail(card: Card, expanded: boolean): string[] {
   const { owedToYou, youOwe } = card;
   if (card.bucket === 'needsSetup') return [];
   if (card.bucket === 'outstanding') {
     return [`${card.settledLineCount} of ${card.lineCount} settled`];
   }
-  // The "You're not in this session · Change" line under it already says so.
+  // Nothing to summarise: the card has no lines, and opening it says why.
   if (card.me.kind === 'notInSession') return [];
   if (card.lineCount === 0) return ["Nothing to collect. You're even with everyone."];
   return [
     `Settled ${formatLocalDate(card.settledAt)}`,
-    [
-      owedToYou.length > 0 && `Received ${formatCents(card.receivedCents)}`,
-      youOwe.length > 0 && `Paid ${formatCents(card.paidOutCents)}`,
-    ]
-      .filter(Boolean)
-      .join(' · '),
+    expanded
+      ? ''
+      : [
+          owedToYou.length > 0 && `Received ${formatCents(card.receivedCents)}`,
+          youOwe.length > 0 && `Paid ${formatCents(card.paidOutCents)}`,
+        ]
+          .filter(Boolean)
+          .join(' · '),
   ];
 }
 
@@ -110,8 +116,8 @@ function MoneySummary({ card }: { card: Card }) {
  * question of who the user is and nothing else; the others summarise what is
  * left or what was settled, and expand to the lines themselves. Every card
  * starts collapsed, so a few unplaced sessions don't push the rest of the page
- * out of sight on a phone. A settled card with no lines has nothing to expand,
- * so it has no toggle. There is deliberately no delete here (AC-13.5):
+ * out of sight on a phone. A card placed automatically by the profile name,
+ * with no lines, has nothing to expand, so it has no toggle. There is deliberately no delete here (AC-13.5):
  * deleting a session belongs to History.
  */
 export function CollectionCard({ card, expanded, onToggle, failed, onFailed, onPaid }: Props) {
@@ -120,23 +126,27 @@ export function CollectionCard({ card, expanded, onToggle, failed, onFailed, onP
   const finished = `Finished ${formatLocalDate(session.closedAt ?? session.createdAt)}`;
   const bodyId = useId();
   const setup = card.bucket === 'needsSetup';
-  const expandable = setup || card.lineCount > 0;
-  // A card placed by one of the user's own names doesn't say who they are on
-  // every card; it only offers "Not you? Change" (BR-N5).
-  const quiet = card.me.kind === 'member' && card.me.recognised;
+  // Only a card placed automatically by the profile name says nothing about who
+  // the user is; every stored pick keeps its line, since Change is the only way
+  // to undo one (BR-N5, round 2).
+  const quiet = card.me.kind === 'member' && !card.me.picked;
+  // The line is shown inside the open card, never on a collapsed one, so a card
+  // that has it but no lines still opens, to show just that.
+  const hasLine = !setup && !quiet;
+  const expandable = setup || card.lineCount > 0 || hasLine;
 
   const summary = (
     <span className={styles.titles}>
       <span className={styles.title}>{title}</span>
       <span className={styles.meta}>{finished}</span>
-      {summaryDetail(card)
+      {summaryDetail(card, expanded)
         .filter((part) => part !== '')
         .map((part) => (
           <span key={part} className={styles.detail}>
             {part}
           </span>
         ))}
-      {card.bucket === 'outstanding' && <MoneySummary card={card} />}
+      {card.bucket === 'outstanding' && !expanded && <MoneySummary card={card} />}
     </span>
   );
 
@@ -164,9 +174,6 @@ export function CollectionCard({ card, expanded, onToggle, failed, onFailed, onP
         )}
       </h3>
 
-      {/* A quiet card's line waits at the bottom of its expanded body; with no body, it stays here. */}
-      {!setup && (!quiet || !expandable) && <YouAre card={card} title={title} quiet={quiet} />}
-
       {expandable && expanded && setup && (
         <div id={bodyId} className={styles.body}>
           <NeedsSetup card={card} />
@@ -175,12 +182,13 @@ export function CollectionCard({ card, expanded, onToggle, failed, onFailed, onP
 
       {expandable && expanded && !setup && (
         <div id={bodyId} className={styles.body}>
+          {hasLine && <YouAre card={card} title={title} />}
           {groups
             .filter((g) => g.lines.length > 0)
             .map((group) => (
               <section key={group.direction} className={styles.group}>
                 <h4 className={styles.groupHeading}>
-                  <DirectionLabel direction={group.direction} hint="inline" />
+                  <DirectionLabel direction={group.direction} />
                 </h4>
                 {group.lines.map((line) => (
                   <LineRow
@@ -195,7 +203,6 @@ export function CollectionCard({ card, expanded, onToggle, failed, onFailed, onP
               </section>
             ))}
           {card.bucket === 'outstanding' && <MarkAll card={card} title={title} onPaid={onPaid} />}
-          {quiet && <YouAre card={card} title={title} quiet />}
         </div>
       )}
     </article>
@@ -203,49 +210,33 @@ export function CollectionCard({ card, expanded, onToggle, failed, onFailed, onP
 }
 
 /**
- * Who the user is in the session. Spelled out on the card for a one-off pick
- * or "not in this session"; a card placed by one of the user's own names only
- * offers "Not you? Change", once expanded, since repeating their own name on
- * every card is noise (US-N1).
+ * Who the user is in the session, spelled out for any stored pick or "not in
+ * this session", since Change is the only way to undo one. It sits at the top of
+ * the open card, above the lines it decides, and never on a collapsed card. A
+ * card placed automatically by the profile name says nothing; a wrong match
+ * there is fixed by editing the name in Profile.
  */
-function YouAre({ card, title, quiet }: { card: Card; title: string; quiet: boolean }) {
+function YouAre({ card, title }: { card: Card; title: string }) {
   const [changing, setChanging] = useState(false);
   return (
     <div className={styles.youAre}>
-      {quiet && card.me.kind === 'member' ? (
-        <>
-          <span>Not you?</span>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="link-action"
-            aria-label={`Change who you are in ${title}. Now: ${card.me.name}`}
-            onClick={() => setChanging(true)}
-          >
-            Change
-          </Button>
-        </>
+      {card.me.kind === 'member' ? (
+        <span>
+          You are <strong>{card.me.name}</strong>
+        </span>
       ) : (
-        <>
-          {card.me.kind === 'member' ? (
-            <span>
-              You are <strong>{card.me.name}</strong>
-            </span>
-          ) : (
-            <span>You&apos;re not in this session</span>
-          )}
-          <span aria-hidden="true">·</span>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="link-action"
-            aria-label={`Change who you are in ${title}`}
-            onClick={() => setChanging(true)}
-          >
-            Change
-          </Button>
-        </>
+        <span>You&apos;re not in this session</span>
       )}
+      <span aria-hidden="true">·</span>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="link-action"
+        aria-label={`Change who you are in ${title}`}
+        onClick={() => setChanging(true)}
+      >
+        Change
+      </Button>
       {changing && (
         <ChangeMeDialog session={card.session} me={card.me} onClose={() => setChanging(false)} />
       )}
@@ -257,15 +248,21 @@ function YouAre({ card, title, quiet }: { card: Card; title: string; quiet: bool
 function NeedsSetup({ card }: { card: Card }) {
   const { setMe } = useSessionsStore();
   const profile = useProfile();
+  // The member a nickname matched, preselected for the user to confirm: a
+  // friend can share the nickname, so it never places a session on its own.
+  const suggested = card.me.kind === 'unknown' ? card.me.suggested : null;
+  // Null means untouched, so a suggestion that arrives or goes while the card is
+  // open (a remember saving, a name removed) is followed until a radio is tapped.
   const [choice, setChoice] = useState<string | null>(null);
   const [remember, setRemember] = useState(true);
+  const selected = choice ?? suggested;
 
   return (
     <div className={styles.setup}>
       <MePicker
-        legend="Which one are you?"
+        legend={suggested !== null ? nicknamePrompt(suggested) : 'Which one are you?'}
         members={card.session.members}
-        value={choice}
+        value={selected}
         onChange={setChoice}
         remember={remember}
         onRememberChange={setRemember}
@@ -273,15 +270,15 @@ function NeedsSetup({ card }: { card: Card }) {
       <div>
         <Button
           variant="primary"
-          disabled={choice === null}
+          disabled={selected === null}
           onClick={() => {
-            if (choice === null) return;
-            setMe(card.session.id, choice);
-            const offer = rememberOffer(profile, choice);
-            if (remember && offer !== null) void profile.remember(choice, offer);
+            if (selected === null) return;
+            setMe(card.session.id, selected);
+            const offer = rememberOffer(profile, selected);
+            if (remember && offer !== null) void profile.remember(selected, offer);
           }}
         >
-          Confirm
+          {selected !== null && selected === suggested ? "Yes, that's me" : 'Confirm'}
         </Button>
       </div>
     </div>

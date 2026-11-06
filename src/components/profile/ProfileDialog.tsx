@@ -34,7 +34,7 @@ export function ProfileDialog({ onClose }: Props) {
       ) : (
         <div className={confirmStyles.body}>
           <h2 id="profile-title" className={confirmStyles.title}>
-            Your name
+            Profile
           </h2>
           {profile.status === 'loading' ? (
             <p role="status" className={confirmStyles.message}>
@@ -103,7 +103,7 @@ function ProfileForm({ onClose }: Props) {
       }}
     >
       <h2 id="profile-title" className={confirmStyles.title}>
-        Your name
+        Profile
       </h2>
       <ProfileNameField value={name} onChange={setName} inputId={inputId} autoFocus />
 

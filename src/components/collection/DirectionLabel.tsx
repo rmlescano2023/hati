@@ -12,8 +12,8 @@ const WORDS: Record<Direction, { label: string; hint: string }> = {
 
 type Props = {
   direction: Direction;
-  /** Where the hint goes: after the label, under it, or nowhere (the card summary). */
-  hint?: 'inline' | 'stacked';
+  /** Shows the hint under the label: the totals strip only. */
+  hint?: boolean;
   /** Follows the label inside its colour, such as the card summary's amount. */
   children?: ReactNode;
   className?: string;
@@ -22,13 +22,13 @@ type Props = {
 /**
  * Which way the money goes, in words, an arrow and a colour. The one place
  * these are defined, so the totals strip, the card summary and the group
- * headings always match. The arrow is decorative: a screen reader reads the
+ * headings always match. Only the strip shows the hint. The arrow is decorative: a screen reader reads the
  * words and then the hint.
  */
 export function DirectionLabel({ direction, hint, children, className }: Props) {
   return (
     <span
-      className={[styles.label, styles[direction], hint === 'stacked' && styles.stacked, className]
+      className={[styles.label, styles[direction], hint && styles.stacked, className]
         .filter(Boolean)
         .join(' ')}
     >

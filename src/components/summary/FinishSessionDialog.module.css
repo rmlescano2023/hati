@@ -1,18 +1,3 @@
 .picker {
   margin-top: 6px;
 }
-
-.collecting {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px;
-  margin-top: 4px;
-  font-size: 13px;
-  color: var(--text2);
-}
-
-.collecting strong {
-  font-weight: 600;
-  color: var(--text);
-}

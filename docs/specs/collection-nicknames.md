@@ -1257,6 +1257,14 @@ line on one-off picks. So the rule becomes:
 | Any stored pick: a confirmed nickname, a one-off, or a member matching the profile name (for example after two profile hits) | "You are **X** · Change" | Change |
 | "I'm not in this session" | "You're not in this session · Change" | Change |
 
+**Owner decision at approval (2026-11-06), which changes this table's "Line" column:** the "You are X · Change"
+line, for any stored pick or "I'm not in this session", shows **only inside an expanded card**, never on a
+collapsed one. A card matched automatically by the profile name never shows it. As built, the line is the first
+thing in the open card's body, above the lines it decides. A card that has the line but no settlement lines (for
+example "I'm not in this session", or a pick of a member with nothing to pay) therefore opens too, to show just
+that line, so Change stays reachable. AC-N1.7 and AC-N1.8 ("collapsed and expanded") and AC-R2-4.2 are read
+accordingly.
+
 Without this, a confirmed "Pao" card would have no line and no Change. A wrong confirmation could then never be
 undone anywhere in the app, and its payments would sit on the wrong lines. This is listed for confirmation in
 "Decisions" below.

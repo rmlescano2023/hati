@@ -37,9 +37,20 @@ export function CollectionPage({ openSessionId }: Props) {
     [sessions, profile.displayName, profile.nicknames],
   );
 
-  const [open, setOpen] = useState<Set<string>>(
-    () => new Set(openSessionId !== undefined ? [openSessionId] : []),
-  );
+  // One card at a time: opening one closes the other, so the page never grows
+  // into several long bodies on a phone (owner, round 2).
+  const [openId, setOpenId] = useState<string | null>(openSessionId ?? null);
+  const toggled = useRef(false);
+  // Closing a long card above the one just opened moves the opened card up the
+  // page, possibly out of view, and Safari has no scroll anchoring to correct
+  // it. Only after a tap, so the landing scroll and re-sorts are left alone.
+  useEffect(() => {
+    if (!toggled.current) return;
+    toggled.current = false;
+    if (openId === null) return;
+    const el = document.getElementById(`collection-${openId}`);
+    if (el && el.getBoundingClientRect().top < 0) el.scrollIntoView({ block: 'start' });
+  }, [openId]);
   // Keyed by session and line, so a failed form survives its card moving
   // between sections as the figures revert.
   const [failed, setFailed] = useState(new Map<string, FailedPayment>());
@@ -145,15 +156,11 @@ export function CollectionPage({ openSessionId }: Props) {
       <CollectionCard
         key={id}
         card={card}
-        expanded={open.has(id)}
-        onToggle={() =>
-          setOpen((current) => {
-            const next = new Set(current);
-            if (next.has(id)) next.delete(id);
-            else next.add(id);
-            return next;
-          })
-        }
+        expanded={openId === id}
+        onToggle={() => {
+          toggled.current = true;
+          setOpenId((current) => (current === id ? null : id));
+        }}
         failed={(lineKey) => {
           const key = `${id}|${lineKey}`;
           const entry = failed.get(key);
@@ -189,23 +196,26 @@ export function CollectionPage({ openSessionId }: Props) {
         <>
           {profile.displayName === null && <ProfileBanner />}
 
-          <div className={styles.strip}>
-            <div className={styles.tile}>
-              <DirectionLabel direction="owedToYou" hint="stacked" className={styles.tileLabel} />
-              <span className={styles.tileAmount}>{formatCents(collection.owedToYouCents)}</span>
+          <section>
+            <h2 className={homeStyles.heading}>Summary</h2>
+            <div className={styles.strip}>
+              <div className={styles.tile}>
+                <DirectionLabel direction="owedToYou" hint className={styles.tileLabel} />
+                <span className={styles.tileAmount}>{formatCents(collection.owedToYouCents)}</span>
+              </div>
+              <div className={styles.tile}>
+                <DirectionLabel direction="youOwe" hint className={styles.tileLabel} />
+                <span className={styles.tileAmount}>{formatCents(collection.youOweCents)}</span>
+              </div>
             </div>
-            <div className={styles.tile}>
-              <DirectionLabel direction="youOwe" hint="stacked" className={styles.tileLabel} />
-              <span className={styles.tileAmount}>{formatCents(collection.youOweCents)}</span>
-            </div>
-          </div>
-          {needsSetup.length > 0 && (
-            <p className={styles.stripNote}>
-              {needsSetup.length === 1
-                ? 'Not counting 1 session that needs setup'
-                : `Not counting ${needsSetup.length} sessions that need setup`}
-            </p>
-          )}
+            {needsSetup.length > 0 && (
+              <p className={styles.stripNote}>
+                {needsSetup.length === 1
+                  ? 'Not counting 1 session that needs setup'
+                  : `Not counting ${needsSetup.length} sessions that need setup`}
+              </p>
+            )}
+          </section>
 
           {needsSetup.length > 0 && (
             <section className={styles.section}>
