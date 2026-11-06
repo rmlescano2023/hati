@@ -82,4 +82,37 @@ describe('parseProfileInput', () => {
       expect(parseProfileInput(bad)).toBeNull();
     }
   });
+
+  it('tidies the other names and drops blanks (BR-N6)', () => {
+    expect(parseProfileInput({ nicknames: [' pao ', '  '] })).toEqual({ nicknames: ['Pao'] });
+  });
+
+  it('takes the name and the other names together', () => {
+    expect(parseProfileInput({ displayName: 'paolo', nicknames: [] })).toEqual({
+      displayName: 'Paolo',
+      nicknames: [],
+    });
+  });
+
+  it('takes one name to add (BR-N11)', () => {
+    expect(parseProfileInput({ addNickname: ' pao ' })).toEqual({ addNickname: 'Pao' });
+  });
+
+  it('rejects other names that are not a short list of strings', () => {
+    const eleven = Array.from({ length: 11 }, (_, i) => `n${i}`);
+    for (const bad of [{ nicknames: 'Pao' }, { nicknames: [5] }, { nicknames: eleven }]) {
+      expect(parseProfileInput(bad)).toBeNull();
+    }
+  });
+
+  it('rejects a blank or mistyped name to add, and one mixed with a set', () => {
+    for (const bad of [
+      { addNickname: '  ' },
+      { addNickname: 5 },
+      { addNickname: 'Pao', displayName: 'X' },
+      { addNickname: 'Pao', nicknames: [] },
+    ]) {
+      expect(parseProfileInput(bad)).toBeNull();
+    }
+  });
 });

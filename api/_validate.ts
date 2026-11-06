@@ -1,5 +1,9 @@
 import { parseActivityAt } from '../src/lib/activity.js';
-import { normaliseProfileName } from '../src/lib/profileName.js';
+import {
+  NICKNAMES_MAX,
+  normaliseProfileName,
+  type ProfileUpdate,
+} from '../src/lib/profileName.js';
 import { normaliseSessionName } from '../src/lib/sessionName.js';
 import { parseSession } from '../src/lib/storage.js';
 import type { NewPayment, Session } from '../src/types';
@@ -91,12 +95,34 @@ export function parsePaymentsInput(
 }
 
 /**
- * A profile update. It is the whole request, so a missing or mistyped name is
- * a 400 rather than a default; a blank one is a deliberate unset (AC-2.4).
+ * A profile update: set the name, the other names or both, or add one other
+ * name. It is the whole request, so a missing or mistyped field is a 400 rather
+ * than a default; a blank name is a deliberate unset (AC-2.4). A list of more
+ * than NICKNAMES_MAX is refused rather than cut, so a name the user thinks is
+ * saved is never silently dropped (BR-N7).
  */
-export function parseProfileInput(raw: unknown): { displayName: string | null } | null {
+export function parseProfileInput(raw: unknown): ProfileUpdate | null {
   if (!isPlainObject(raw)) return null;
-  const { displayName } = raw;
-  if (displayName !== null && typeof displayName !== 'string') return null;
-  return { displayName: normaliseProfileName(displayName) };
+  const { displayName, nicknames, addNickname } = raw;
+
+  if (addNickname !== undefined) {
+    if (displayName !== undefined || nicknames !== undefined) return null;
+    const name = normaliseProfileName(addNickname);
+    return name === null ? null : { addNickname: name };
+  }
+
+  if (displayName === undefined && nicknames === undefined) return null;
+  const update: { displayName?: string | null; nicknames?: string[] } = {};
+  if (displayName !== undefined) {
+    if (displayName !== null && typeof displayName !== 'string') return null;
+    update.displayName = normaliseProfileName(displayName);
+  }
+  if (nicknames !== undefined) {
+    if (!Array.isArray(nicknames) || nicknames.length > NICKNAMES_MAX) return null;
+    if (!nicknames.every((n) => typeof n === 'string')) return null;
+    update.nicknames = nicknames
+      .map((n) => normaliseProfileName(n))
+      .filter((n): n is string => n !== null);
+  }
+  return update;
 }

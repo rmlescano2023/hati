@@ -1,12 +1,13 @@
 import { getFinalSettlement, getNettedOwedMatrix, getRawOwedMatrix } from './calculations.js';
 import { compareNames, formatMoney, sortNames } from './format.js';
 import { roundMoney } from './money.js';
+import { NICKNAMES_MAX, normaliseProfileName } from './profileName.js';
 import { sessionDisplayTitle } from './sessionLabel.js';
 import type { NewPayment, Payment, Session } from '../types';
 
 /**
  * Everything Collection shows is derived here, on every render, from the
- * sessions, their payments and the profile name. Nothing derived is stored, so
+ * sessions, their payments and the user's names. Nothing derived is stored, so
  * a pick, a rename or an undo can never leave a stale figure behind.
  *
  * Money is whole centavos throughout. Line amounts come from the settlement
@@ -42,33 +43,84 @@ export function parseMe(raw: unknown, members: string[]): string | null {
   return typeof raw === 'string' && members.includes(raw) ? raw : null;
 }
 
+/** The names Hati recognises the user by: the profile name, if set, and their other names (BR-N1). */
+export type KnownNames = { displayName: string | null; nicknames: string[] };
+
+const sameName = (a: string, b: string): boolean => compareNames(a, b) === 0;
+
+/** Whether a name is one of the user's own, ignoring case and accents but not spaces (BR-N2). */
+export function isKnownName(name: string, names: KnownNames): boolean {
+  return (
+    (names.displayName !== null && sameName(name, names.displayName)) ||
+    names.nicknames.some((n) => sameName(name, n))
+  );
+}
+
 /**
- * The one member whose name matches the profile name, ignoring case and
- * accents but not spaces (BR-4). More than one match is treated as none:
- * guessing between them would put payments on the wrong lines.
+ * The one member who is the user. The profile name decides first: one hit
+ * places the session, and more than one is ambiguous, so nothing is guessed
+ * (BR-4). Only when it matches no member do the other names count, with the
+ * same one-hit rule (owner, Q1), so saving a nickname never unplaces a session
+ * the profile name already placed. Hits are counted by member, so one member
+ * matching two of the names is still one hit.
  */
-export function matchMember(members: string[], profileName: string | null): string | null {
-  if (profileName === null) return null;
-  const hits = members.filter((m) => compareNames(m, profileName) === 0);
-  return hits.length === 1 ? hits[0] : null;
+export function matchMember(members: string[], names: KnownNames): string | null {
+  const { displayName } = names;
+  const byName = displayName === null ? [] : members.filter((m) => sameName(m, displayName));
+  if (byName.length > 0) return byName.length === 1 ? byName[0] : null;
+  const byNickname = members.filter((m) => names.nicknames.some((n) => sameName(m, n)));
+  return byNickname.length === 1 ? byNickname[0] : null;
 }
 
 export type Me =
-  | { kind: 'member'; name: string; picked: boolean }
+  /**
+   * `recognised`: the member is one of the user's own names, whether picked or
+   * matched, so the card needn't say who they are (BR-N5). Derived on every
+   * render, so it follows the names as they change.
+   */
+  | { kind: 'member'; name: string; picked: boolean; recognised: boolean }
   | { kind: 'notInSession' }
   | { kind: 'unknown' };
 
-/** BR-5: an explicit pick, then the profile match, then unknown (Needs setup). */
-export function resolveMe(
-  session: Pick<Session, 'me' | 'members'>,
-  profileName: string | null,
-): Me {
+/** BR-5: an explicit pick, then the match on the user's names, then unknown (Needs setup). */
+export function resolveMe(session: Pick<Session, 'me' | 'members'>, names: KnownNames): Me {
   if (session.me === NOT_IN_SESSION) return { kind: 'notInSession' };
   if (session.me !== null && session.members.includes(session.me)) {
-    return { kind: 'member', name: session.me, picked: true };
+    return {
+      kind: 'member',
+      name: session.me,
+      picked: true,
+      recognised: isKnownName(session.me, names),
+    };
   }
-  const match = matchMember(session.members, profileName);
-  return match === null ? { kind: 'unknown' } : { kind: 'member', name: match, picked: false };
+  const match = matchMember(session.members, names);
+  return match === null
+    ? { kind: 'unknown' }
+    : { kind: 'member', name: match, picked: false, recognised: true };
+}
+
+/** Which "Remember" checkbox a picker offers for its selection, if any. */
+export type RememberOffer = 'name' | 'nickname';
+
+/**
+ * "Remember as my name" while no profile name is set, otherwise "Remember
+ * “X” as another name for me", and only for a member Hati doesn't already
+ * know (BR-N10). Callers use it both to show the checkbox and to decide
+ * whether its value counts, since it only means something while shown.
+ */
+export function rememberOffer(
+  profile: KnownNames & { status: string },
+  value: string | null,
+): RememberOffer | null {
+  if (profile.status !== 'ready' || value === null || value === NOT_IN_SESSION) return null;
+  if (isKnownName(value, profile)) return null;
+  // The name is stored tidied. One that tidies into something else, such as a
+  // member name past 60 characters or with doubled spaces, would never match
+  // again, so it isn't offered (BR-N6, E15).
+  const stored = normaliseProfileName(value);
+  if (stored === null || !sameName(stored, value)) return null;
+  if (profile.displayName === null) return 'name';
+  return profile.nicknames.length < NICKNAMES_MAX ? 'nickname' : null;
 }
 
 export type SettlementPair = { debtor: string; creditor: string; amountCents: number };
@@ -158,8 +210,8 @@ const sumRemaining = (lines: CollectionLine[]) =>
   lines.reduce((sum, l) => sum + l.remainingCents, 0);
 const sumPaid = (lines: CollectionLine[]) => lines.reduce((sum, l) => sum + l.paidCents, 0);
 
-export function buildCard(session: Session, profileName: string | null): CollectionCard {
-  const me = resolveMe(session, profileName);
+export function buildCard(session: Session, names: KnownNames): CollectionCard {
+  const me = resolveMe(session, names);
   const finishedAt = session.closedAt ?? session.createdAt;
   const owedToYou: CollectionLine[] = [];
   const youOwe: CollectionLine[] = [];
@@ -214,8 +266,8 @@ export type Collection = {
 };
 
 /** Finished sessions only (BR-1), sectioned and ordered as BR-17a sets out. */
-export function buildCollection(sessions: Session[], profileName: string | null): Collection {
-  const cards = sessions.filter((s) => s.status === 'closed').map((s) => buildCard(s, profileName));
+export function buildCollection(sessions: Session[], names: KnownNames): Collection {
+  const cards = sessions.filter((s) => s.status === 'closed').map((s) => buildCard(s, names));
   const byFinished = (a: CollectionCard, b: CollectionCard) =>
     ms(b.session.closedAt) - ms(a.session.closedAt) || byId(a.session.id, b.session.id);
   const bySettled = (a: CollectionCard, b: CollectionCard) =>
