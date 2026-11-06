@@ -1434,11 +1434,12 @@ undone anywhere in the app, and its payments would sit on the wrong lines. This 
 
 The owner checked the round 2 build and asked for these. Where they differ from the text above, they win.
 
-1. **The open card is highlighted.** An expanded card on Collection takes `--surface2` as its background and
-   `--border2` as its border, with a 0.15s transition like the buttons use. It stays neutral, because green and
-   amber already mean direction and status here, and applies at every width. Text in `--text` and `--text2`
-   keeps AA on `--surface2` (5.77:1 for `--text2`). The `--text3` meta lines ("Finished …", payment times) were
-   already below AA on `--surface` (3.41:1) and are 3.07:1 on `--surface2`; left as they were.
+1. **The open card is highlighted.** An expanded card on Collection keeps its normal `--surface` background, and
+   gets a brighter neutral outline, `--text3` (#6c727d) as its border, and a soft lift, `--shadow-md`, with a 0.15s
+   transition on both. A first try with a `--surface2` background looked faded and was dropped. It stays neutral,
+   because green and amber already mean direction and status here, and applies at every width. The text, chips and
+   buttons inside sit on the same surface as before, so their contrast is unchanged. `--shadow-md` is barely
+   visible on the near-black page, so the outline does most of the work.
 2. **At the nickname limit the Profile dialog hides the add controls.** Once 3 other names are listed, the "Add a
    name" button and the add field and its Add button are not rendered at all, not disabled. The note reads
    "You can keep up to 3 nicknames only." (the number is `NICKNAMES_MAX`), replacing "You can keep up to 3 other
