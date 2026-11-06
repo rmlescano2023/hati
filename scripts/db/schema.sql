@@ -18,6 +18,12 @@ alter table users add column if not exists onboarded_at timestamptz;
 -- one is the user. Null means not set yet.
 alter table users add column if not exists display_name text;
 
+-- Other names the user goes by in some groups ("Pao" for "Paolo"), tidied
+-- like display_name, deduplicated and sorted by the app. Collection matches
+-- them only when display_name matches no member. Null means none, as does
+-- an empty array.
+alter table users add column if not exists nicknames text[];
+
 create table if not exists expense_sessions (
   id         text primary key,          -- keeps the existing "session_xxx" ids
   user_id    text not null references users (id) on delete cascade,
