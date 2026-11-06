@@ -1,5 +1,6 @@
 import { buildDemoData } from './demoData';
 import { createId } from './id';
+import { sortNames } from './format';
 import { NOT_IN_SESSION, buildCard, openLinePayments } from './collection';
 import type { Payment, PurchaseRecord, Session } from '../types';
 
@@ -116,5 +117,67 @@ export function buildDemoSessions(): Session[] {
       payments: [],
     };
     return status === 'closed' ? withCollectionState(session, closedIndex++) : session;
+  });
+}
+
+/** Renames members throughout a generated record set, so a seeded session can hold any names. */
+function renameMembers(
+  demo: { members: string[]; records: PurchaseRecord[] },
+  names: Record<string, string>,
+): { members: string[]; records: PurchaseRecord[] } {
+  const rename = (m: string) => names[m] ?? m;
+  return {
+    members: sortNames(demo.members.map(rename)),
+    records: demo.records.map((record) => ({
+      ...record,
+      payors: record.payors.map((p) => ({ ...p, member: rename(p.member) })),
+      items: record.items.map((item) =>
+        item.mode === 'equal'
+          ? { ...item, owners: item.owners.map(rename) }
+          : {
+              ...item,
+              amounts: Object.fromEntries(
+                Object.entries(item.amounts).map(([m, amount]) => [rename(m), amount]),
+              ),
+            },
+      ),
+    })),
+  };
+}
+
+/**
+ * Three finished sessions with no pick, for trying the Needs setup question
+ * without finishing drafts by hand. Every name differs from the profile name
+ * "Renmar" the other seeds use, so each one is unplaced whatever it is. Appended
+ * only, never replacing anything.
+ */
+export function buildNeedsSetupSessions(): Session[] {
+  const specs: { name: string; rename: Record<string, string>; endDaysAgo: number }[] = [
+    // Shows the nickname prompt when "Red" is a saved other name, else the plain picker.
+    { name: 'Needs setup: nickname Red', rename: { Renmar: 'Red' }, endDaysAgo: 3 },
+    // Neither name: always the plain picker.
+    { name: 'Needs setup: no known name', rename: { Renmar: 'Zed' }, endDaysAgo: 4 },
+    // Both names: nothing preselected once Red and Pao are both saved.
+    {
+      name: 'Needs setup: Red and Pao',
+      rename: { Renmar: 'Red', Jyllan: 'Pao' },
+      endDaysAgo: 5,
+    },
+  ];
+  return specs.map(({ name, rename, endDaysAgo }) => {
+    const demo = renameMembers(buildDemoData(3, 10), rename);
+    const records = shiftDates(demo.records.slice(0, 2), endDaysAgo);
+    return {
+      id: createId('session'),
+      status: 'closed',
+      createdAt: daysAgoIso(endDaysAgo + records.length + 1),
+      closedAt: daysAgoIso(Math.max(0, endDaysAgo - 1)),
+      members: demo.members,
+      records,
+      name,
+      activityAt: null,
+      me: null,
+      payments: [],
+    };
   });
 }

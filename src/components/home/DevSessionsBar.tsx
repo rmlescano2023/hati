@@ -1,6 +1,6 @@
 import { Button } from '../shared/Button';
 import { useSessionsStore } from '../../context/SessionsStoreContext';
-import { buildDemoSessions } from '../../lib/demoSessions';
+import { buildDemoSessions, buildNeedsSetupSessions } from '../../lib/demoSessions';
 import styles from './DevDataBar.module.css';
 
 type Props = {
@@ -10,7 +10,8 @@ type Props = {
 
 /**
  * Dev-only seeding for the launcher and History: a spread of drafts and closed
- * sessions, so both lists can be eyeballed without creating a dozen by hand.
+ * sessions, so both lists can be eyeballed without creating a dozen by hand,
+ * and a few unplaced ones for Collection's Needs setup question.
  * Never rendered in a production build — `import.meta.env.DEV` is statically
  * false there, so this component and `demoSessions` are dropped by the bundler.
  */
@@ -30,6 +31,12 @@ export function DevSessionsBar({ onPreviewTour }: Props) {
       </Button>
       <Button size="sm" onClick={() => seed(true)}>
         Seed Sessions (add)
+      </Button>
+      <Button
+        size="sm"
+        onClick={() => replaceAllSessions([...sessions, ...buildNeedsSetupSessions()])}
+      >
+        Seed Needs setup (add)
       </Button>
       {onPreviewTour && (
         <Button size="sm" onClick={onPreviewTour}>

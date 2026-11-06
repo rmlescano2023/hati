@@ -1430,6 +1430,25 @@ undone anywhere in the app, and its payments would sit on the wrong lines. This 
   - Given two nickname hits,
   - Then nothing is preselected.
 
+#### Owner check (2026-11-06): three more changes
+
+The owner checked the round 2 build and asked for these. Where they differ from the text above, they win.
+
+1. **The open card is highlighted.** An expanded card on Collection takes `--surface2` as its background and
+   `--border2` as its border, with a 0.15s transition like the buttons use. It stays neutral, because green and
+   amber already mean direction and status here, and applies at every width. Text in `--text` and `--text2`
+   keeps AA on `--surface2` (5.77:1 for `--text2`). The `--text3` meta lines ("Finished …", payment times) were
+   already below AA on `--surface` (3.41:1) and are 3.07:1 on `--surface2`; left as they were.
+2. **At the nickname limit the Profile dialog hides the add controls.** Once 3 other names are listed, the "Add a
+   name" button and the add field and its Add button are not rendered at all, not disabled. The note reads
+   "You can keep up to 3 nicknames only." (the number is `NICKNAMES_MAX`), replacing "You can keep up to 3 other
+   names." in AC-R2-3.1. Below the limit nothing changes.
+3. **A dev-only "Seed Needs setup (add)" button** in `DevSessionsBar`, beside "Seed Sessions (add)", behind the
+   same `import.meta.env.DEV` gate and lazy import. It appends three finished sessions with no pick and
+   settlement lines, never replacing anything: "Needs setup: nickname Red" (Red, no Renmar), "Needs setup: no
+   known name" (Zed) and "Needs setup: Red and Pao". `buildNeedsSetupSessions` in `src/lib/demoSessions.ts`
+   builds them, and `demoSessions.test.ts` covers their shape.
+
 #### R2-11. Brighter section headings
 
 - **Change:** in `src/pages/HomePage.module.css`, `.heading { color: var(--text2); }`, replacing `var(--text3)`.

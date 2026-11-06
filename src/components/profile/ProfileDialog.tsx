@@ -130,14 +130,7 @@ function ProfileForm({ onClose }: Props) {
           </ul>
         )}
         {others.length >= NICKNAMES_MAX ? (
-          <>
-            <div>
-              <Button size="sm" variant="ghost" disabled>
-                Add a name
-              </Button>
-            </div>
-            <p className={styles.note}>You can keep up to {NICKNAMES_MAX} other names.</p>
-          </>
+          <p className={styles.note}>You can keep up to {NICKNAMES_MAX} nicknames only.</p>
         ) : !adding ? (
           <div>
             <Button

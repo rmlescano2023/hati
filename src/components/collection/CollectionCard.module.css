@@ -7,6 +7,16 @@
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
+  transition:
+    background-color 0.15s,
+    border-color 0.15s;
+}
+
+/* The one open card, so it's clear which one the body below belongs to. Neutral
+   on purpose: green and amber already mean money direction and status here. */
+.open {
+  border-color: var(--border2);
+  background: var(--surface2);
 }
 
 .headerHeading {

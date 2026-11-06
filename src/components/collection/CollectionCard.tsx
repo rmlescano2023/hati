@@ -156,7 +156,10 @@ export function CollectionCard({ card, expanded, onToggle, failed, onFailed, onP
   ];
 
   return (
-    <article id={`collection-${session.id}`} className={styles.card}>
+    <article
+      id={`collection-${session.id}`}
+      className={`${styles.card} ${expandable && expanded ? styles.open : ''}`}
+    >
       <h3 className={styles.headerHeading}>
         {expandable ? (
           <button
