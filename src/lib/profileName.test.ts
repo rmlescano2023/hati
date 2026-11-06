@@ -91,13 +91,29 @@ describe('applyProfileUpdate (BR-N7, BR-N11, BR-N13)', () => {
   });
 
   it('refuses an add past the limit, but not a duplicate at the limit', () => {
-    const ten = Array.from(
-      { length: NICKNAMES_MAX },
-      (_, i) => `Name${String.fromCharCode(97 + i)}`,
-    );
-    const full = { displayName: 'Paolo', nicknames: ten };
+    const full = {
+      displayName: 'Paolo',
+      nicknames: Array.from(
+        { length: NICKNAMES_MAX },
+        (_, i) => `Name${String.fromCharCode(97 + i)}`,
+      ),
+    };
     expect(applyProfileUpdate(full, { addNickname: 'Pao' })).toBeNull();
     expect(applyProfileUpdate(full, { addNickname: 'namea' })).toEqual(full);
+  });
+
+  it('keeps at most 3 other names', () => {
+    expect(NICKNAMES_MAX).toBe(3);
+  });
+
+  it('leaves a stored list longer than the limit readable and refuses adds (AC-R2-3.5)', () => {
+    const five = {
+      displayName: 'Paolo',
+      nicknames: ['Namea', 'Nameb', 'Namec', 'Named', 'Namee'],
+    };
+    expect(applyProfileUpdate(five, { addNickname: 'Pao' })).toBeNull();
+    expect(applyProfileUpdate(five, { displayName: 'Paolo' })).toEqual(five);
+    expect(applyProfileUpdate(five, { addNickname: 'namee' })).toEqual(five);
   });
 
   it('adds with no profile name (E4)', () => {

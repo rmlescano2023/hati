@@ -6,6 +6,7 @@ import {
   isKnownName,
   markAllMessage,
   matchMember,
+  nicknamePrompt,
   mergeServerPayments,
   newPayments,
   openLinePayments,
@@ -16,6 +17,7 @@ import {
   settlementPairs,
   type KnownNames,
 } from './collection';
+import { NICKNAMES_MAX } from './profileName';
 import type { Payment, PurchaseRecord, Session } from '../types';
 
 const names = (displayName: string | null, ...nicknames: string[]): KnownNames => ({
@@ -124,10 +126,13 @@ describe('settlementPairs', () => {
   });
 });
 
+const profileHit = (member: string) => ({ member, via: 'profile' });
+const nicknameHit = (member: string) => ({ member, via: 'nickname' });
+
 describe('matchMember (BR-4, BR-N2, BR-N3)', () => {
   it('ignores case and accents', () => {
-    expect(matchMember(['Ana', 'Renmar'], names('renmar'))).toBe('Renmar');
-    expect(matchMember(['José', 'Ana'], names('Jose'))).toBe('José');
+    expect(matchMember(['Ana', 'Renmar'], names('renmar'))).toEqual(profileHit('Renmar'));
+    expect(matchMember(['José', 'Ana'], names('Jose'))).toEqual(profileHit('José'));
   });
 
   it('does not match a longer name', () => {
@@ -143,24 +148,35 @@ describe('matchMember (BR-4, BR-N2, BR-N3)', () => {
     expect(matchMember(['José', 'Jose', 'Pao'], names('jose', 'Pao'))).toBeNull();
   });
 
-  it('places a member by an other name (AC-N3.1, AC-N3.4)', () => {
-    expect(matchMember(['Ana', 'Pao'], names('Paolo', 'Pao'))).toBe('Pao');
-    expect(matchMember(['Ana', 'Pao'], names(null, 'Pao'))).toBe('Pao');
+  it('finds a member by an other name, as a nickname hit (AC-R2-9.1, AC-R2-9.4)', () => {
+    expect(matchMember(['Ana', 'Pao'], names('Paolo', 'Pao'))).toEqual(nicknameHit('Pao'));
+    expect(matchMember(['Ana', 'Pao'], names(null, 'Pao'))).toEqual(nicknameHit('Pao'));
   });
 
   it('ignores case and accents but not spaces for other names (AC-N3.2)', () => {
-    expect(matchMember(['Ana', 'pao'], names('Paolo', 'Pao'))).toBe('pao');
-    expect(matchMember(['Ana', 'Páo'], names('Paolo', 'Pao'))).toBe('Páo');
+    expect(matchMember(['Ana', 'pao'], names('Paolo', 'Pao'))).toEqual(nicknameHit('pao'));
+    expect(matchMember(['Ana', 'Páo'], names('Paolo', 'Pao'))).toEqual(nicknameHit('Páo'));
     expect(matchMember(['Ana', 'Pao L'], names('Paolo', 'Pao'))).toBeNull();
   });
 
   it('lets the profile name win over an other name (Q1, E2)', () => {
-    expect(matchMember(['Paolo', 'Pao'], names('Paolo', 'Pao'))).toBe('Paolo');
+    expect(matchMember(['Paolo', 'Pao'], names('Paolo', 'Pao'))).toEqual(profileHit('Paolo'));
   });
 
-  it('asks when the other names match two members and the profile name none (AC-N3.3)', () => {
+  it('gives null when the other names match two members and the profile name none (AC-N3.3)', () => {
     expect(matchMember(['Pao', 'Red'], names('Paolo', 'Pao', 'Red'))).toBeNull();
     expect(matchMember(['Pao', 'Páo'], names(null, 'Pao'))).toBeNull();
+  });
+
+  it('matches a member against the last of a stored list longer than the limit (AC-R2-3.5)', () => {
+    const five = names('Paolo', 'Namea', 'Nameb', 'Namec', 'Named', 'Namee');
+    expect(matchMember(['Ana', 'Namee'], five)).toEqual(nicknameHit('Namee'));
+  });
+});
+
+describe('nicknamePrompt', () => {
+  it('names the member as it appears in the session', () => {
+    expect(nicknamePrompt('Pao')).toBe('You go by “Pao” — is that you here?');
   });
 });
 
@@ -184,18 +200,14 @@ describe('resolveMe (BR-5, BR-N4)', () => {
       kind: 'member',
       name: 'Ana',
       picked: true,
-      recognised: false,
     });
   });
 
-  it('recognises a pick of a known name, as a profile name or an other name (AC-N1.3)', () => {
-    expect(resolveMe({ me: 'Ana', members }, names('Renmar', 'ana'))).toMatchObject({
+  it('keeps a pick of a known name a pick, so its line shows (AC-R2-9.9)', () => {
+    expect(resolveMe({ me: 'Renmar', members }, names('Renmar'))).toEqual({
+      kind: 'member',
+      name: 'Renmar',
       picked: true,
-      recognised: true,
-    });
-    expect(resolveMe({ me: 'Renmar', members }, names('Renmar'))).toMatchObject({
-      picked: true,
-      recognised: true,
     });
   });
 
@@ -210,19 +222,30 @@ describe('resolveMe (BR-5, BR-N4)', () => {
       kind: 'member',
       name: 'Renmar',
       picked: false,
-      recognised: true,
     });
   });
 
-  it('uses the match without a pick, and is unknown without either', () => {
+  it('places a profile-name match, and is unknown without one', () => {
     expect(resolveMe({ me: null, members }, names('renmar'))).toEqual({
       kind: 'member',
       name: 'Renmar',
       picked: false,
-      recognised: true,
     });
-    expect(resolveMe({ me: null, members }, names('Zoe'))).toEqual({ kind: 'unknown' });
-    expect(resolveMe({ me: null, members }, names(null))).toEqual({ kind: 'unknown' });
+    expect(resolveMe({ me: null, members }, names('Zoe'))).toEqual({
+      kind: 'unknown',
+      suggested: null,
+    });
+    expect(resolveMe({ me: null, members }, names(null))).toEqual({
+      kind: 'unknown',
+      suggested: null,
+    });
+  });
+
+  it('only suggests a nickname match, never places it (AC-R2-9.1)', () => {
+    expect(resolveMe({ me: null, members }, names('Zoe', 'Ana'))).toEqual({
+      kind: 'unknown',
+      suggested: 'Ana',
+    });
   });
 });
 
@@ -405,43 +428,44 @@ describe('buildCollection with other names (US-N1, US-N3)', () => {
   const paoTrip = (over: Partial<Session> = {}) =>
     finished('session_pao', ['Ana', 'Pao'], [purchase('r8', 'Pao', 100, ['Ana', 'Pao'])], over);
 
-  it('places a session by an other name, and asks without it (AC-N1.2, AC-N3.6)', () => {
-    const withIt = buildCollection([paoTrip()], names('Paolo', 'Pao'));
-    expect(withIt.needsSetup).toEqual([]);
-    expect(withIt.outstanding[0].me).toMatchObject({ name: 'Pao', recognised: true });
-    expect(buildCollection([paoTrip()], names('Paolo')).needsSetup).toHaveLength(1);
+  it('suggests a nickname match in Needs setup, out of the totals (AC-R2-9.1)', () => {
+    const c = buildCollection([paoTrip()], names('Paolo', 'Pao'));
+    expect(c.outstanding).toEqual([]);
+    expect(c.needsSetup[0].me).toEqual({ kind: 'unknown', suggested: 'Pao' });
+    expect([c.owedToYouCents, c.youOweCents]).toEqual([0, 0]);
   });
 
-  it('sends an automatic match back to Needs setup when the name goes, keeping a pick (E3)', () => {
-    const auto = paoTrip();
-    const picked = paoTrip({ id: 'session_picked', me: 'Pao' });
-    const c = buildCollection([auto, picked], names('Paolo'));
-    expect(c.needsSetup.map((card) => card.session.id)).toEqual(['session_pao']);
-    expect(c.outstanding[0].me).toMatchObject({ picked: true, recognised: false });
-    expect(c.outstanding[0].owedToYou.concat(c.outstanding[0].youOwe)).toHaveLength(1);
+  it('places the session once Pao is confirmed, and keeps it when the name goes (AC-R2-9.2)', () => {
+    const confirmed = paoTrip({ me: 'Pao' });
+    expect(buildCollection([confirmed], names('Paolo', 'Pao')).outstanding).toHaveLength(1);
+    const after = buildCollection([confirmed], names('Paolo'));
+    expect(after.outstanding[0].me).toMatchObject({ name: 'Pao', picked: true });
+    expect(after.outstanding[0].owedToYou.concat(after.outstanding[0].youOwe)).toHaveLength(1);
   });
 
-  it('keeps a session with the profile name and an added friend placed as the profile name (E7)', () => {
+  it('drops the suggestion when the name is removed (AC-R2-9.8)', () => {
+    const c = buildCollection([paoTrip()], names('Paolo'));
+    expect(c.needsSetup[0].me).toEqual({ kind: 'unknown', suggested: null });
+  });
+
+  it('keeps a session with the profile name and a friend placed as the profile name (AC-R2-9.6)', () => {
     const both = finished(
       'session_both',
       ['Paolo', 'Pao'],
       [purchase('r9', 'Paolo', 100, ['Paolo', 'Pao'])],
     );
-    const before = buildCollection([both], names('Paolo'));
-    const after = buildCollection([both], names('Paolo', 'Pao'));
-    expect(before.outstanding[0].me).toMatchObject({ name: 'Paolo' });
-    expect(after.outstanding[0].me).toMatchObject({ name: 'Paolo' });
+    for (const known of [names('Paolo'), names('Paolo', 'Pao')]) {
+      expect(buildCollection([both], known).outstanding[0].me).toMatchObject({
+        name: 'Paolo',
+        picked: false,
+      });
+    }
   });
 
-  it('turns a one-off pick into a recognised one once the name is added (AC-N1.9)', () => {
-    const picked = tripC({ me: 'Ana' });
-    expect(buildCard(picked, names('Renmar')).me).toMatchObject({ recognised: false });
-    expect(buildCard(picked, names('Renmar', 'Ana')).me).toMatchObject({ recognised: true });
-  });
-
-  it('places a one-member session whose member is a known name (E19)', () => {
+  it('does not place a one-member session from a nickname alone (E19)', () => {
     const solo = finished('session_solo', ['Pao'], []);
-    expect(buildCard(solo, names(null, 'Pao')).bucket).toBe('settled');
+    expect(buildCard(solo, names('Pao')).bucket).toBe('settled');
+    expect(buildCard(solo, names(null, 'Pao')).bucket).toBe('needsSetup');
     expect(buildCard(solo, names(null)).bucket).toBe('needsSetup');
   });
 });
@@ -471,10 +495,18 @@ describe('rememberOffer (BR-N10)', () => {
     expect(rememberOffer(ready(null, 'Red'), 'Pao')).toBe('name');
   });
 
-  it('stops offering another name at ten, but still offers the profile name', () => {
-    const ten = Array.from({ length: 10 }, (_, i) => `Name${String.fromCharCode(97 + i)}`);
-    expect(rememberOffer(ready('Paolo', ...ten), 'Pao')).toBeNull();
-    expect(rememberOffer(ready(null, ...ten), 'Pao')).toBe('name');
+  it('stops offering another name at the limit, but still offers the profile name', () => {
+    const full = Array.from(
+      { length: NICKNAMES_MAX },
+      (_, i) => `Name${String.fromCharCode(97 + i)}`,
+    );
+    expect(rememberOffer(ready('Paolo', ...full), 'Pao')).toBeNull();
+    expect(rememberOffer(ready(null, ...full), 'Pao')).toBe('name');
+  });
+
+  it('offers no other name for a stored list longer than the limit (AC-R2-3.5)', () => {
+    const five = ['Namea', 'Nameb', 'Namec', 'Named', 'Namee'];
+    expect(rememberOffer(ready('Paolo', ...five), 'Pao')).toBeNull();
   });
 
   it('offers nothing for a name that would not survive being stored (BR-N6, E15)', () => {

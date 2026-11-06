@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { ensureUser, getUserId, pool } from './_shared.js';
 import { parseProfileInput } from './_validate.js';
-import { applyProfileUpdate } from '../src/lib/profileName.js';
+import { NICKNAMES_MAX, applyProfileUpdate } from '../src/lib/profileName.js';
 
 /**
  * The account's own record: whether onboarding is done, and the profile name
@@ -61,9 +61,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       );
       if (next === null) {
         await client.sql`rollback`;
-        return res
-          .status(409)
-          .json({ error: 'You can keep up to 10 other names.', code: 'too_many_names' });
+        return res.status(409).json({
+          error: `You can keep up to ${NICKNAMES_MAX} other names.`,
+          code: 'too_many_names',
+        });
       }
       // The driver sends a JS array as a Postgres array literal, but the
       // template's types only list primitives, hence the cast on the value. The

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parsePaymentsInput, parseProfileInput } from '../../api/_validate';
+import { NICKNAMES_MAX } from './profileName';
 
 const entry = (over: Record<string, unknown> = {}) => ({
   id: 'pay_abc123',
@@ -94,13 +95,19 @@ describe('parseProfileInput', () => {
     });
   });
 
+  it('accepts a list at the limit (AC-R2-3.4)', () => {
+    expect(parseProfileInput({ nicknames: ['a', 'b', 'c'] })).toEqual({
+      nicknames: ['A', 'B', 'C'],
+    });
+  });
+
   it('takes one name to add (BR-N11)', () => {
     expect(parseProfileInput({ addNickname: ' pao ' })).toEqual({ addNickname: 'Pao' });
   });
 
   it('rejects other names that are not a short list of strings', () => {
-    const eleven = Array.from({ length: 11 }, (_, i) => `n${i}`);
-    for (const bad of [{ nicknames: 'Pao' }, { nicknames: [5] }, { nicknames: eleven }]) {
+    const tooMany = Array.from({ length: NICKNAMES_MAX + 1 }, (_, i) => `n${i}`);
+    for (const bad of [{ nicknames: 'Pao' }, { nicknames: [5] }, { nicknames: tooMany }]) {
       expect(parseProfileInput(bad)).toBeNull();
     }
   });

@@ -10,6 +10,7 @@ import {
 } from 'react';
 import { useAuth } from '@clerk/clerk-react';
 import type { RememberOffer } from '../lib/collection';
+import { NICKNAMES_MAX } from '../lib/profileName';
 import { WRITE_TIMEOUT_MS, authorisedFetch, withDeadline } from '../lib/writeQueue';
 
 type ProfileValue = {
@@ -149,7 +150,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       if (result.ok) return;
       setSaveError(
         result.code === 'too_many_names'
-          ? `“${name}” wasn't saved: you already have 10 other names. Remove one in Profile to make room.`
+          ? `“${name}” wasn't saved: you already have ${NICKNAMES_MAX} other names. Remove one in Profile to make room.`
           : as === 'nickname'
             ? `“${name}” wasn't saved as one of your names. Add it in Profile to try again.`
             : `“${name}” wasn't saved as your name. Enter it in Profile to try again.`,

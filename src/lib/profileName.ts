@@ -20,7 +20,7 @@ export function normaliseProfileName(raw: unknown): string | null {
 }
 
 /** The most other names an account keeps (BR-N7). */
-export const NICKNAMES_MAX = 10;
+export const NICKNAMES_MAX = 3;
 
 const sameName = (a: string, b: string): boolean => compareNames(a, b) === 0;
 

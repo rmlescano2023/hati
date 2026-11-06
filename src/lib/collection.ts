@@ -56,48 +56,52 @@ export function isKnownName(name: string, names: KnownNames): boolean {
   );
 }
 
+/** One member matched by the user's names, and by which: only a profile-name hit places a session. */
+export type Match = { member: string; via: 'profile' | 'nickname' };
+
 /**
  * The one member who is the user. The profile name decides first: one hit
  * places the session, and more than one is ambiguous, so nothing is guessed
  * (BR-4). Only when it matches no member do the other names count, with the
  * same one-hit rule (owner, Q1), so saving a nickname never unplaces a session
  * the profile name already placed. Hits are counted by member, so one member
- * matching two of the names is still one hit.
+ * matching two of the names is still one hit. A nickname hit is only a
+ * suggestion, confirmed by the user, because a friend can share the nickname
+ * (owner, round 2).
  */
-export function matchMember(members: string[], names: KnownNames): string | null {
+export function matchMember(members: string[], names: KnownNames): Match | null {
   const { displayName } = names;
   const byName = displayName === null ? [] : members.filter((m) => sameName(m, displayName));
-  if (byName.length > 0) return byName.length === 1 ? byName[0] : null;
+  if (byName.length > 0) return byName.length === 1 ? { member: byName[0], via: 'profile' } : null;
   const byNickname = members.filter((m) => names.nicknames.some((n) => sameName(m, n)));
-  return byNickname.length === 1 ? byNickname[0] : null;
+  return byNickname.length === 1 ? { member: byNickname[0], via: 'nickname' } : null;
 }
 
 export type Me =
-  /**
-   * `recognised`: the member is one of the user's own names, whether picked or
-   * matched, so the card needn't say who they are (BR-N5). Derived on every
-   * render, so it follows the names as they change.
-   */
-  | { kind: 'member'; name: string; picked: boolean; recognised: boolean }
-  | { kind: 'notInSession' }
-  | { kind: 'unknown' };
+  | { kind: 'member'; name: string; picked: boolean }
+  /** `suggested`: the one member matched by a nickname alone, preselected for the user to confirm. */
+  | { kind: 'unknown'; suggested: string | null }
+  | { kind: 'notInSession' };
 
-/** BR-5: an explicit pick, then the match on the user's names, then unknown (Needs setup). */
+/**
+ * BR-N4: an explicit pick, then a profile-name match, then unknown (Needs
+ * setup), with a nickname match as the suggestion.
+ */
 export function resolveMe(session: Pick<Session, 'me' | 'members'>, names: KnownNames): Me {
   if (session.me === NOT_IN_SESSION) return { kind: 'notInSession' };
   if (session.me !== null && session.members.includes(session.me)) {
-    return {
-      kind: 'member',
-      name: session.me,
-      picked: true,
-      recognised: isKnownName(session.me, names),
-    };
+    return { kind: 'member', name: session.me, picked: true };
   }
   const match = matchMember(session.members, names);
-  return match === null
-    ? { kind: 'unknown' }
-    : { kind: 'member', name: match, picked: false, recognised: true };
+  if (match === null) return { kind: 'unknown', suggested: null };
+  return match.via === 'profile'
+    ? { kind: 'member', name: match.member, picked: false }
+    : { kind: 'unknown', suggested: match.member };
 }
+
+/** The question a Needs setup card or the Finish picker asks about a nickname match. */
+export const nicknamePrompt = (member: string): string =>
+  `You go by “${member}” — is that you here?`;
 
 /** Which "Remember" checkbox a picker offers for its selection, if any. */
 export type RememberOffer = 'name' | 'nickname';
