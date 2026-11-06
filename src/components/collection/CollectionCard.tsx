@@ -158,7 +158,7 @@ export function CollectionCard({ card, expanded, onToggle, failed, onFailed, onP
   return (
     <article
       id={`collection-${session.id}`}
-      className={`${styles.card} ${expandable && expanded ? styles.open : ''}`}
+      className={`${styles.card} ${expandable ? (expanded ? styles.open : styles.clickable) : ''}`}
     >
       <h3 className={styles.headerHeading}>
         {expandable ? (

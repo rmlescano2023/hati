@@ -1434,12 +1434,17 @@ undone anywhere in the app, and its payments would sit on the wrong lines. This 
 
 The owner checked the round 2 build and asked for these. Where they differ from the text above, they win.
 
-1. **The open card is highlighted.** An expanded card on Collection keeps its normal `--surface` background, and
-   gets a brighter neutral outline, `--text3` (#6c727d) as its border, and a soft lift, `--shadow-md`, with a 0.15s
-   transition on both. A first try with a `--surface2` background looked faded and was dropped. It stays neutral,
-   because green and amber already mean direction and status here, and applies at every width. The text, chips and
-   buttons inside sit on the same surface as before, so their contrast is unchanged. `--shadow-md` is barely
-   visible on the near-black page, so the outline does most of the work.
+1. **Cards follow Home's hover, and the open card is outlined.** Collection cards now match Home's In Progress
+   cards (`SessionCard.module.css`, `.card:hover`).
+   - A collapsed card that can open gets `--accent-text` as its border and `--surface2` as its background on
+     hover, with the same 0.15s ease transition and the same plain `:hover`, with no touch guard. A static card that
+     can't open gets no hover, since it isn't clickable.
+   - The open card gets the same `--accent-text` border and `--shadow-md`, and keeps `--surface`: a lighter fill
+     looked faded on an open card, so hovering it changes nothing.
+   - The text, chips and buttons inside sit on `--surface` as before, so their contrast is unchanged. The
+     `--shadow-md` lift is faint on the near-black page, so the outline does most of the work.
+   - Because the hover is plain `:hover`, on a touch screen a card that has just been closed by a tap can keep
+     the hover look until the next tap elsewhere. Home has the same behaviour.
 2. **At the nickname limit the Profile dialog hides the add controls.** Once 3 other names are listed, the "Add a
    name" button and the add field and its Add button are not rendered at all, not disabled. The note reads
    "You can keep up to 3 nicknames only." (the number is `NICKNAMES_MAX`), replacing "You can keep up to 3 other

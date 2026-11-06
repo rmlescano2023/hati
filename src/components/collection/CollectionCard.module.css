@@ -8,15 +8,22 @@
   border-radius: var(--radius);
   background: var(--surface);
   transition:
-    border-color 0.15s,
-    box-shadow 0.15s;
+    border-color 0.15s ease,
+    background 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
-/* The one open card, so it's clear which one the body below belongs to: a
-   brighter neutral outline and a lift, on the normal surface. Neutral on
-   purpose: green and amber already mean money direction and status here. */
+/* Follows Home's In Progress cards: a collapsed card that can open gets the
+   green outline and lighter fill on hover. */
+.clickable:hover {
+  border-color: var(--accent-text);
+  background: var(--surface2);
+}
+
+/* The one open card has the same outline and a lift, but no lighter fill, so
+   it stays on --surface and hovering it changes nothing. */
 .open {
-  border-color: var(--text3);
+  border-color: var(--accent-text);
   box-shadow: var(--shadow-md);
 }
 
