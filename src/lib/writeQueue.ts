@@ -221,6 +221,29 @@ export function withDeadline<T>(ms: number, work: (signal: AbortSignal) => Promi
 }
 
 /**
+ * An error whose message was written for the user. Anything else that is
+ * thrown, such as the browser's "Failed to fetch" or a JSON parse error, is
+ * about the machinery and means nothing to them.
+ */
+export class FriendlyError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'FriendlyError';
+  }
+}
+
+/**
+ * What a banner says for a thrown error: Hati's own words when it wrote them,
+ * otherwise `fallback`, so a dropped connection never shows raw error text.
+ */
+export function messageOf(err: unknown, fallback: string): string {
+  return err instanceof FriendlyError ? err.message : fallback;
+}
+
+/** What a request says when the user has no valid sign-in (401, or no token at all). */
+export const SIGNED_OUT = "You're signed out. Sign in again, then try again.";
+
+/**
  * Sends one request with the user's token. A token that only arrives after
  * `signal` has aborted sends nothing: the attempt has already been reported
  * as failed, and a late write could undo a newer one.
@@ -234,7 +257,7 @@ export async function authorisedFetch(
 ): Promise<Response> {
   const token = await getToken();
   if (signal?.aborted) throw new TimeoutError();
-  if (!token) throw new Error('Not signed in.');
+  if (!token) throw new FriendlyError(SIGNED_OUT);
   return send(path, {
     ...init,
     signal,
@@ -244,6 +267,37 @@ export async function authorisedFetch(
 
 /** What a save says when its session has gone from the server (404). */
 export const DELETED_ELSEWHERE = 'This session was deleted on another device.';
+
+/** The same, for a batch where several sessions had gone. */
+export const DELETED_ELSEWHERE_MANY = 'These sessions were deleted on another device.';
+
+/**
+ * Whether a banner message says its session has gone. Retrying can't bring it
+ * back, so the banner's button only reloads and says so.
+ */
+export const isDeletedElsewhere = (message: string | null): boolean =>
+  message === DELETED_ELSEWHERE || message === DELETED_ELSEWHERE_MANY;
+
+/**
+ * The banner message for a payment the server didn't record. A status code
+ * means nothing to the user, so each case says what happened and what can
+ * work: a deleted session can't be retried, a signed-out user must sign in, and
+ * a dropped connection is worth another try. A request that never got an answer
+ * keeps any message Hati wrote itself (see `messageOf`).
+ */
+export function recordFailedMessage(
+  count: number,
+  status: number | null,
+  thrown?: unknown,
+): string {
+  const many = count > 1;
+  const what = many ? 'the payments' : 'the payment';
+  if (status === 404) return DELETED_ELSEWHERE;
+  if (status === 401) return SIGNED_OUT;
+  if (status !== null)
+    return `Couldn't record ${what}, so ${many ? 'they were' : 'it was'} taken off. Try again.`;
+  return messageOf(thrown, `Couldn't record ${what}. Check your connection and try again.`);
+}
 
 /** The banner message for a save the server refused with `status`. */
 export function saveFailedMessage(status: number): string {
@@ -275,11 +329,30 @@ export type FailureKind = 'save' | 'delete' | 'load' | 'seed' | 'payment';
  * `'payment'` has already been reverted on screen, so it is left out of
  * `failedSessionIds` and never shows the reverted-edit note.
  */
-export type Failure = { kind: FailureKind; sessionId: string | null; message: string };
+export type Failure = {
+  kind: FailureKind;
+  sessionId: string | null;
+  message: string;
+  /** For a `'payment'`: the order its write started in (see `createWriteOrder`). */
+  seq?: number;
+  /** For a `'payment'`: the lines it covered, or `WHOLE_SESSION` (see `createWriteOrder`). */
+  lines?: readonly string[];
+};
 
-/** Adds `next`, replacing any failure with the same kind and session, so it becomes the most recent. */
+const sameFailure = (a: Failure, b: Failure) =>
+  a.kind === b.kind &&
+  a.sessionId === b.sessionId &&
+  (a.lines ?? []).join() === (b.lines ?? []).join();
+
+/**
+ * Adds `next`, replacing any failure with the same kind, session and lines, so
+ * it becomes the most recent. Payment failures can land out of order, so one
+ * from an older write never replaces the failure of a newer one.
+ */
 export function addFailure(list: readonly Failure[], next: Failure): Failure[] {
-  return [...list.filter((f) => f.kind !== next.kind || f.sessionId !== next.sessionId), next];
+  const older = list.find((f) => sameFailure(f, next));
+  if (older?.seq !== undefined && next.seq !== undefined && older.seq > next.seq) return [...list];
+  return [...list.filter((f) => !sameFailure(f, next)), next];
 }
 
 /**
@@ -295,10 +368,90 @@ export function resolveFailure(
   return next.length === list.length ? list : next;
 }
 
-/** The sessions whose save, create or delete failed, for the reverted-edit note. */
+/**
+ * Removes a session's payment failures that later successes have answered, and
+ * returns `list` itself when there are none. A failure stays while any line it
+ * covered still lacks a later success, so a success on one line never hides
+ * another line's failure.
+ */
+export function resolveSuperseded(
+  list: readonly Failure[],
+  order: ReturnType<typeof createWriteOrder>,
+  sessionId: string,
+): readonly Failure[] {
+  const next = list.filter(
+    (f) =>
+      f.kind !== 'payment' ||
+      f.sessionId !== sessionId ||
+      f.seq === undefined ||
+      f.lines === undefined ||
+      !order.superseded(sessionId, f.seq, f.lines),
+  );
+  return next.length === list.length ? list : next;
+}
+
+/** The scope of a write that covers a whole session rather than particular lines. */
+export const WHOLE_SESSION = '*';
+
+/** A settlement line, by who pays whom, as the scope of a payment write. */
+export const lineKey = (p: { debtor: string; creditor: string }): string =>
+  `${p.debtor}\n${p.creditor}`;
+
+/**
+ * Puts a session's payment writes in the order they started, and remembers
+ * which lines each success covered. Writes settle in whatever order the network
+ * allows, so a failure can land after a later write succeeded, and a success
+ * must only answer the failures it follows and covers.
+ *
+ * The scope is the lines the write touched: a payment or an undo covers its
+ * own line, Mark all covers every line it paid, and Undo "already settled" and
+ * Already settled cover `WHOLE_SESSION`. A success answers a failure only when
+ * it started later and every line the failure covered has had one, so a
+ * success on line Y never hides line X's failure. A whole-session success
+ * answers every line's failure, but a line's success never answers a
+ * whole-session failure, which is about the session rather than any one line.
+ */
+export function createWriteOrder(): {
+  /** Numbers a write as it starts. */
+  start(): number;
+  /** The write numbered `seq` succeeded for `id`, covering `lines`. */
+  succeeded(id: string, seq: number, lines: readonly string[]): void;
+  /** Whether later successes have answered a failure of write `seq` covering `lines`. */
+  superseded(id: string, seq: number, lines: readonly string[]): boolean;
+} {
+  let last = 0;
+  const lastSuccess = new Map<string, number>();
+  const key = (id: string, line: string) => `${id}\n${line}`;
+  return {
+    start: () => ++last,
+    succeeded(id, seq, lines) {
+      for (const line of lines) {
+        lastSuccess.set(key(id, line), Math.max(lastSuccess.get(key(id, line)) ?? 0, seq));
+      }
+    },
+    superseded: (id, seq, lines) =>
+      lines.every(
+        (line) =>
+          Math.max(
+            lastSuccess.get(key(id, line)) ?? 0,
+            lastSuccess.get(key(id, WHOLE_SESSION)) ?? 0,
+          ) > seq,
+      ),
+  };
+}
+
+/**
+ * The sessions whose save, create or delete failed, for the reverted-edit note.
+ * A session the server says has gone is left out: a reload removes it rather
+ * than reverting an edit, and the note would be wrong about it.
+ */
 export function failedSessionIds(list: readonly Failure[]): string[] {
   return list.flatMap((f) =>
-    (f.kind === 'save' || f.kind === 'delete') && f.sessionId !== null ? [f.sessionId] : [],
+    (f.kind === 'save' || f.kind === 'delete') &&
+    f.sessionId !== null &&
+    f.message !== DELETED_ELSEWHERE
+      ? [f.sessionId]
+      : [],
   );
 }
 

@@ -9,6 +9,7 @@ import { EmptyState } from '../components/shared/EmptyState';
 import { useProfile } from '../context/ProfileContext';
 import { useSessionsStore } from '../context/SessionsStoreContext';
 import {
+  announcesSettled,
   buildCollection,
   formatCents,
   pairPaymentIds,
@@ -33,7 +34,7 @@ type Props = {
  * its totals; then what is settled, collapsed out of the way.
  */
 export function CollectionPage({ openSessionId, canAsk, previewSettled = false }: Props) {
-  const { sessions, settleSessions } = useSessionsStore();
+  const { sessions, settleSessions, isPaying } = useSessionsStore();
   const profile = useProfile();
   const collection = useMemo(
     () =>
@@ -147,15 +148,17 @@ export function CollectionPage({ openSessionId, canAsk, previewSettled = false }
   // the move is announced and focus lands on the Settled toggle (AC-11.2). That
   // happens only once the server has confirmed the payment and the card really is
   // in Settled: the optimistic move alone says nothing, since a refused payment
-  // puts the card back and an announcement could not be taken back.
+  // puts the card back and an announcement could not be taken back. A second
+  // payment on the session still in flight is part of that optimistic move, so
+  // the announcement waits for the last one to end, which reports in its turn.
   const [confirmedPaid, setConfirmedPaid] = useState<string | null>(null);
   useEffect(() => {
     if (confirmedPaid === null) return;
     setConfirmedPaid(null);
-    if (cards.get(confirmedPaid)?.bucket !== 'settled') return;
+    if (!announcesSettled(isPaying(confirmedPaid), cards.get(confirmedPaid)?.bucket)) return;
     setAnnouncement('Session fully settled. Moved to Settled.');
     requestAnimationFrame(() => settledToggle.current?.focus());
-  }, [confirmedPaid, cards]);
+  }, [confirmedPaid, cards, isPaying]);
   // How a payment ended. The live region is emptied first, so a refusal leaves
   // nothing in it and a second identical announcement is read again. A refused
   // payment puts its card or line back, and focus goes to the card's header
