@@ -1,4 +1,5 @@
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
+import { Button } from '../components/shared/Button';
 import { EmptyState } from '../components/shared/EmptyState';
 import { useSessionsStore } from './SessionsStoreContext';
 import type { NewPurchaseRecord, PurchaseRecord } from '../types';
@@ -44,9 +45,12 @@ const AppDataContext = createContext<AppDataValue | null>(null);
  */
 export function AppDataProvider({
   sessionId,
+  onBack,
   children,
 }: {
   sessionId: string;
+  /** Where "Back to Home" goes when the session has gone, since the workspace's own bar goes with it. */
+  onBack: () => void;
   children: ReactNode;
 }) {
   const store = useSessionsStore();
@@ -80,7 +84,9 @@ export function AppDataProvider({
 
   if (!value) {
     return (
-      <EmptyState title="Session not found" description="It may have been closed elsewhere." />
+      <EmptyState title="Session not found" description="It may have been closed elsewhere.">
+        <Button onClick={onBack}>← Back to Home</Button>
+      </EmptyState>
     );
   }
 

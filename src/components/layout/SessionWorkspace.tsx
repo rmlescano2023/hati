@@ -41,7 +41,7 @@ export function SessionWorkspace({ sessionId, tab, onTabChange, onBack, onClosed
   }, [renaming]);
 
   return (
-    <AppDataProvider sessionId={sessionId}>
+    <AppDataProvider sessionId={sessionId} onBack={onBack}>
       <div className={styles.bar}>
         <Button variant="ghost" size="sm" data-tour="workspace-back" onClick={onBack}>
           ← Back to Home
