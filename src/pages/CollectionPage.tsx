@@ -15,6 +15,7 @@ import {
   pairPaymentIds,
   type CollectionCard as Card,
 } from '../lib/collection';
+import { showsEmptyState } from '../lib/writeQueue';
 import appStyles from '../App.module.css';
 import homeStyles from './HomePage.module.css';
 import styles from './CollectionPage.module.css';
@@ -34,7 +35,7 @@ type Props = {
  * its totals; then what is settled, collapsed out of the way.
  */
 export function CollectionPage({ openSessionId, canAsk, previewSettled = false }: Props) {
-  const { sessions, settleSessions, isPaying } = useSessionsStore();
+  const { sessions, settleSessions, isPaying, sync } = useSessionsStore();
   const profile = useProfile();
   const collection = useMemo(
     () =>
@@ -278,10 +279,13 @@ export function CollectionPage({ openSessionId, canAsk, previewSettled = false }
   return (
     <>
       {total === 0 ? (
-        <EmptyState
-          title="Nothing to collect yet"
-          description="Finish a session and it will show up here."
-        />
+        // After a failed load the banner speaks instead of an empty state.
+        showsEmptyState(sync.loaded, total) && (
+          <EmptyState
+            title="Nothing to collect yet"
+            description="Finish a session and it will show up here."
+          />
+        )
       ) : (
         <>
           {profile.displayName === null && <ProfileBanner />}

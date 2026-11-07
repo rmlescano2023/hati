@@ -6,6 +6,7 @@ import { EmptyState } from '../components/shared/EmptyState';
 import { useSessionsStore } from '../context/SessionsStoreContext';
 import { compareByRecentActivity } from '../lib/activity';
 import { deleteSessionMessage } from '../lib/sessionLabel';
+import { showsEmptyState } from '../lib/writeQueue';
 import styles from './HomePage.module.css';
 
 // Dev-only: `import.meta.env.DEV` is statically false in a production build, so
@@ -38,7 +39,7 @@ export function HomePage({
   onPreviewWhatsNew,
   onAskAlreadySettled,
 }: Props) {
-  const { sessions, deleteSession } = useSessionsStore();
+  const { sessions, deleteSession, sync } = useSessionsStore();
   // Held by id and looked up on render, so the confirmation always reads the
   // session's current name.
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
@@ -67,14 +68,17 @@ export function HomePage({
     return (
       <>
         {devBar}
-        <EmptyState
-          title="No sessions in progress"
-          description="Start one to add members and log what everyone spent."
-        >
-          <Button variant="primary" size="lg" data-tour="new-session" onClick={onNewSession}>
-            + New Session
-          </Button>
-        </EmptyState>
+        {/* After a failed load the banner speaks instead, and the nav row's button is the way in. */}
+        {showsEmptyState(sync.loaded, drafts.length) && (
+          <EmptyState
+            title="No sessions in progress"
+            description="Start one to add members and log what everyone spent."
+          >
+            <Button variant="primary" size="lg" data-tour="new-session" onClick={onNewSession}>
+              + New Session
+            </Button>
+          </EmptyState>
+        )}
       </>
     );
   }
