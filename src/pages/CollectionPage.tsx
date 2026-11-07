@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AlreadySettledDialog } from '../components/collection/AlreadySettledDialog';
 import { CollectionCard } from '../components/collection/CollectionCard';
 import { DirectionLabel } from '../components/collection/DirectionLabel';
 import type { FailedPayment } from '../components/collection/LineRow';
@@ -21,6 +22,10 @@ import styles from './CollectionPage.module.css';
 type Props = {
   /** The session just finished, landed on open (AC-4.9). */
   openSessionId?: string;
+  /** Whether a one-time question may open: not over the tour, What's new or another dialog. */
+  canAsk: boolean;
+  /** Dev-only: ask "Already settled?" even if it was answered, and store no answer. */
+  previewSettled?: boolean;
 };
 
 /**
@@ -28,8 +33,8 @@ type Props = {
  * place come first, so they get set up; then what is still outstanding, with
  * its totals; then what is settled, collapsed out of the way.
  */
-export function CollectionPage({ openSessionId }: Props) {
-  const { sessions } = useSessionsStore();
+export function CollectionPage({ openSessionId, canAsk, previewSettled = false }: Props) {
+  const { sessions, settleSessions } = useSessionsStore();
   const profile = useProfile();
   const collection = useMemo(
     () =>
@@ -149,12 +154,18 @@ export function CollectionPage({ openSessionId }: Props) {
       next.set(c.session.id, c.bucket);
     }
     const id = lastPaid.current;
-    if (id !== null && buckets.current.get(id) === 'outstanding' && next.get(id) === 'settled') {
+    const prev = id === null ? undefined : buckets.current.get(id);
+    // A Needs setup card can reach Settled now too, by being marked already settled.
+    if (id !== null && prev !== undefined && prev !== 'settled' && next.get(id) === 'settled') {
       setAnnouncement('Session fully settled. Moved to Settled.');
       settledToggle.current?.focus();
     }
     buckets.current = next;
   }, [collection]);
+
+  // The one-time "Already settled?" question. It's asked about the sessions
+  // finished before Collection, live, so the count is true when it opens.
+  const [previewDone, setPreviewDone] = useState(false);
 
   if (profile.status === 'loading') {
     return (
@@ -177,6 +188,26 @@ export function CollectionPage({ openSessionId }: Props) {
   }
 
   const { needsSetup, outstanding, settled } = collection;
+  const askOpen =
+    canAsk &&
+    profile.status === 'ready' &&
+    (previewSettled ? !previewDone : !profile.alreadySettledAnswered) &&
+    collection.alreadySettledOffers.length > 0;
+  const answerAlreadySettled = ({ settle }: { settle: string[] }) => {
+    // Stored whatever the answer, so it isn't asked again (BR-S14). A preview
+    // stores nothing, and its "Yes" or "Mark" still records real payments.
+    if (previewSettled) setPreviewDone(true);
+    else profile.answerAlreadySettled();
+    if (settle.length === 0) return;
+    void settleSessions(settle);
+    setAnnouncement(
+      settle.length === 1
+        ? 'Session fully settled. Moved to Settled.'
+        : `${settle.length} sessions moved to Settled.`,
+    );
+    // The Settled section appears once the optimistic payments land.
+    requestAnimationFrame(() => settledToggle.current?.focus());
+  };
   const total = needsSetup.length + outstanding.length + settled.length;
 
   const renderCard = (card: Card) => {
@@ -209,6 +240,10 @@ export function CollectionPage({ openSessionId }: Props) {
         }
         onPaid={() => {
           lastPaid.current = id;
+        }}
+        onAlreadySettled={() => {
+          lastPaid.current = id;
+          void settleSessions([id]);
         }}
         onPlaced={() => {
           placing.current = id;
@@ -305,6 +340,13 @@ export function CollectionPage({ openSessionId }: Props) {
             </section>
           )}
         </>
+      )}
+
+      {askOpen && (
+        <AlreadySettledDialog
+          offers={collection.alreadySettledOffers}
+          onAnswer={answerAlreadySettled}
+        />
       )}
 
       <p role="status" className={styles.srOnly}>

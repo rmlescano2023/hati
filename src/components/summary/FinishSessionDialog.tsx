@@ -64,7 +64,11 @@ export function FinishSessionDialog({ members, onCancel, onConfirm }: Props) {
         {picking && (
           <div className={styles.picker}>
             <MePicker
-              legend={suggested !== null ? nicknamePrompt(suggested) : 'Which one are you?'}
+              legend={
+                suggested !== null && selected === suggested
+                  ? nicknamePrompt(suggested)
+                  : 'Which one are you?'
+              }
               members={members}
               value={selected}
               onChange={setValue}

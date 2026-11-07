@@ -30,6 +30,8 @@ type Props = {
   onFailed: (lineKey: string, failed: FailedPayment | null) => void;
   /** Called as a payment is recorded here, so the page can announce the session settling. */
   onPaid: () => void;
+  /** Marks the session as already settled: a full payment on every pair. */
+  onAlreadySettled: () => void;
   /** Called as a Needs setup card is confirmed, so the page can bring the user to where it lands. */
   onPlaced: () => void;
   /** Briefly outlined: this card has just been placed in this section. */
@@ -57,6 +59,10 @@ function Chevron({ open }: { open: boolean }) {
   );
 }
 
+/** Every pair is paid and none of them is the user's, so there is nothing of theirs to show. */
+const everyonesPaid = (card: Card): boolean =>
+  card.pairCount > 0 && card.allPairsPaid && card.lineCount === 0;
+
 /**
  * The part of the summary after the dates, which depends on the section. The
  * money figures show only while collapsed: expanded, every line shows its own.
@@ -67,8 +73,13 @@ function summaryDetail(card: Card, expanded: boolean): string[] {
   if (card.bucket === 'outstanding') {
     return [`${card.settledLineCount} of ${card.lineCount} settled`];
   }
-  // Nothing to summarise: the card has no lines, and opening it says why.
-  if (card.me.kind === 'notInSession') return [];
+  // A fully paid session where the user has no lines on screen: nobody owes
+  // anybody, which is true whether they're not in it or Hati doesn't know who
+  // they are (Q3, Q4).
+  if (card.me.kind === 'notInSession') return everyonesPaid(card) ? ["Everyone's paid"] : [];
+  if (card.me.kind === 'unknown') {
+    return card.pairCount === 0 ? ["Nothing to collect. Everyone's even."] : ["Everyone's paid"];
+  }
   if (card.lineCount === 0) return ["Nothing to collect. You're even with everyone."];
   return [
     `Settled ${formatLocalDate(card.settledAt)}`,
@@ -131,6 +142,7 @@ export function CollectionCard({
   failed,
   onFailed,
   onPaid,
+  onAlreadySettled,
   onPlaced,
   placed,
 }: Props) {
@@ -141,12 +153,13 @@ export function CollectionCard({
   const setup = card.bucket === 'needsSetup';
   // Only a card placed automatically by the profile name says nothing about who
   // the user is; every stored pick keeps its line, since Change is the only way
-  // to undo one (BR-N5, round 2).
-  const quiet = card.me.kind === 'member' && !card.me.picked;
+  // to undo one (BR-N5, round 2). An unknown "me" on a fully paid card has none
+  // either, and must never read "You're not in this session".
+  const hasLine = (card.me.kind === 'member' && card.me.picked) || card.me.kind === 'notInSession';
   // The line is shown inside the open card, never on a collapsed one, so a card
   // that has it but no lines still opens, to show just that.
-  const hasLine = !setup && !quiet;
-  const expandable = setup || card.lineCount > 0 || hasLine;
+  const allPaid = everyonesPaid(card);
+  const expandable = setup || card.lineCount > 0 || hasLine || card.presettled || allPaid;
 
   const summary = (
     <span className={styles.titles}>
@@ -190,6 +203,18 @@ export function CollectionCard({
         )}
       </h3>
 
+      {card.offersAlreadySettled && (
+        <div className={styles.alreadySettled}>
+          <Button
+            size="sm"
+            aria-label={`Mark “${title}” as already settled`}
+            onClick={onAlreadySettled}
+          >
+            Already settled
+          </Button>
+        </div>
+      )}
+
       {expandable && expanded && setup && (
         <div id={bodyId} className={styles.body}>
           <NeedsSetup card={card} onPlaced={onPlaced} />
@@ -218,7 +243,11 @@ export function CollectionCard({
                 ))}
               </section>
             ))}
+          {allPaid && (
+            <p className={styles.detail}>Every line in this session is marked as paid.</p>
+          )}
           {card.bucket === 'outstanding' && <MarkAll card={card} title={title} onPaid={onPaid} />}
+          {card.presettled && <UndoSettled card={card} title={title} />}
         </div>
       )}
     </article>
@@ -276,7 +305,11 @@ function NeedsSetup({ card, onPlaced }: { card: Card; onPlaced: () => void }) {
   return (
     <div className={styles.setup}>
       <MePicker
-        legend={suggested !== null ? nicknamePrompt(suggested) : 'Which one are you?'}
+        legend={
+          suggested !== null && selected === suggested
+            ? nicknamePrompt(suggested)
+            : 'Which one are you?'
+        }
         members={card.session.members}
         value={selected}
         onChange={setChoice}
@@ -298,6 +331,35 @@ function NeedsSetup({ card, onPlaced }: { card: Card; onPlaced: () => void }) {
           {selected !== null && selected === suggested ? "Yes, that's me" : 'Confirm'}
         </Button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Undoes "already settled": removes every payment recorded when the session
+ * was marked, in one request. It confirms first, and shows on every such card,
+ * whether or not the user is in the session (Q3).
+ */
+function UndoSettled({ card, title }: { card: Card; title: string }) {
+  const { removeAllPayments } = useSessionsStore();
+  const [confirming, setConfirming] = useState(false);
+  return (
+    <div className={styles.markAll}>
+      <Button aria-label={`Undo “already settled” on ${title}`} onClick={() => setConfirming(true)}>
+        Undo “Already settled”
+      </Button>
+      <ConfirmDialog
+        open={confirming}
+        title="Undo “already settled”?"
+        message={`This removes the payments recorded when “${title}” was marked as settled. It goes back to being tracked.`}
+        confirmLabel="Undo"
+        destructive
+        onCancel={() => setConfirming(false)}
+        onConfirm={() => {
+          setConfirming(false);
+          removeAllPayments(card.session.id);
+        }}
+      />
     </div>
   );
 }

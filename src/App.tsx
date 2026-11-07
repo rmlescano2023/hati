@@ -16,6 +16,7 @@ import { CollectionPage } from './pages/CollectionPage';
 import { ProfileDialog } from './components/profile/ProfileDialog';
 import { OnboardingTour } from './components/onboarding/OnboardingTour';
 import { OnboardingDialog } from './components/onboarding/OnboardingDialog';
+import onboardingStyles from './components/onboarding/OnboardingDialog.module.css';
 import type { ScreenShape } from './components/onboarding/steps';
 import { useOnboarding } from './hooks/useOnboarding';
 import styles from './App.module.css';
@@ -28,7 +29,7 @@ import styles from './App.module.css';
  */
 type Screen =
   | { kind: 'home' }
-  | { kind: 'collection'; openSessionId?: string }
+  | { kind: 'collection'; openSessionId?: string; previewSettled?: boolean }
   | { kind: 'history' }
   | { kind: 'historyDetail'; sessionId: string }
   | { kind: 'session'; sessionId: string; tab: SessionTabId };
@@ -43,13 +44,26 @@ export default function App() {
   const [naming, setNaming] = useState(false);
   /** Whether the profile name dialog is open. */
   const [profileOpen, setProfileOpen] = useState(false);
-  const { shouldRun: firstLogin, markSeen } = useOnboarding();
+  const { shouldRun: firstLogin, markSeen, whatsNewDue, markWhatsNewSeen } = useOnboarding();
 
   /**
    * Onboarding is a small sequence rather than a flag: the offer, the tour
    * itself, then the sign-off. Only 'running' puts the tour on screen.
    */
   const [phase, setPhase] = useState<'off' | 'intro' | 'running' | 'done'>('off');
+
+  /**
+   * Dev-only: shows "What's new" from the Preview What's new button even if it
+   * was already seen. Closing a preview never writes the marker.
+   */
+  const [whatsNewPreview, setWhatsNewPreview] = useState(false);
+  // A returning account sees it once, on whatever screen the app opens to. It
+  // waits out the welcome and the tour, which a new account gets instead (BR-W5).
+  const whatsNewOpen = phase === 'off' && (whatsNewDue || whatsNewPreview);
+  const closeWhatsNew = () => {
+    if (whatsNewPreview) setWhatsNewPreview(false);
+    else markWhatsNewSeen();
+  };
 
   // The offer opens as soon as we know this is a first login, and only then —
   // the guard keeps a later state change from reopening a finished sequence.
@@ -253,6 +267,37 @@ export default function App() {
           Get started
         </Button>
       </OnboardingDialog>
+      <OnboardingDialog
+        open={whatsNewOpen}
+        title="What's new in Hati"
+        message={
+          <span className={onboardingStyles.points}>
+            <span>
+              <strong>Collection.</strong> A new tab for finished sessions: see who owes you and who
+              you owe, and record payments as they come in, even part payments.
+            </span>
+            <span>
+              <strong>Your name.</strong> Set it in Profile, in your account menu, so Hati knows
+              which member is you.
+            </span>
+          </span>
+        }
+        onDismiss={closeWhatsNew}
+      >
+        <Button variant="ghost" onClick={closeWhatsNew}>
+          Got it
+        </Button>
+        <Button
+          variant="primary"
+          autoFocus
+          onClick={() => {
+            closeWhatsNew();
+            setScreen({ kind: 'collection' });
+          }}
+        >
+          Take me to Collection
+        </Button>
+      </OnboardingDialog>
       {naming && (
         <NewSessionDialog
           onCancel={() => setNaming(false)}
@@ -272,10 +317,22 @@ export default function App() {
           onOpenSession={openFromHome}
           onNewSession={newSession}
           onPreviewTour={import.meta.env.DEV ? previewTour : undefined}
+          onPreviewWhatsNew={import.meta.env.DEV ? () => setWhatsNewPreview(true) : undefined}
+          onAskAlreadySettled={
+            import.meta.env.DEV
+              ? () => setScreen({ kind: 'collection', previewSettled: true })
+              : undefined
+          }
         />
       )}
       {screen.kind === 'collection' && (
-        <CollectionPage key={screen.openSessionId ?? ''} openSessionId={screen.openSessionId} />
+        <CollectionPage
+          key={screen.openSessionId ?? ''}
+          openSessionId={screen.openSessionId}
+          // Never over the tour, What's new or another dialog (BR-W10, E-S11).
+          canAsk={phase === 'off' && !whatsNewOpen && !profileOpen && !naming}
+          previewSettled={screen.previewSettled}
+        />
       )}
       {screen.kind === 'history' && (
         <HistoryPage
