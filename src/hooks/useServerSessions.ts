@@ -3,7 +3,7 @@ import { useAuth } from '@clerk/clerk-react';
 import type { NewPayment, Payment, Session } from '../types';
 import { keepOpenedActivity } from '../lib/activity';
 import { sessionDisplayTitle } from '../lib/sessionLabel';
-import { mergeServerPayments, newPayments, settlePayments } from '../lib/collection';
+import { isFullyPaid, mergeServerPayments, newPayments, settlePayments } from '../lib/collection';
 import { createId } from '../lib/id';
 import {
   TimeoutError,
@@ -92,8 +92,10 @@ type Result = {
   /**
    * Marks sessions as already settled: for each, one request recording a full
    * payment on every settlement pair, all or nothing, on screen at once. A
-   * session another device already settled counts as done. Failures are
-   * reported once, in the banner, and listed in the result (BR-S14, BR-S15).
+   * session another device already settled counts as done. `settled` lists
+   * only the sessions that really end up fully paid after the server's answer;
+   * failures are reported once, in the banner, and listed in `failed`
+   * (BR-S14, BR-S15).
    */
   settleSessions: (sessionIds: string[]) => Promise<{ settled: string[]; failed: string[] }>;
   /**
@@ -747,7 +749,12 @@ export function useServerSessions(): Result {
             },
             { quiet: true },
           );
-          (ok ? settled : failed).push(id);
+          // Settled only if every pair really is paid once the server's answer is
+          // merged: another device may have recorded just part of it, and the
+          // session then stays where it is, neither settled nor failed.
+          const now = sessionsRef.current.find((s) => s.id === id);
+          if (!ok) failed.push(id);
+          else if (now && isFullyPaid(now)) settled.push(id);
         }),
       );
       if (failed.length > 0) {

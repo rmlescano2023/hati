@@ -289,7 +289,6 @@ export default function App() {
         </Button>
         <Button
           variant="primary"
-          autoFocus
           onClick={() => {
             closeWhatsNew();
             setScreen({ kind: 'collection' });

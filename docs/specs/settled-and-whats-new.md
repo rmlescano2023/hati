@@ -476,12 +476,14 @@ and `--text2` 6.36:1 on `--surface`, and `--accent-text` for the onboarding-dial
   onDismiss={closeWhatsNew}
 >
   <Button variant="ghost" onClick={closeWhatsNew}>Got it</Button>
-  <Button variant="primary" autoFocus onClick={() => { closeWhatsNew(); setScreen({ kind: 'collection' }); }}>
+  <Button variant="primary" onClick={() => { closeWhatsNew(); setScreen({ kind: 'collection' }); }}>
     Take me to Collection
   </Button>
 </OnboardingDialog>
 ```
 
+- **Initial focus** is the first button, "Got it", which is what `showModal` focuses. It is the safe choice, and
+  the primary carries no `autoFocus`.
 - **Closing:** `closeWhatsNew` calls `if (whatsNewPreview) setWhatsNewPreview(false); else markWhatsNewSeen();`.
   A preview never writes the marker.
 - **Import:** `onboardingStyles` from `./components/onboarding/OnboardingDialog.module.css`.
@@ -513,6 +515,8 @@ and `--text2` 6.36:1 on `--surface`, and `--accent-text` for the onboarding-dial
   - default "Let me choose": `setStep('choose')`;
   - primary "Yes, all settled": `onAnswer({ settle: offers.map((c) => c.session.id) })`.
 - `onDismiss` (Escape) is "No" (Q2). The backdrop does nothing.
+- **Initial focus** is "No, track them", the first button, so pressing Enter never records payments. "Yes, all
+  settled" carries no `autoFocus`.
 
 **`step === 'choose'`:**
 - The same `OnboardingDialog`, with `stacked` and the title "Which were already settled?".
@@ -561,9 +565,10 @@ and `--text2` 6.36:1 on `--surface`, and `--accent-text` for the onboarding-dial
   1. If not previewing, call `profile.answerAlreadySettled()`. It's stored whatever the outcome (BR-S14).
   2. If `settle` is non-empty:
      - Call `void settleSessions(settle)`.
-     - Set the announcement to `settle.length === 1 ? 'Session fully settled. Moved to Settled.' : `${settle.length} sessions moved to Settled.``
-       (BR-S13).
-     - Move focus to the Settled toggle on the next frame. The section appears once the optimistic payments land.
+     - Call `markSettled(settle)`: after the server's answer, announce
+       `done.length === 1 ? 'Session fully settled. Moved to Settled.' : `${done.length} sessions moved to Settled.``
+       and move focus to the Settled toggle on the next frame, where `done` is only the sessions that really end up
+       fully paid (BR-S13, and the owner additions below).
 - **The per-card button:** `onAlreadySettled={() => { lastPaid.current = id; void settleSessions([id]); }}`.
   - **The announcement effect:** its condition `buckets.current.get(id) === 'outstanding'` becomes
     `const prev = buckets.current.get(id); prev !== undefined && prev !== 'settled'`, so a Needs setup card moving
@@ -884,3 +889,19 @@ cards and page, and need no schema or API change.
     primary, and the row wraps on a phone. The owner said that reads fine.
   - Its `aria-label` still names the session. If it had focus when the card opened or closed, focus moves to the
     new button, or to the card's header toggle when the button has gone.
+- **(d) The checklist's rows keep their height.** `.row` in `AlreadySettledDialog.module.css` is `flex: none`. The
+  list is a column flex box with a maximum height, so rows shrank and a wrapping title overlapped the next row.
+  The list still scrolls inside its box.
+- **(e) The "settled" announcement follows the server's answer.** `settleSessions` returns in `settled` only the
+  sessions that are fully paid once the server's answer is merged (`isFullyPaid`, with a unit test). A session
+  another device only part paid stays where it is and is not announced, and neither is a mark that failed. The page
+  clears any earlier announcement first, and announces and moves focus to the Settled toggle only for `settled`.
+  When a single card's mark failed, focus goes to that card's header toggle instead of being lost. The per-card
+  button no longer sets `lastPaid`, so the optimistic move alone announces nothing. Mark all and line payments
+  keep today's announcement.
+- **(f) Cancel on "Undo “already settled”" returns focus to the Undo button.** The confirmation is removed rather
+  than closed, so the browser wouldn't restore focus on its own.
+- **(g) Initial focus stays on the safe choice.** What's new focuses "Got it" and the question focuses "No, track
+  them" (the first button each, as `showModal` does), so Enter never records payments. The two `autoFocus` props on
+  the primary buttons did nothing, so they are removed, and the spec no longer mentions them.
+

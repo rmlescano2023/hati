@@ -321,6 +321,16 @@ export function settlePayments(
   });
 }
 
+/**
+ * Whether the session has pairs and every one of them is paid in full: what it
+ * means to have ended up settled after marking it so. It is checked against the
+ * payments on screen after the server's answer is merged, so a partial payment
+ * recorded on another device doesn't count.
+ */
+export function isFullyPaid(session: Pick<Session, 'members' | 'records' | 'payments'>): boolean {
+  return settlementPairs(session).length > 0 && settlePayments(session).length === 0;
+}
+
 export type Collection = {
   needsSetup: CollectionCard[];
   outstanding: CollectionCard[];

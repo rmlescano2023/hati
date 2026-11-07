@@ -43,7 +43,6 @@ export function AlreadySettledDialog({ offers, onAnswer }: Props) {
         <Button onClick={() => setStep('choose')}>Let me choose</Button>
         <Button
           variant="primary"
-          autoFocus
           onClick={() => onAnswer({ settle: offers.map((c) => c.session.id) })}
         >
           Yes, all settled

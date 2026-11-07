@@ -14,6 +14,9 @@
 }
 
 .row {
+  /* The list is a column that scrolls, so a row must keep its height: shrunk,
+     a wrapping title would overlap the next row. */
+  flex: none;
   display: flex;
   align-items: center;
   gap: 10px;

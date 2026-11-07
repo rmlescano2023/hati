@@ -14,6 +14,7 @@ import {
   parsePaymentAmount,
   rememberOffer,
   PAYMENTS_PER_REQUEST_MAX,
+  isFullyPaid,
   resolveMe,
   settlePayments,
   settlementPairs,
@@ -606,6 +607,24 @@ describe('offersAlreadySettled (BR-S1)', () => {
     expect(card.pairCount).toBe(210);
     expect(card.pairCount).toBeGreaterThan(PAYMENTS_PER_REQUEST_MAX);
     expect(card.offersAlreadySettled).toBe(false);
+  });
+});
+
+describe('isFullyPaid (the announcement after marking a session settled)', () => {
+  it('is true once every pair is paid in full', () => {
+    const trip = tripA();
+    expect(isFullyPaid({ ...trip, payments: allPaid(trip) })).toBe(true);
+  });
+
+  it('is false while any pair has something left, as after another device paid part of it', () => {
+    const trip = tripA();
+    const partial = [pay('pay_1', 'Ana', 'Renmar', 10000)];
+    expect(isFullyPaid({ ...trip, payments: partial })).toBe(false);
+    expect(isFullyPaid(trip)).toBe(false);
+  });
+
+  it('is false for a session with no pairs, which has nothing that was marked', () => {
+    expect(isFullyPaid(tripD())).toBe(false);
   });
 });
 

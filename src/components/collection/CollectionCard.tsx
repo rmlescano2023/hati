@@ -382,8 +382,9 @@ function NeedsSetup({
 function UndoSettled({ card, title }: { card: Card; title: string }) {
   const { removeAllPayments } = useSessionsStore();
   const [confirming, setConfirming] = useState(false);
+  const row = useRef<HTMLDivElement>(null);
   return (
-    <div className={styles.markAll}>
+    <div ref={row} className={styles.markAll}>
       <Button aria-label={`Undo “already settled” on ${title}`} onClick={() => setConfirming(true)}>
         Undo “Already settled”
       </Button>
@@ -393,7 +394,12 @@ function UndoSettled({ card, title }: { card: Card; title: string }) {
         message={`This removes the payments recorded when “${title}” was marked as settled. It goes back to being tracked.`}
         confirmLabel="Undo"
         destructive
-        onCancel={() => setConfirming(false)}
+        onCancel={() => {
+          setConfirming(false);
+          // The dialog is removed rather than closed, so focus wouldn't return
+          // to the button that opened it on its own.
+          requestAnimationFrame(() => row.current?.querySelector('button')?.focus());
+        }}
         onConfirm={() => {
           setConfirming(false);
           removeAllPayments(card.session.id);

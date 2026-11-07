@@ -193,20 +193,34 @@ export function CollectionPage({ openSessionId, canAsk, previewSettled = false }
     profile.status === 'ready' &&
     (previewSettled ? !previewDone : !profile.alreadySettledAnswered) &&
     collection.alreadySettledOffers.length > 0;
+  // Marks sessions as already settled, then announces and moves focus only for
+  // the ones that really ended up Settled once the server answered. A mark that
+  // failed puts its card back, and one another device only part paid stays where
+  // it is, so neither is announced (the optimistic move alone says nothing).
+  const markSettled = async (ids: string[]) => {
+    setAnnouncement('');
+    const { settled: done } = await settleSessions(ids);
+    if (done.length > 0) {
+      setAnnouncement(
+        done.length === 1
+          ? 'Session fully settled. Moved to Settled.'
+          : `${done.length} sessions moved to Settled.`,
+      );
+      requestAnimationFrame(() => settledToggle.current?.focus());
+    } else if (ids.length === 1) {
+      // The card came back, so focus goes to it rather than being lost with the
+      // button it was on.
+      requestAnimationFrame(() =>
+        document.querySelector<HTMLElement>(`#collection-${ids[0]} [aria-expanded]`)?.focus(),
+      );
+    }
+  };
   const answerAlreadySettled = ({ settle }: { settle: string[] }) => {
     // Stored whatever the answer, so it isn't asked again (BR-S14). A preview
     // stores nothing, and its "Yes" or "Mark" still records real payments.
     if (previewSettled) setPreviewDone(true);
     else profile.answerAlreadySettled();
-    if (settle.length === 0) return;
-    void settleSessions(settle);
-    setAnnouncement(
-      settle.length === 1
-        ? 'Session fully settled. Moved to Settled.'
-        : `${settle.length} sessions moved to Settled.`,
-    );
-    // The Settled section appears once the optimistic payments land.
-    requestAnimationFrame(() => settledToggle.current?.focus());
+    if (settle.length > 0) void markSettled(settle);
   };
   const total = needsSetup.length + outstanding.length + settled.length;
 
@@ -241,10 +255,7 @@ export function CollectionPage({ openSessionId, canAsk, previewSettled = false }
         onPaid={() => {
           lastPaid.current = id;
         }}
-        onAlreadySettled={() => {
-          lastPaid.current = id;
-          void settleSessions([id]);
-        }}
+        onAlreadySettled={() => void markSettled([id])}
         onPlaced={() => {
           placing.current = id;
         }}
