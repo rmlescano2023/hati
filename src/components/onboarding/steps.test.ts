@@ -34,12 +34,20 @@ describe('the tour sequence', () => {
       ),
     );
     expect([...seen].sort()).toEqual([
+      'collection',
       'history',
       'home',
       'session:breakdown',
       'session:expenses',
       'session:summary',
     ]);
+  });
+
+  it('shows Collection after leaving the workspace and before History', () => {
+    const collection = TOUR_STEPS.findIndex((s) => s.target === 'nav-collection');
+    const back = TOUR_STEPS.findIndex((s) => s.target === 'workspace-back');
+    expect(collection).toBe(back + 1);
+    expect(collection).toBe(TOUR_STEPS.length - 2);
   });
 
   it('enters and leaves the session workspace exactly once', () => {

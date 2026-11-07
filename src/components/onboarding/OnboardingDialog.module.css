@@ -49,3 +49,20 @@
   gap: 8px;
   margin-top: 14px;
 }
+
+/* What's new's points: left-aligned inside the centred dialog. */
+.points {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+}
+
+@media (max-width: 640px) {
+  /* Three buttons don't fit side by side at 375px. Stacked in reading order,
+     the primary last, nearest the thumb. */
+  .stacked {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

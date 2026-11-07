@@ -37,6 +37,13 @@
   margin-top: 3px;
 }
 
+/* The Profile item's icon in Clerk's menu, which renders in a portal; CSS
+   Module classes are global, so the class still reaches it there. */
+.menuIcon {
+  width: 16px;
+  height: 16px;
+}
+
 @media (max-width: 480px) {
   .subtitle {
     font-size: 12px;
