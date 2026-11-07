@@ -35,7 +35,12 @@ type SessionsStoreValue = {
     sessionId: string,
     payments: NewPayment[],
     onSettled?: (result: PaymentResult) => boolean | void,
-  ) => void;
+    options?: { quiet?: boolean },
+  ) => Promise<void>;
+  /** Marks finished sessions as already settled, one all-or-nothing request each; see `useServerSessions`. */
+  settleSessions: (sessionIds: string[]) => Promise<{ settled: string[]; failed: string[] }>;
+  /** Undoes "already settled" on one session, in one request; see `useServerSessions`. */
+  removeAllPayments: (sessionId: string) => void;
   /** Undoes one payment; see `useServerSessions`. */
   removePayment: (
     sessionId: string,
@@ -73,8 +78,10 @@ type SessionsStoreValue = {
     sessionId: string,
     data: { members: string[]; records: PurchaseRecord[] },
   ) => void;
-  /** Dev-only seeding: swap the whole session list. */
+  /** Dev-only seeding: swap the whole session list. On a shared database this deletes real sessions. */
   replaceAllSessions: (sessions: Session[]) => void;
+  /** Dev-only seeding that only adds: nothing existing is deleted or re-saved. */
+  appendSessions: (sessions: Session[]) => void;
   /** Where the current data stands with the server. */
   sync: {
     status: SyncStatus;
@@ -137,8 +144,11 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
     removeSession,
     recordOpen,
     addPayments,
+    settleSessions,
+    removeAllPayments,
     removePayment,
     replaceAll,
+    appendAll,
     status,
     error,
     retry,
@@ -385,6 +395,7 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
   );
 
   const replaceAllSessions = useCallback((next: Session[]) => replaceAll(next), [replaceAll]);
+  const appendSessions = useCallback((next: Session[]) => appendAll(next), [appendAll]);
 
   const value = useMemo<SessionsStoreValue>(
     () => ({
@@ -394,6 +405,8 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
       closeSession,
       setMe,
       addPayments,
+      settleSessions,
+      removeAllPayments,
       removePayment,
       deleteSession,
       recordOpen,
@@ -408,6 +421,7 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
       updateItemMemberAmount,
       replaceSessionData,
       replaceAllSessions,
+      appendSessions,
       sync: { status, error, retry, reverted, dismissReverted },
     }),
     [
@@ -422,6 +436,8 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
       closeSession,
       setMe,
       addPayments,
+      settleSessions,
+      removeAllPayments,
       removePayment,
       deleteSession,
       recordOpen,
@@ -436,6 +452,7 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
       updateItemMemberAmount,
       replaceSessionData,
       replaceAllSessions,
+      appendSessions,
     ],
   );
 

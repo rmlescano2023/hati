@@ -3,7 +3,8 @@ import { useAuth } from '@clerk/clerk-react';
 import type { NewPayment, Payment, Session } from '../types';
 import { keepOpenedActivity } from '../lib/activity';
 import { sessionDisplayTitle } from '../lib/sessionLabel';
-import { mergeServerPayments, newPayments } from '../lib/collection';
+import { mergeServerPayments, newPayments, settlePayments } from '../lib/collection';
+import { createId } from '../lib/id';
 import {
   TimeoutError,
   WRITE_TIMEOUT_MS,
@@ -27,8 +28,12 @@ export type SyncStatus = 'loading' | 'ready' | 'error';
 /** How one payment write ended, for a message shown where it was made. */
 export type PaymentResult =
   | { ok: true }
-  /** `payments` is the session's as they stand after the failure, reverted or refreshed. */
-  | { ok: false; message: string; payments: Payment[] };
+  /**
+   * `payments` is the session's as they stand after the failure, reverted or
+   * refreshed. `code` is the server's reason for a refusal, such as
+   * `over_remaining`, when it gave one.
+   */
+  | { ok: false; message: string; payments: Payment[]; code?: string };
 
 /**
  * What a refused request was, for a banner read away from the line: the pair
@@ -74,13 +79,34 @@ type Result = {
    * `onSettled` hears how it ended, with a message for the form. A refusal,
    * such as a line already paid in full, skips the banner only when
    * `onSettled` returns true to say it showed the message itself, so one is
-   * never lost to a form that has gone from the screen.
+   * never lost to a form that has gone from the screen. It returns how the
+   * write ended, a promise that never rejects; with `quiet` it never reports a
+   * failure in the banner, so the caller reports it once for a batch.
    */
   addPayments: (
     sessionId: string,
     payments: NewPayment[],
     onSettled?: (result: PaymentResult) => boolean | void,
-  ) => void;
+    options?: { quiet?: boolean },
+  ) => Promise<void>;
+  /**
+   * Marks sessions as already settled: for each, one request recording a full
+   * payment on every settlement pair, all or nothing, on screen at once. A
+   * session another device already settled counts as done. Failures are
+   * reported once, in the banner, and listed in the result (BR-S14, BR-S15).
+   */
+  settleSessions: (sessionIds: string[]) => Promise<{ settled: string[]; failed: string[] }>;
+  /**
+   * Undoes "already settled": removes every payment of a session in one
+   * request, on screen at once. All or nothing on the server, so a failure
+   * puts them all back and "Try again" always shows what the server has.
+   */
+  removeAllPayments: (sessionId: string) => void;
+  /**
+   * Dev-only seeding that only ever adds: sessions already there are left
+   * alone, and nothing is deleted, so it is safe on a database with real data.
+   */
+  appendAll: (next: Session[]) => void;
   /** Undoes one payment, on screen at once; a failure puts it back and is reported. */
   removePayment: (
     sessionId: string,
@@ -107,6 +133,8 @@ const PAYMENT_TIMEOUT =
   'Recording the payment is taking too long. Tap Try again to see whether it was saved.';
 const UNDO_TIMEOUT =
   'Undoing the payment is taking too long. Tap Try again to see whether it was undone.';
+const UNDO_ALL_TIMEOUT =
+  'Undoing “already settled” is taking too long. Tap Try again to see whether it was undone.';
 
 const PAYMENTS_ENDPOINT = '/api/payments';
 
@@ -580,11 +608,12 @@ export function useServerSessions(): Result {
       sessionId: string,
       payments: NewPayment[],
       onSettled?: (result: PaymentResult) => boolean | void,
-    ) => {
+      options?: { quiet?: boolean },
+    ): Promise<void> => {
       const session = sessionsRef.current.find((s) => s.id === sessionId);
       if (!session) {
         onSettled?.({ ok: false, message: 'This session is gone.', payments: [] });
-        return;
+        return Promise.resolve();
       }
       // The whole request is still sent, since the server skips what it has,
       // but only what this call put on screen is ever taken off again.
@@ -661,11 +690,13 @@ export function useServerSessions(): Result {
                 ? 'This is taking too long. Check your connection and try again.'
                 : 'Not recorded. Check your connection and try again.'),
             payments: paymentsOf(sessionsRef.current, sessionId),
+            code: typeof body?.code === 'string' ? body.code : undefined,
           }) === true;
         // A refusal shown on the form the user just saved isn't repeated. Any
         // other failure, or a refusal whose form is gone, goes to the banner,
-        // which stays in view and offers "Try again".
-        if (refusal === null || !shownByCaller) {
+        // which stays in view and offers "Try again". A quiet write leaves
+        // the report to its caller.
+        if (!options?.quiet && (refusal === null || !shownByCaller)) {
           fail({
             kind: 'payment',
             sessionId,
@@ -685,8 +716,111 @@ export function useServerSessions(): Result {
       });
       for (const id of ids) adding.current.set(id, work);
       pending.track(work);
+      return work;
     },
     [authedFetch, countPaying, fail, pending, queue, setPayments],
+  );
+
+  const settleSessions = useCallback(
+    async (sessionIds: string[]): Promise<{ settled: string[]; failed: string[] }> => {
+      const settled: string[] = [];
+      const failed: string[] = [];
+      await Promise.all(
+        sessionIds.map(async (id) => {
+          const session = sessionsRef.current.find((s) => s.id === id);
+          // Gone, or already has a payment: another device got there first (BR-S15).
+          if (!session || session.payments.length > 0) return;
+          const entries = settlePayments(session).map((p) => ({ ...p, id: createId('pay') }));
+          if (entries.length === 0) return;
+          let ok = true;
+          await addPayments(
+            id,
+            entries,
+            (result) => {
+              // `over_remaining` means it was settled elsewhere meanwhile, and
+              // `addPayments` has merged the server's payments in. A session
+              // deleted meanwhile has nothing to report either.
+              const gone = !sessionsRef.current.some((s) => s.id === id);
+              if (!result.ok && result.code !== 'over_remaining' && !gone) ok = false;
+              // So no refusal is bannered here: the batch reports once.
+              return true;
+            },
+            { quiet: true },
+          );
+          (ok ? settled : failed).push(id);
+        }),
+      );
+      if (failed.length > 0) {
+        const title = (id: string) => {
+          const s = sessionsRef.current.find((x) => x.id === id);
+          return s ? sessionDisplayTitle(s) : '';
+        };
+        fail({
+          kind: 'payment',
+          sessionId: null,
+          message:
+            failed.length === 1
+              ? `Couldn't mark “${title(failed[0])}” as settled. Tap “Already settled” on it to try again.`
+              : `Couldn't mark ${failed.length} sessions as settled. Tap “Already settled” on each to try again.`,
+        });
+      }
+      return { settled, failed };
+    },
+    [addPayments, fail],
+  );
+
+  const removeAllPayments = useCallback(
+    (sessionId: string) => {
+      const snapshot = sessionsRef.current.find((s) => s.id === sessionId)?.payments ?? [];
+      if (snapshot.length === 0) return;
+      setPayments(sessionId, () => []);
+      countPaying(sessionId, 1);
+      const ids = snapshot.map((p) => p.id);
+      for (const id of ids) removing.current.add(id);
+
+      const work = (async () => {
+        let status: number | null = null;
+        let timedOut = false;
+        try {
+          // Payments still being recorded land first, or the delete misses them.
+          await Promise.all(ids.map((id) => adding.current.get(id)));
+          status = await withDeadline(WRITE_TIMEOUT_MS, async (signal) => {
+            const res = await authedFetch(
+              `${PAYMENTS_ENDPOINT}?sessionId=${encodeURIComponent(sessionId)}`,
+              { method: 'DELETE' },
+              signal,
+            );
+            return res.status;
+          });
+          // Not found means there is nothing left to undo, which is done too.
+          if (status === 204 || status === 404) {
+            setFailures((f) => resolveFailure(f, 'payment', sessionId));
+            return;
+          }
+        } catch (err) {
+          timedOut = err instanceof TimeoutError;
+        }
+
+        if (!sessionsRef.current.some((s) => s.id === sessionId)) return;
+        setPayments(sessionId, (list) => [
+          ...list,
+          ...snapshot.filter((p) => !list.some((x) => x.id === p.id)),
+        ]);
+        fail({
+          kind: 'payment',
+          sessionId,
+          message: timedOut
+            ? UNDO_ALL_TIMEOUT
+            : `Couldn't undo “already settled” (${status ?? 'no connection'}), so its payments are still recorded.`,
+        });
+      })().finally(() => {
+        settledDuringLoad.current.add(sessionId);
+        countPaying(sessionId, -1);
+        for (const id of ids) removing.current.delete(id);
+      });
+      pending.track(work);
+    },
+    [authedFetch, countPaying, fail, pending, setPayments],
   );
 
   const removePayment = useCallback(
@@ -745,6 +879,39 @@ export function useServerSessions(): Result {
     [authedFetch, countPaying, fail, pending, setPayments],
   );
 
+  /** Creates one seeded session on the server: the row, its content, then its payments. */
+  const seedOne = useCallback(
+    async (session: Session) => {
+      await authedFetch(ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: session.id }),
+      });
+      await authedFetch(`${ENDPOINT}/${encodeURIComponent(session.id)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(session),
+      });
+      // A save never carries payments, so seeded ones go through their own endpoint.
+      if (session.payments.length > 0) {
+        await authedFetch(PAYMENTS_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId: session.id,
+            payments: session.payments.map(({ id, debtor, creditor, amountCents }) => ({
+              id,
+              debtor,
+              creditor,
+              amountCents,
+            })),
+          }),
+        });
+      }
+    },
+    [authedFetch],
+  );
+
   const replaceAll = useCallback(
     (next: Session[]) => {
       // Dev-only, so a request per session is fine — there is no bulk
@@ -764,34 +931,7 @@ export function useServerSessions(): Result {
               method: 'DELETE',
             });
           }
-          for (const session of next) {
-            await authedFetch(ENDPOINT, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ id: session.id }),
-            });
-            await authedFetch(`${ENDPOINT}/${encodeURIComponent(session.id)}`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(session),
-            });
-            // A save never carries payments, so seeded ones go through their own endpoint.
-            if (session.payments.length > 0) {
-              await authedFetch(PAYMENTS_ENDPOINT, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  sessionId: session.id,
-                  payments: session.payments.map(({ id, debtor, creditor, amountCents }) => ({
-                    id,
-                    debtor,
-                    creditor,
-                    amountCents,
-                  })),
-                }),
-              });
-            }
-          }
+          for (const session of next) await seedOne(session);
           setFailures((f) => resolveFailure(f, 'seed', null));
         } catch (err) {
           fail({
@@ -803,7 +943,31 @@ export function useServerSessions(): Result {
       })();
       pending.track(seed);
     },
-    [authedFetch, commit, fail, pending, queue],
+    [authedFetch, commit, fail, pending, queue, seedOne],
+  );
+
+  const appendAll = useCallback(
+    (next: Session[]) => {
+      // Only sessions that aren't there yet, and never a DELETE or a PUT of one
+      // that is: the database may hold real data, and re-saving an existing
+      // session could change it.
+      const fresh = next.filter((s) => !sessionsRef.current.some((p) => p.id === s.id));
+      commit([...sessionsRef.current, ...fresh]);
+      const seed = (async () => {
+        try {
+          for (const session of fresh) await seedOne(session);
+          setFailures((f) => resolveFailure(f, 'seed', null));
+        } catch (err) {
+          fail({
+            kind: 'seed',
+            sessionId: null,
+            message: messageOf(err, 'Could not seed sessions.'),
+          });
+        }
+      })();
+      pending.track(seed);
+    },
+    [commit, fail, pending, seedOne],
   );
 
   /**
@@ -831,8 +995,11 @@ export function useServerSessions(): Result {
     removeSession,
     recordOpen,
     addPayments,
+    settleSessions,
+    removeAllPayments,
     removePayment,
     replaceAll,
+    appendAll,
     status,
     error,
     retry,

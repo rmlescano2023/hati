@@ -32,6 +32,10 @@ type ProfileValue = {
    */
   remember: (name: string, as: RememberOffer) => Promise<void>;
   dismissSaveError: () => void;
+  /** Whether the account has answered Collection's one-time "Already settled?" question. */
+  alreadySettledAnswered: boolean;
+  /** Records the answer, on screen at once; a failure is silent and it is asked again next load. */
+  answerAlreadySettled: () => void;
   reload: () => void;
 };
 
@@ -59,6 +63,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<ProfileValue['status']>('loading');
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [nicknames, setNicknames] = useState<string[]>([]);
+  const [alreadySettledAnswered, setAlreadySettledAnswered] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [reloads, setReloads] = useState(0);
 
@@ -78,11 +83,16 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
         const body = await withDeadline(WRITE_TIMEOUT_MS, async (signal) => {
           const res = await send({ method: 'GET' }, signal);
           if (!res.ok) throw new Error(`Could not load your profile (${res.status}).`);
-          return (await res.json()) as { displayName?: unknown; nicknames?: unknown };
+          return (await res.json()) as {
+            displayName?: unknown;
+            nicknames?: unknown;
+            alreadySettledAnsweredAt?: unknown;
+          };
         });
         if (cancelled) return;
         setDisplayName(typeof body.displayName === 'string' ? body.displayName : null);
         setNicknames(namesFrom(body.nicknames));
+        setAlreadySettledAnswered(body.alreadySettledAnsweredAt != null);
         setStatus('ready');
       } catch (err) {
         if (cancelled) return;
@@ -161,6 +171,23 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 
   const dismissSaveError = useCallback(() => setSaveError(null), []);
 
+  // Outside the PATCH chain, since it touches neither name. A failure is silent:
+  // the next load asks again with the live count, and after a "Yes" there's
+  // nothing left to ask about.
+  const answerAlreadySettled = useCallback(() => {
+    setAlreadySettledAnswered(true);
+    void withDeadline(WRITE_TIMEOUT_MS, (signal) =>
+      send(
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mark: 'alreadySettled' }),
+        },
+        signal,
+      ),
+    ).catch(() => undefined);
+  }, [send]);
+
   const reload = useCallback(() => setReloads((n) => n + 1), []);
 
   const value = useMemo<ProfileValue>(
@@ -172,9 +199,22 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       save,
       remember,
       dismissSaveError,
+      alreadySettledAnswered,
+      answerAlreadySettled,
       reload,
     }),
-    [status, displayName, nicknames, saveError, save, remember, dismissSaveError, reload],
+    [
+      status,
+      displayName,
+      nicknames,
+      saveError,
+      save,
+      remember,
+      dismissSaveError,
+      alreadySettledAnswered,
+      answerAlreadySettled,
+      reload,
+    ],
   );
 
   return <ProfileContext.Provider value={value}>{children}</ProfileContext.Provider>;
