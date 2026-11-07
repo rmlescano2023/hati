@@ -877,4 +877,9 @@ cards and page, and need no schema or API change.
   the normal border over 1.6s (the `placed` animation), with no new colours. With `prefers-reduced-motion`, there
   is no fade: the outline is held for the same 1.6s and then removed. Nothing happens when the pick doesn't move
   the card, and the card isn't opened.
+- **(c) Where "Already settled" sits on an open card.** Collapsed, the button stays under the summary. Expanded, it
+  leaves that spot and sits beside the card's own action, at the same button size: next to "Mark all as paid" on
+  an Outstanding card, and next to Confirm / "Yes, that's me" on a Needs setup card (Confirm first, as the primary).
+  The rows wrap on a phone like the other button rows. Its `aria-label` still names the session. The button is a
+  different element in each place, so if it had focus when the card opened or closed, focus moves to the new one.
 

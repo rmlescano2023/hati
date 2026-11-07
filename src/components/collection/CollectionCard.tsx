@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { Button } from '../shared/Button';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { useProfile } from '../../context/ProfileContext';
@@ -181,8 +181,40 @@ export function CollectionCard({
     { direction: 'youOwe', lines: card.youOwe },
   ];
 
+  // Focus on the "Already settled" button survives the card opening or closing,
+  // which moves the button between two places in the card: it is a different
+  // element each time, so focus would otherwise fall back to the page.
+  const article = useRef<HTMLElement>(null);
+  const buttonFocused = useRef(false);
+  useEffect(() => {
+    if (!buttonFocused.current) return;
+    const active = document.activeElement;
+    if (active && active !== document.body) return;
+    article.current?.querySelector<HTMLButtonElement>('[data-already-settled]')?.focus();
+  }, [expanded]);
+  const alreadySettled = (size: 'sm' | 'md'): ReactNode =>
+    card.offersAlreadySettled ? (
+      <Button
+        size={size}
+        data-already-settled=""
+        aria-label={`Mark “${title}” as already settled`}
+        onClick={onAlreadySettled}
+        onFocus={() => {
+          buttonFocused.current = true;
+        }}
+        onBlur={(e) => {
+          // A blur from the button being replaced leaves it detached, and focus
+          // should follow it; one from the user moving on clears it.
+          if (e.currentTarget.isConnected) buttonFocused.current = false;
+        }}
+      >
+        Already settled
+      </Button>
+    ) : null;
+
   return (
     <article
+      ref={article}
       id={`collection-${session.id}`}
       className={`${styles.card} ${expandable ? (expanded ? styles.open : styles.clickable) : ''} ${placed ? styles.placed : ''}`}
     >
@@ -203,21 +235,14 @@ export function CollectionCard({
         )}
       </h3>
 
-      {card.offersAlreadySettled && (
-        <div className={styles.alreadySettled}>
-          <Button
-            size="sm"
-            aria-label={`Mark “${title}” as already settled`}
-            onClick={onAlreadySettled}
-          >
-            Already settled
-          </Button>
-        </div>
+      {/* Collapsed, the button sits under the summary; open, it moves in beside the card's own action. */}
+      {!expanded && alreadySettled && (
+        <div className={styles.alreadySettled}>{alreadySettled('sm')}</div>
       )}
 
       {expandable && expanded && setup && (
         <div id={bodyId} className={styles.body}>
-          <NeedsSetup card={card} onPlaced={onPlaced} />
+          <NeedsSetup card={card} onPlaced={onPlaced} extra={alreadySettled('md')} />
         </div>
       )}
 
@@ -246,7 +271,9 @@ export function CollectionCard({
           {allPaid && (
             <p className={styles.detail}>Every line in this session is marked as paid.</p>
           )}
-          {card.bucket === 'outstanding' && <MarkAll card={card} title={title} onPaid={onPaid} />}
+          {card.bucket === 'outstanding' && (
+            <MarkAll card={card} title={title} onPaid={onPaid} extra={alreadySettled('md')} />
+          )}
           {card.presettled && <UndoSettled card={card} title={title} />}
         </div>
       )}
@@ -290,7 +317,16 @@ function YouAre({ card, title }: { card: Card; title: string }) {
 }
 
 /** Asks who the user is in a session Hati couldn't place (US-5). */
-function NeedsSetup({ card, onPlaced }: { card: Card; onPlaced: () => void }) {
+function NeedsSetup({
+  card,
+  onPlaced,
+  extra,
+}: {
+  card: Card;
+  onPlaced: () => void;
+  /** "Already settled", when offered, beside Confirm. */
+  extra: ReactNode;
+}) {
   const { setMe } = useSessionsStore();
   const profile = useProfile();
   // The member a nickname matched, preselected for the user to confirm: a
@@ -316,7 +352,7 @@ function NeedsSetup({ card, onPlaced }: { card: Card; onPlaced: () => void }) {
         remember={remember}
         onRememberChange={setRemember}
       />
-      <div>
+      <div className={styles.actions}>
         <Button
           variant="primary"
           disabled={selected === null}
@@ -330,6 +366,7 @@ function NeedsSetup({ card, onPlaced }: { card: Card; onPlaced: () => void }) {
         >
           {selected !== null && selected === suggested ? "Yes, that's me" : 'Confirm'}
         </Button>
+        {extra}
       </div>
     </div>
   );
@@ -369,7 +406,18 @@ function UndoSettled({ card, title }: { card: Card; title: string }) {
  * or nothing (US-8b). It confirms first, because one tap can write many
  * payments; each can still be undone on its own.
  */
-function MarkAll({ card, title, onPaid }: { card: Card; title: string; onPaid: () => void }) {
+function MarkAll({
+  card,
+  title,
+  onPaid,
+  extra,
+}: {
+  card: Card;
+  title: string;
+  onPaid: () => void;
+  /** "Already settled", when offered, in the same row. */
+  extra: ReactNode;
+}) {
   const { addPayments } = useSessionsStore();
   const [confirming, setConfirming] = useState(false);
   return (
@@ -377,6 +425,7 @@ function MarkAll({ card, title, onPaid }: { card: Card; title: string; onPaid: (
       <Button aria-label={`Mark all as paid in ${title}`} onClick={() => setConfirming(true)}>
         Mark all as paid
       </Button>
+      {extra}
       <ConfirmDialog
         open={confirming}
         title="Mark everything as paid?"
