@@ -4,6 +4,7 @@ import { ConfirmDialog } from '../components/shared/ConfirmDialog';
 import { EmptyState } from '../components/shared/EmptyState';
 import { useSessionsStore } from '../context/SessionsStoreContext';
 import { deleteSessionMessage } from '../lib/sessionLabel';
+import { showsEmptyState } from '../lib/writeQueue';
 import styles from './HomePage.module.css';
 
 type Props = {
@@ -16,7 +17,7 @@ type Props = {
  * deleted from their cards, but never edited.
  */
 export function HistoryPage({ onOpenSession }: Props) {
-  const { sessions, deleteSession } = useSessionsStore();
+  const { sessions, deleteSession, sync } = useSessionsStore();
   // Held by id and looked up on render, as on Home, so the confirmation always
   // reads the session's current name.
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
@@ -32,12 +33,13 @@ export function HistoryPage({ onOpenSession }: Props) {
   const pendingDelete = closed.find((s) => s.id === pendingDeleteId) ?? null;
 
   if (closed.length === 0) {
-    return (
+    // After a failed load the banner speaks instead of an empty state.
+    return showsEmptyState(sync.loaded, closed.length) ? (
       <EmptyState
         title="No archived sessions yet"
         description="Finish a session from its Summary tab and it will be filed here."
       />
-    );
+    ) : null;
   }
 
   return (
