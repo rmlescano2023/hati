@@ -38,7 +38,10 @@ export function ExportSoaButton({
     try {
       await downloadSoa({ members, records, fileNameSuffix, name });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not generate the PDF.');
+      // The generator's own message is about its internals, so the user gets a
+      // plain line and the cause goes to the console in development.
+      if (import.meta.env.DEV) console.warn('soa: could not create the PDF', err);
+      setError("Couldn't create the PDF. Try again.");
     } finally {
       setBusy(false);
     }
