@@ -12,7 +12,6 @@ import {
   buildCollection,
   formatCents,
   pairPaymentIds,
-  type Bucket,
   type CollectionCard as Card,
 } from '../lib/collection';
 import appStyles from '../App.module.css';
@@ -145,23 +144,34 @@ export function CollectionPage({ openSessionId, canAsk, previewSettled = false }
   }, [placedId]);
 
   // A payment that settles a session moves its card, and the focus with it, so
-  // the move is announced and focus lands on the Settled toggle (AC-11.2).
-  const lastPaid = useRef<string | null>(null);
-  const buckets = useRef(new Map<string, Bucket>());
+  // the move is announced and focus lands on the Settled toggle (AC-11.2). That
+  // happens only once the server has confirmed the payment and the card really is
+  // in Settled: the optimistic move alone says nothing, since a refused payment
+  // puts the card back and an announcement could not be taken back.
+  const [confirmedPaid, setConfirmedPaid] = useState<string | null>(null);
   useEffect(() => {
-    const next = new Map<string, Bucket>();
-    for (const c of [...collection.needsSetup, ...collection.outstanding, ...collection.settled]) {
-      next.set(c.session.id, c.bucket);
+    if (confirmedPaid === null) return;
+    setConfirmedPaid(null);
+    if (cards.get(confirmedPaid)?.bucket !== 'settled') return;
+    setAnnouncement('Session fully settled. Moved to Settled.');
+    requestAnimationFrame(() => settledToggle.current?.focus());
+  }, [confirmedPaid, cards]);
+  // How a payment ended. The live region is emptied first, so a refusal leaves
+  // nothing in it and a second identical announcement is read again. A refused
+  // payment puts its card or line back, and focus goes to the card's header
+  // unless a form already took it, rather than being lost with the button.
+  const paymentEnded = (id: string, ok: boolean) => {
+    setAnnouncement('');
+    if (ok) {
+      setConfirmedPaid(id);
+      return;
     }
-    const id = lastPaid.current;
-    const prev = id === null ? undefined : buckets.current.get(id);
-    // A Needs setup card can reach Settled now too, by being marked already settled.
-    if (id !== null && prev !== undefined && prev !== 'settled' && next.get(id) === 'settled') {
-      setAnnouncement('Session fully settled. Moved to Settled.');
-      settledToggle.current?.focus();
-    }
-    buckets.current = next;
-  }, [collection]);
+    requestAnimationFrame(() => {
+      const active = document.activeElement;
+      if (active && active !== document.body) return;
+      document.querySelector<HTMLElement>(`#collection-${id} [aria-expanded]`)?.focus();
+    });
+  };
 
   // The one-time "Already settled?" question. It's asked about the sessions
   // finished before Collection, live, so the count is true when it opens.
@@ -252,9 +262,7 @@ export function CollectionPage({ openSessionId, canAsk, previewSettled = false }
             return next;
           })
         }
-        onPaid={() => {
-          lastPaid.current = id;
-        }}
+        onPaid={(ok) => paymentEnded(id, ok)}
         onAlreadySettled={() => void markSettled([id])}
         onPlaced={() => {
           placing.current = id;

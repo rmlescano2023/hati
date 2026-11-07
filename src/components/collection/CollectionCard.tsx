@@ -28,8 +28,8 @@ type Props = {
   /** Failed payments by line key, for this card's lines. */
   failed: (lineKey: string) => FailedPayment | undefined;
   onFailed: (lineKey: string, failed: FailedPayment | null) => void;
-  /** Called as a payment is recorded here, so the page can announce the session settling. */
-  onPaid: () => void;
+  /** Called as a payment recorded here ends, `ok` once the server has it, so the page can announce the session settling. */
+  onPaid: (ok: boolean) => void;
   /** Marks the session as already settled: a full payment on every pair. */
   onAlreadySettled: () => void;
   /** Called as a Needs setup card is confirmed, so the page can bring the user to where it lands. */
@@ -414,11 +414,20 @@ function UndoSettled({ card, title }: { card: Card; title: string }) {
  * or nothing (US-8b). It confirms first, because one tap can write many
  * payments; each can still be undone on its own.
  */
-function MarkAll({ card, title, onPaid }: { card: Card; title: string; onPaid: () => void }) {
+function MarkAll({
+  card,
+  title,
+  onPaid,
+}: {
+  card: Card;
+  title: string;
+  onPaid: (ok: boolean) => void;
+}) {
   const { addPayments } = useSessionsStore();
   const [confirming, setConfirming] = useState(false);
+  const row = useRef<HTMLDivElement>(null);
   return (
-    <div className={styles.markAll}>
+    <div ref={row} className={styles.markAll}>
       <Button aria-label={`Mark all as paid in ${title}`} onClick={() => setConfirming(true)}>
         Mark all as paid
       </Button>
@@ -427,13 +436,19 @@ function MarkAll({ card, title, onPaid }: { card: Card; title: string; onPaid: (
         title="Mark everything as paid?"
         message={confirming ? markAllMessage(card) : ''}
         confirmLabel="Mark all as paid"
-        onCancel={() => setConfirming(false)}
+        onCancel={() => {
+          setConfirming(false);
+          // The dialog is removed rather than closed, so focus wouldn't return
+          // to the button that opened it on its own.
+          requestAnimationFrame(() => row.current?.querySelector('button')?.focus());
+        }}
         onConfirm={() => {
           setConfirming(false);
-          onPaid();
           addPayments(
             card.session.id,
             openLinePayments(card).map((p) => ({ ...p, id: createId('pay') })),
+            // The refusal itself is bannered by the store; this only reports the ending.
+            (result) => onPaid(result.ok),
           );
         }}
       />
