@@ -56,6 +56,10 @@ export function LineRow({ sessionId, line, failed, onFailed, onPaid }: Props) {
   // A double tap on Save, or a held Enter, must still record one payment (AC-7.10).
   const submitted = useRef(false);
   const input = useRef<HTMLInputElement>(null);
+  // The form and the undo dialog are removed rather than closed, so focus would
+  // fall back to the page. These find the buttons that opened them again.
+  const actions = useRef<HTMLDivElement>(null);
+  const history = useRef<HTMLUListElement>(null);
   const messageId = useId();
   // Whether the row is on screen, so a refusal arriving after it has gone is
   // reported in the banner instead of into state nobody sees.
@@ -102,6 +106,8 @@ export function LineRow({ sessionId, line, failed, onFailed, onPaid }: Props) {
   const closeForm = () => {
     setOpen(false);
     onFailed(null);
+    // The first button of the actions is the one that opened the form.
+    requestAnimationFrame(() => actions.current?.querySelector('button')?.focus());
   };
 
   /** `onFailure` returns whether it showed the message, as `addPayments` asks. */
@@ -219,7 +225,7 @@ export function LineRow({ sessionId, line, failed, onFailed, onPaid }: Props) {
         </form>
       ) : (
         line.remainingCents > 0 && (
-          <div className={styles.actions}>
+          <div ref={actions} className={styles.actions}>
             <Button
               size="sm"
               aria-label={
@@ -245,7 +251,7 @@ export function LineRow({ sessionId, line, failed, onFailed, onPaid }: Props) {
       )}
 
       {line.payments.length > 0 && (
-        <ul className={styles.history}>
+        <ul ref={history} className={styles.history}>
           {line.payments.map((payment) => (
             <li key={payment.id} className={styles.entry}>
               <span className={styles.entryText}>
@@ -257,6 +263,7 @@ export function LineRow({ sessionId, line, failed, onFailed, onPaid }: Props) {
               <Button
                 variant="ghost"
                 size="sm"
+                data-undo={payment.id}
                 aria-label={
                   owedToYou
                     ? `Undo ${formatCents(payment.amountCents)} received from ${other}`
@@ -283,7 +290,15 @@ export function LineRow({ sessionId, line, failed, onFailed, onPaid }: Props) {
         }
         confirmLabel="Undo payment"
         destructive
-        onCancel={() => setUndoing(null)}
+        onCancel={() => {
+          const id = undoing?.id;
+          setUndoing(null);
+          requestAnimationFrame(() =>
+            [...(history.current?.querySelectorAll<HTMLButtonElement>('[data-undo]') ?? [])]
+              .find((button) => button.dataset.undo === id)
+              ?.focus(),
+          );
+        }}
         onConfirm={() => {
           if (undoing) removePayment(sessionId, undoing.id);
           setUndoing(null);
