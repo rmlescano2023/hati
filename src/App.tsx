@@ -19,6 +19,7 @@ import { OnboardingDialog } from './components/onboarding/OnboardingDialog';
 import onboardingStyles from './components/onboarding/OnboardingDialog.module.css';
 import type { ScreenShape } from './components/onboarding/steps';
 import { useOnboarding } from './hooks/useOnboarding';
+import { showsEmptyState } from './lib/writeQueue';
 import styles from './App.module.css';
 
 /**
@@ -103,7 +104,16 @@ export default function App() {
     openSession(sessionId);
   };
   const startSession = (name: string | null) => {
-    const id = createSession(name);
+    // If the create fails before anything is entered, the session is taken off
+    // the screen, so leave it for Home rather than for "Session not found". The
+    // tour keeps its session as it is, since it narrates the screen it is on.
+    const id = createSession(
+      name,
+      phase === 'running'
+        ? undefined
+        : () =>
+            setScreen((s) => (s.kind === 'session' && s.sessionId === id ? { kind: 'home' } : s)),
+    );
     if (phase === 'running' && tourSession.current === null) tourSession.current = id;
     openSession(id);
   };
@@ -174,8 +184,12 @@ export default function App() {
   );
 
   // An empty Home carries the action in its own empty state, so the nav row
-  // drops it there rather than offering the same button twice.
-  const homeIsEmpty = !sessions.some((s) => s.status === 'draft');
+  // drops it there rather than offering the same button twice. While the load
+  // has failed Home shows no empty state, so the nav row keeps the action.
+  const homeIsEmpty = showsEmptyState(
+    sync.loaded,
+    sessions.filter((s) => s.status === 'draft').length,
+  );
   const showNewSession = !(screen.kind === 'home' && homeIsEmpty);
 
   const nav = !TOP_LEVEL.has(screen.kind) ? null : (

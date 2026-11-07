@@ -169,6 +169,25 @@ export function mergeLoaded<S extends { id: string }>(
 }
 
 /**
+ * `list` with `session` back at `index`, where it was before a delete that
+ * failed took it off the screen. It is left alone if it is there already, and
+ * the index is clamped, since the list may have changed while the delete ran.
+ */
+export function restoreAt<S extends { id: string }>(list: S[], session: S, index: number): S[] {
+  if (list.some((s) => s.id === session.id)) return list;
+  const at = Math.min(Math.max(index, 0), list.length);
+  return [...list.slice(0, at), session, ...list.slice(at)];
+}
+
+/**
+ * Whether a screen with nothing to list may say so. An empty list is only the
+ * truth after a load that succeeded: while the first load has failed the list
+ * is empty because nothing arrived, and "No sessions" would read as lost data.
+ * The banner carries that message instead.
+ */
+export const showsEmptyState = (loaded: boolean, shown: number): boolean => loaded && shown === 0;
+
+/**
  * The loaded list with the on-screen payments of the sessions `keep` names,
  * and the server's copy of everything else about them. A session whose save
  * failed must take the server's copy, so its rollback is shown and reported,
@@ -318,6 +337,20 @@ export function saveFailedMessage(status: number): string {
 }
 
 /**
+ * Whether a create that failed should take its session off the screen and send
+ * the user out of it. That is only right for a session the user has not edited:
+ * an edited one is kept, because the next save sends the create again and
+ * nothing typed is lost. A session that has already gone from the screen has
+ * nothing to take off, and `optedIn` is false for a caller that must keep the
+ * session, as the onboarding tour does.
+ */
+export const discardsFailedCreate = (c: {
+  optedIn: boolean;
+  onScreen: boolean;
+  edited: boolean;
+}): boolean => c.optedIn && c.onScreen && !c.edited;
+
+/**
  * Sends a save only once the session's row can exist. A save never creates a
  * session, so it waits for a create still in flight, and `send` is told to
  * create it first when that create failed. `createFailed` is read after the
@@ -332,15 +365,17 @@ export async function saveOnceCreated(
   await send(createFailed());
 }
 
-export type FailureKind = 'save' | 'delete' | 'load' | 'seed' | 'payment';
+export type FailureKind = 'save' | 'create' | 'delete' | 'load' | 'seed' | 'payment';
 
 /**
  * One write or load that failed and hasn't been resolved yet. Keeping them
  * apart, rather than one global error, is what stops a success on one
  * session from hiding a failure on another. A `'save'` also covers a failed
- * create, because a later save of the session creates the row too. A
- * `'payment'` has already been reverted on screen, so it is left out of
- * `failedSessionIds` and never shows the reverted-edit note.
+ * create of an edited session, because a later save of it creates the row too.
+ * A `'create'` is for a session that was never edited and has been taken off
+ * the screen, so there is nothing of it left to revert. A `'payment'` has
+ * already been reverted on screen, so it is left out of `failedSessionIds` and
+ * never shows the reverted-edit note.
  */
 export type Failure = {
   kind: FailureKind;

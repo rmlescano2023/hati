@@ -15,6 +15,7 @@ import {
   createSaveConfirmations,
   createSaveQueue,
   createWriteOrder,
+  discardsFailedCreate,
   failedMessage,
   failedSessionIds,
   isDeletedElsewhere,
@@ -27,10 +28,12 @@ import {
   needsRefresh,
   resolveAlreadySettled,
   resolveFailure,
+  restoreAt,
   revertedAny,
   sameSessionContent,
   saveFailedMessage,
   saveOnceCreated,
+  showsEmptyState,
   withDeadline,
   type Failure,
 } from './writeQueue';
@@ -1127,5 +1130,124 @@ describe('needsRefresh (the banner button reloads when retrying cannot help)', (
       needsRefresh(failure("Couldn't record the payment. Check your connection and try again.")),
     ).toBe(false);
     expect(needsRefresh(undefined)).toBe(false);
+  });
+});
+
+describe('a failed create of an untouched session', () => {
+  const open = { optedIn: true, onScreen: true, edited: false };
+
+  it('takes the session off the screen, as long as nothing was entered in it', () => {
+    expect(discardsFailedCreate(open)).toBe(true);
+  });
+
+  it('keeps an edited session, whose next save sends the create again', () => {
+    expect(discardsFailedCreate({ ...open, edited: true })).toBe(false);
+  });
+
+  it('keeps the session for a caller that did not opt in, as the tour does', () => {
+    expect(discardsFailedCreate({ ...open, optedIn: false })).toBe(false);
+  });
+
+  it('has nothing to take off once the session has already gone from the screen', () => {
+    expect(discardsFailedCreate({ ...open, onScreen: false })).toBe(false);
+  });
+
+  // The failure names no session, so "Try again" has no session to look for in
+  // its reload and can't report the missing one as "Session not found" or as a
+  // reverted edit.
+  it('is not a failed session, so Try again never makes it a revert candidate', () => {
+    let list = addFailure([], {
+      kind: 'create',
+      sessionId: null,
+      message: 'Could not create the session.',
+    });
+    expect(failedSessionIds(list)).toEqual([]);
+    expect(revertedAny(failedSessionIds(list), [], [], sameSessionContent)).toBe(false);
+    list = addFailure(list, { kind: 'save', sessionId: 'A', message: 'save A' });
+    expect(failedSessionIds(list)).toEqual(['A']);
+  });
+
+  it('is answered by the next create that lands, and by no save or delete', () => {
+    const list = addFailure([], {
+      kind: 'create',
+      sessionId: null,
+      message: 'Could not create the session.',
+    });
+    expect(resolveFailure(list, 'save', null)).toBe(list);
+    expect(resolveFailure(list, 'delete', null)).toBe(list);
+    expect(resolveFailure(list, 'create', null)).toEqual([]);
+  });
+});
+
+describe('showsEmptyState (no "No sessions" while the load has failed)', () => {
+  it('says so after a load that succeeded and found nothing', () => {
+    expect(showsEmptyState(true, 0)).toBe(true);
+  });
+
+  it('stays silent while no load has succeeded, as after a failed first load', () => {
+    expect(showsEmptyState(false, 0)).toBe(false);
+  });
+
+  it('stays silent when there is something to list, loaded or not', () => {
+    expect(showsEmptyState(true, 2)).toBe(false);
+    expect(showsEmptyState(false, 2)).toBe(false);
+  });
+});
+
+describe('restoreAt (a card whose delete failed comes back where it was)', () => {
+  const ids = (list: { id: string }[]) => list.map((s) => s.id);
+  const a = { id: 'A' };
+  const b = { id: 'B' };
+  const c = { id: 'C' };
+
+  it('puts the session back at its original position', () => {
+    expect(ids(restoreAt([a, c], b, 1))).toEqual(['A', 'B', 'C']);
+    expect(ids(restoreAt([b, c], a, 0))).toEqual(['A', 'B', 'C']);
+    expect(ids(restoreAt([a, b], c, 2))).toEqual(['A', 'B', 'C']);
+  });
+
+  it('clamps the position when the list has shrunk meanwhile', () => {
+    expect(ids(restoreAt([a], c, 5))).toEqual(['A', 'C']);
+    expect(ids(restoreAt([a], c, -1))).toEqual(['C', 'A']);
+  });
+
+  it('leaves the list alone when the session is already there', () => {
+    const list = [a, b];
+    expect(restoreAt(list, b, 0)).toBe(list);
+  });
+
+  // A load that lands during the delete drops the session, as it must while the
+  // delete is in flight; the restore then wins, and a later load keeps it.
+  it('is not undone by a load that landed during the delete, nor by the next one', () => {
+    const server = [a, b, c];
+    const duringDelete = mergeLoaded(
+      server,
+      [a, c],
+      () => false,
+      (id) => id === 'B',
+    );
+    expect(ids(duringDelete)).toEqual(['A', 'C']);
+    const restored = restoreAt(duringDelete, b, 1);
+    expect(ids(restored)).toEqual(['A', 'B', 'C']);
+    expect(
+      ids(
+        mergeLoaded(
+          server,
+          restored,
+          () => false,
+          () => false,
+        ),
+      ),
+    ).toEqual(['A', 'B', 'C']);
+  });
+
+  it('is answered by a later delete of the same session, and by no other', () => {
+    const list = addFailure([], {
+      kind: 'delete',
+      sessionId: 'B',
+      message: 'Could not delete the session.',
+    });
+    expect(resolveFailure(list, 'delete', 'A')).toBe(list);
+    expect(resolveFailure(list, 'delete', 'B')).toEqual([]);
   });
 });

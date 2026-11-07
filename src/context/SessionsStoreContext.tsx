@@ -17,9 +17,11 @@ type SessionsStoreValue = {
   sessions: Session[];
   /**
    * Creates an empty draft, named if `name` has anything usable in it, and
-   * returns its id for the caller to navigate into.
+   * returns its id for the caller to navigate into. `onDiscarded` is called if
+   * the create fails before the draft was edited and it is taken off the
+   * screen, so the caller can leave it; see `useServerSessions`.
    */
-  createSession: (name?: string | null) => string;
+  createSession: (name?: string | null, onDiscarded?: () => void) => string;
   /** Names or renames a draft; a blank name clears it. Closed sessions are left alone. */
   renameSession: (sessionId: string, rawName: string) => void;
   /**
@@ -87,6 +89,8 @@ type SessionsStoreValue = {
   /** Where the current data stands with the server. */
   sync: {
     status: SyncStatus;
+    /** True once a load has succeeded; until then an empty list is not an empty account. */
+    loaded: boolean;
     error: string | null;
     /** True when retrying can't help, so the banner's button reloads and says "Refresh". */
     refresh: boolean;
@@ -155,6 +159,7 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
     replaceAll,
     appendAll,
     status,
+    loaded,
     error,
     refresh,
     retry,
@@ -198,25 +203,31 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
     [updateSession],
   );
 
-  const createSession = useCallback((name?: string | null): string => {
-    const id = createId('session');
-    // The caller navigates into the session immediately, so the id is minted
-    // here and the server catches up rather than being awaited.
-    addSession({
-      id,
-      status: 'draft',
-      createdAt: new Date().toISOString(),
-      closedAt: null,
-      members: [],
-      records: [],
-      name: normaliseSessionName(name ?? null),
-      activityAt: null,
-      me: null,
-      finishedWithCollection: false,
-      payments: [],
-    });
-    return id;
-  }, [addSession]);
+  const createSession = useCallback(
+    (name?: string | null, onDiscarded?: () => void): string => {
+      const id = createId('session');
+      // The caller navigates into the session immediately, so the id is minted
+      // here and the server catches up rather than being awaited.
+      addSession(
+        {
+          id,
+          status: 'draft',
+          createdAt: new Date().toISOString(),
+          closedAt: null,
+          members: [],
+          records: [],
+          name: normaliseSessionName(name ?? null),
+          activityAt: null,
+          me: null,
+          finishedWithCollection: false,
+          payments: [],
+        },
+        onDiscarded,
+      );
+      return id;
+    },
+    [addSession],
+  );
 
   const renameSession = useCallback(
     (sessionId: string, rawName: string) => {
@@ -429,10 +440,11 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
       replaceSessionData,
       replaceAllSessions,
       appendSessions,
-      sync: { status, error, refresh, retry, reverted, dismissReverted },
+      sync: { status, loaded, error, refresh, retry, reverted, dismissReverted },
     }),
     [
       status,
+      loaded,
       error,
       refresh,
       retry,
