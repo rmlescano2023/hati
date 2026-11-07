@@ -41,6 +41,8 @@ type SessionsStoreValue = {
   settleSessions: (sessionIds: string[]) => Promise<{ settled: string[]; failed: string[] }>;
   /** Undoes "already settled" on one session, in one request; see `useServerSessions`. */
   removeAllPayments: (sessionId: string) => void;
+  /** Whether a payment write for the session is still waiting on the server; see `useServerSessions`. */
+  isPaying: (sessionId: string) => boolean;
   /** Undoes one payment; see `useServerSessions`. */
   removePayment: (
     sessionId: string,
@@ -147,6 +149,7 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
     settleSessions,
     removeAllPayments,
     removePayment,
+    isPaying,
     replaceAll,
     appendAll,
     status,
@@ -408,6 +411,7 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
       settleSessions,
       removeAllPayments,
       removePayment,
+      isPaying,
       deleteSession,
       recordOpen,
       addMember,
@@ -439,6 +443,7 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
       settleSessions,
       removeAllPayments,
       removePayment,
+      isPaying,
       deleteSession,
       recordOpen,
       addMember,
