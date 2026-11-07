@@ -40,6 +40,36 @@ export function formatLongDate(iso: string): string {
   return longDateFormatter.format(date);
 }
 
+const localDateFormatter = new Intl.DateTimeFormat('en-US', {
+  year: 'numeric',
+  month: 'long',
+  day: 'numeric',
+});
+
+const localDateTimeFormatter = new Intl.DateTimeFormat('en-US', {
+  year: 'numeric',
+  month: 'short',
+  day: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+});
+
+/**
+ * An ISO time as the day it fell on where the user is: "November 4, 2026".
+ * Unlike `formatLongDate`, this is a moment rather than a calendar date, so it
+ * follows the device's time zone. An unreadable time is returned unchanged.
+ */
+export function formatLocalDate(iso: string): string {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? iso : localDateFormatter.format(date);
+}
+
+/** An ISO time in the device's time zone: "Nov 4, 2026, 3:15 PM". Unreadable is returned unchanged. */
+export function formatLocalDateTime(iso: string): string {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? iso : localDateTimeFormatter.format(date);
+}
+
 /** Today in local time as `YYYY-MM-DD` (the value an `<input type="date">` wants). */
 export function todayIso(): string {
   const now = new Date();

@@ -10,6 +10,7 @@ import {
   createSaveConfirmations,
   createSaveQueue,
   failedSessionIds,
+  keepLocalPayments,
   mergeLoaded,
   resolveFailure,
   revertedAny,
@@ -597,6 +598,13 @@ describe('failures', () => {
     list = addFailure(list, { kind: 'seed', sessionId: null, message: 'seed' });
     expect(failedSessionIds(list)).toEqual(['A', 'B']);
   });
+
+  // A failed payment is already reverted on screen, so it has no edit to warn about.
+  it('leaves a payment failure out of the failed sessions', () => {
+    let list = addFailure([], save('A'));
+    list = addFailure(list, { kind: 'payment', sessionId: 'C', message: 'payment C' });
+    expect(failedSessionIds(list)).toEqual(['A']);
+  });
 });
 
 describe('revertedAny and sameSessionContent', () => {
@@ -607,6 +615,9 @@ describe('revertedAny and sameSessionContent', () => {
     closedAt: null,
     name: null,
     activityAt: null,
+    me: null,
+    finishedWithCollection: false,
+    payments: [],
     members: ['Ana', 'Ben'],
     records: [
       {
@@ -704,6 +715,47 @@ describe('revertedAny and sameSessionContent', () => {
     if (item.mode === 'equal') item.totalPrice = 120;
     expect(sameSessionContent(base, priced)).toBe(false);
     expect(sameSessionContent(base, { ...base, records: base.records.slice(1) })).toBe(false);
+  });
+
+  it('notices a changed pick, but not payments, which a save never carries', () => {
+    const base = session('A');
+    expect(sameSessionContent(base, session('A', { me: 'Ana' }))).toBe(false);
+    expect(sameSessionContent(base, session('A', { finishedWithCollection: true }))).toBe(false);
+    const paid = session('A', {
+      payments: [
+        {
+          id: 'pay_1',
+          debtor: 'Ben',
+          creditor: 'Ana',
+          amountCents: 100,
+          createdAt: '2026-11-03T10:00:00.000Z',
+        },
+      ],
+    });
+    expect(sameSessionContent(base, paid)).toBe(true);
+  });
+});
+
+describe('keepLocalPayments', () => {
+  type S = { id: string; me: string | null; payments: string[] };
+
+  it('takes the server copy but the on-screen payments for the sessions named', () => {
+    const server: S[] = [
+      { id: 'A', me: null, payments: [] },
+      { id: 'B', me: null, payments: [] },
+    ];
+    const local: S[] = [
+      { id: 'A', me: 'Ana', payments: ['pay_1'] },
+      { id: 'B', me: 'Ben', payments: ['pay_2'] },
+    ];
+    const result = keepLocalPayments(server, local, (id) => id === 'A');
+    expect(result[0]).toEqual({ id: 'A', me: null, payments: ['pay_1'] });
+    expect(result[1]).toBe(server[1]);
+  });
+
+  it('leaves a session with no on-screen copy as the server sent it', () => {
+    const server: S[] = [{ id: 'A', me: null, payments: ['pay_1'] }];
+    expect(keepLocalPayments(server, [], () => true)[0]).toBe(server[0]);
   });
 });
 

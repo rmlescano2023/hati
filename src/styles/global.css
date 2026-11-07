@@ -162,6 +162,16 @@ button {
   line-height: 1.5;
 }
 
+/* A ghost button that reads as a link: an inline action next to text, such as
+   "Change" or "Edit", which otherwise looks like part of the sentence. The
+   element selector outranks the button's own ghost colour. */
+button.link-action {
+  color: var(--accent-text);
+  text-decoration: underline;
+  text-decoration-color: rgba(127, 211, 168, 0.45);
+  text-underline-offset: 3px;
+}
+
 .visually-hidden {
   position: absolute;
   width: 1px;

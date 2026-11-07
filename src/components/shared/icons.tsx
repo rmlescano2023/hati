@@ -5,7 +5,9 @@ type Props = {
 };
 
 /**
- * Line icons for the tab bars, the New Session button and the rename pencils.
+ * Line icons for the tab bars, the New Session button, the rename pencils and
+ * the account menu's Profile item, the direction arrows on Collection, the
+ * remove control in Profile.
  * Stroked in currentColor, so each one takes the colour of the text beside it,
  * including a tab's active colour. Decorative: the label next to them, or the
  * button's own aria-label, carries the name.
@@ -41,6 +43,25 @@ export function HistoryIcon(props: Props) {
     <Icon {...props}>
       <circle cx="12" cy="12" r="8" />
       <path d="M12 7.5V12l3 2" />
+    </Icon>
+  );
+}
+
+/** A receipt with a tick: money that has been collected. */
+export function CollectionIcon(props: Props) {
+  return (
+    <Icon {...props}>
+      <path d="M6 3h12v18l-2-1.5-2 1.5-2-1.5-2 1.5-2-1.5L6 21Z" />
+      <path d="m9 11.5 2 2 4-4" />
+    </Icon>
+  );
+}
+
+export function ProfileIcon(props: Props) {
+  return (
+    <Icon {...props}>
+      <circle cx="12" cy="8" r="3.5" />
+      <path d="M5 20a7 7 0 0 1 14 0" />
     </Icon>
   );
 }
@@ -85,6 +106,32 @@ export function PencilIcon(props: Props) {
     <Icon {...props}>
       <path d="M4 20h4L19 9a2.83 2.83 0 0 0-4-4L4 16v4Z" />
       <path d="m13.5 6.5 4 4" />
+    </Icon>
+  );
+}
+
+export function ArrowDownIcon(props: Props) {
+  return (
+    <Icon {...props}>
+      <path d="M12 5v14" />
+      <path d="m6 13 6 6 6-6" />
+    </Icon>
+  );
+}
+
+export function ArrowUpIcon(props: Props) {
+  return (
+    <Icon {...props}>
+      <path d="M12 19V5" />
+      <path d="m6 11 6-6 6 6" />
+    </Icon>
+  );
+}
+
+export function CloseIcon(props: Props) {
+  return (
+    <Icon {...props}>
+      <path d="M6 6l12 12M18 6 6 18" />
     </Icon>
   );
 }

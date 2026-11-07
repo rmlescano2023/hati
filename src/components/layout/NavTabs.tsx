@@ -1,11 +1,12 @@
 import type { ComponentType, ReactNode } from 'react';
-import { HistoryIcon, HomeIcon } from '../shared/icons';
+import { CollectionIcon, HistoryIcon, HomeIcon } from '../shared/icons';
 import styles from './NavTabs.module.css';
 
-export type TabId = 'home' | 'history';
+export type TabId = 'home' | 'collection' | 'history';
 
 const TABS: { id: TabId; label: string; Icon: ComponentType<{ className?: string }> }[] = [
   { id: 'home', label: 'Home', Icon: HomeIcon },
+  { id: 'collection', label: 'Collection', Icon: CollectionIcon },
   { id: 'history', label: 'History', Icon: HistoryIcon },
 ];
 

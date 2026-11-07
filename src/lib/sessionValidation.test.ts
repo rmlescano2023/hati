@@ -115,6 +115,31 @@ describe('parseSession as the write boundary', () => {
     );
   });
 
+  it('reads an absent pick as none', () => {
+    expect(parseSession(valid)?.me).toBeNull();
+  });
+
+  it('keeps a pick that is one of the members, or the not-in-session marker', () => {
+    expect(parseSession({ ...valid, me: 'Ana' })?.me).toBe('Ana');
+    expect(parseSession({ ...valid, me: '' })?.me).toBe('');
+  });
+
+  it('accepts the session but drops a pick it cannot use', () => {
+    for (const bad of ['Zed', 42, null]) {
+      const s = parseSession({ ...valid, me: bad });
+      expect(s?.id).toBe('session_1');
+      expect(s?.me).toBeNull();
+    }
+  });
+
+  it('never reads payments from a session body', () => {
+    const s = parseSession({
+      ...valid,
+      payments: [{ id: 'pay_1', debtor: 'Bea', creditor: 'Ana', amountCents: 100 }],
+    });
+    expect(s?.payments).toEqual([]);
+  });
+
   it('ignores an item amount that is not a finite number', () => {
     const s = parseSession({
       ...valid,
@@ -128,5 +153,18 @@ describe('parseSession as the write boundary', () => {
     const item = s?.records[0].items[0];
     expect(item?.mode).toBe('custom');
     expect(item && 'amounts' in item ? item.amounts : null).toEqual({ Bea: 10 });
+  });
+});
+
+describe('parseSession and finishedWithCollection', () => {
+  it('keeps true, and reads anything else as false without rejecting the session', () => {
+    expect(parseSession({ ...valid, finishedWithCollection: true })?.finishedWithCollection).toBe(
+      true,
+    );
+    for (const other of [undefined, 'true', 1, null, false]) {
+      const s = parseSession({ ...valid, finishedWithCollection: other });
+      expect(s).not.toBeNull();
+      expect(s?.finishedWithCollection).toBe(false);
+    }
   });
 });

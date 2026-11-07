@@ -47,14 +47,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       //
       // The activity time only moves forward: `greatest` ignores a null, so an
       // older client's write never wipes it, and a late or retried save never
-      // pulls a session down below a later open or edit (BR-7).
+      // pulls a session down below a later open or edit (BR-7). A null pick
+      // means this write carries none, so `coalesce` keeps the stored one and
+      // an older client or a draft's save never wipes it. Payments are never
+      // read from the body: they are written only through /api/payments. The
+      // finished-with-Collection mark only ever turns on, so an older client's
+      // save, or a re-save of a finished session, never clears it.
       const { rowCount } = await client.sql`
         update expense_sessions set
           status      = ${session.status},
           closed_at   = ${session.closedAt},
           members     = ${JSON.stringify(session.members)}::jsonb,
           name        = ${session.name},
-          activity_at = greatest(activity_at, ${activityAt}::timestamptz)
+          activity_at = greatest(activity_at, ${activityAt}::timestamptz),
+          me          = coalesce(${session.me}, me),
+          finished_with_collection =
+            coalesce(finished_with_collection, false) or ${session.finishedWithCollection}
         where id = ${sessionId} and user_id = ${userId}`;
       if (rowCount === 0) {
         await client.sql`rollback`;
