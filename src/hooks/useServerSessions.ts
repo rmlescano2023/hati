@@ -32,6 +32,7 @@ import {
   resolveAlreadySettled,
   resolveFailure,
   resolveSuperseded,
+  restoreAt,
   revertedAny,
   sameSessionContent,
   saveFailedMessage,
@@ -607,6 +608,9 @@ export function useServerSessions(): Result {
 
   const removeSession = useCallback(
     (sessionId: string) => {
+      // Kept so a failed delete can put the card back where it was.
+      const index = sessionsRef.current.findIndex((s) => s.id === sessionId);
+      const removed = sessionsRef.current[index];
       commit(sessionsRef.current.filter((s) => s.id !== sessionId));
       deleting.current.add(sessionId);
       const remove = (async () => {
@@ -628,7 +632,13 @@ export function useServerSessions(): Result {
               throw new FriendlyError(failedMessage('delete the session', res.status));
             }
           });
+          // The user can delete it again after a failure, which this answers.
+          setFailures((f) => resolveFailure(f, 'delete', sessionId));
         } catch (err) {
+          // The session is still on the server, so it comes back at once rather
+          // than only after "Try again". `deleting` still holds it up to here,
+          // so a load landing meanwhile can't fight the restore.
+          if (removed) commit(restoreAt(sessionsRef.current, removed, index));
           fail({
             kind: 'delete',
             sessionId,

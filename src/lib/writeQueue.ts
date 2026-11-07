@@ -169,6 +169,17 @@ export function mergeLoaded<S extends { id: string }>(
 }
 
 /**
+ * `list` with `session` back at `index`, where it was before a delete that
+ * failed took it off the screen. It is left alone if it is there already, and
+ * the index is clamped, since the list may have changed while the delete ran.
+ */
+export function restoreAt<S extends { id: string }>(list: S[], session: S, index: number): S[] {
+  if (list.some((s) => s.id === session.id)) return list;
+  const at = Math.min(Math.max(index, 0), list.length);
+  return [...list.slice(0, at), session, ...list.slice(at)];
+}
+
+/**
  * Whether a screen with nothing to list may say so. An empty list is only the
  * truth after a load that succeeded: while the first load has failed the list
  * is empty because nothing arrived, and "No sessions" would read as lost data.

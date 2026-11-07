@@ -28,6 +28,7 @@ import {
   needsRefresh,
   resolveAlreadySettled,
   resolveFailure,
+  restoreAt,
   revertedAny,
   sameSessionContent,
   saveFailedMessage,
@@ -1190,5 +1191,63 @@ describe('showsEmptyState (no "No sessions" while the load has failed)', () => {
   it('stays silent when there is something to list, loaded or not', () => {
     expect(showsEmptyState(true, 2)).toBe(false);
     expect(showsEmptyState(false, 2)).toBe(false);
+  });
+});
+
+describe('restoreAt (a card whose delete failed comes back where it was)', () => {
+  const ids = (list: { id: string }[]) => list.map((s) => s.id);
+  const a = { id: 'A' };
+  const b = { id: 'B' };
+  const c = { id: 'C' };
+
+  it('puts the session back at its original position', () => {
+    expect(ids(restoreAt([a, c], b, 1))).toEqual(['A', 'B', 'C']);
+    expect(ids(restoreAt([b, c], a, 0))).toEqual(['A', 'B', 'C']);
+    expect(ids(restoreAt([a, b], c, 2))).toEqual(['A', 'B', 'C']);
+  });
+
+  it('clamps the position when the list has shrunk meanwhile', () => {
+    expect(ids(restoreAt([a], c, 5))).toEqual(['A', 'C']);
+    expect(ids(restoreAt([a], c, -1))).toEqual(['C', 'A']);
+  });
+
+  it('leaves the list alone when the session is already there', () => {
+    const list = [a, b];
+    expect(restoreAt(list, b, 0)).toBe(list);
+  });
+
+  // A load that lands during the delete drops the session, as it must while the
+  // delete is in flight; the restore then wins, and a later load keeps it.
+  it('is not undone by a load that landed during the delete, nor by the next one', () => {
+    const server = [a, b, c];
+    const duringDelete = mergeLoaded(
+      server,
+      [a, c],
+      () => false,
+      (id) => id === 'B',
+    );
+    expect(ids(duringDelete)).toEqual(['A', 'C']);
+    const restored = restoreAt(duringDelete, b, 1);
+    expect(ids(restored)).toEqual(['A', 'B', 'C']);
+    expect(
+      ids(
+        mergeLoaded(
+          server,
+          restored,
+          () => false,
+          () => false,
+        ),
+      ),
+    ).toEqual(['A', 'B', 'C']);
+  });
+
+  it('is answered by a later delete of the same session, and by no other', () => {
+    const list = addFailure([], {
+      kind: 'delete',
+      sessionId: 'B',
+      message: 'Could not delete the session.',
+    });
+    expect(resolveFailure(list, 'delete', 'A')).toBe(list);
+    expect(resolveFailure(list, 'delete', 'B')).toEqual([]);
   });
 });
