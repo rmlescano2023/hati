@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { parsePaymentsInput, parseProfileInput } from '../../api/_validate';
+import {
+  parsePaymentsInput,
+  parseProfileInput,
+  parseSessionIdQuery,
+  parseUserMark,
+} from '../../api/_validate';
 import { NICKNAMES_MAX } from './profileName';
 
 const entry = (over: Record<string, unknown> = {}) => ({
@@ -39,10 +44,12 @@ describe('parsePaymentsInput', () => {
     expect(parsePaymentsInput({ payments: [entry()] })).toBeNull();
   });
 
-  it('rejects an empty list and one over 100', () => {
+  it('rejects an empty list and one over 200, and takes exactly 200', () => {
     expect(parsePaymentsInput(body([]))).toBeNull();
-    const many = Array.from({ length: 101 }, (_, i) => entry({ id: `pay_${i}`, debtor: `D${i}` }));
-    expect(parsePaymentsInput(body(many))).toBeNull();
+    const list = (n: number) =>
+      Array.from({ length: n }, (_, i) => entry({ id: `pay_${i}`, debtor: `D${i}` }));
+    expect(parsePaymentsInput(body(list(200)))?.payments).toHaveLength(200);
+    expect(parsePaymentsInput(body(list(201)))).toBeNull();
   });
 
   it('rejects a bad id', () => {
@@ -120,6 +127,36 @@ describe('parseProfileInput', () => {
       { addNickname: 'Pao', nicknames: [] },
     ]) {
       expect(parseProfileInput(bad)).toBeNull();
+    }
+  });
+});
+
+describe('parseUserMark', () => {
+  it('reads no body as the onboarding mark, which is what every old client sends', () => {
+    expect(parseUserMark(undefined)).toBe('onboarding');
+    expect(parseUserMark(null)).toBe('onboarding');
+  });
+
+  it('passes the two named marks', () => {
+    expect(parseUserMark({ mark: 'whatsNew' })).toBe('whatsNew');
+    expect(parseUserMark({ mark: 'alreadySettled' })).toBe('alreadySettled');
+  });
+
+  it('rejects anything else', () => {
+    for (const bad of [{}, { mark: 'x' }, { mark: 'onboarding' }, 'whatsNew', [], 5]) {
+      expect(parseUserMark(bad)).toBeNull();
+    }
+  });
+});
+
+describe('parseSessionIdQuery', () => {
+  it('passes a session id', () => {
+    expect(parseSessionIdQuery('session_a')).toBe('session_a');
+  });
+
+  it('rejects an empty, missing, repeated or over-long one', () => {
+    for (const bad of ['', undefined, ['a', 'b'], 'x'.repeat(201)]) {
+      expect(parseSessionIdQuery(bad)).toBeNull();
     }
   });
 });

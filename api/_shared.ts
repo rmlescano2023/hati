@@ -54,6 +54,7 @@ type SessionRow = {
   name: string | null;
   activity_at: Date | string | null;
   me: string | null;
+  finished_with_collection: boolean | null;
 };
 
 type RecordRow = {
@@ -88,7 +89,8 @@ const iso = (v: Date | string): string => (v instanceof Date ? v.toISOString() :
  */
 export async function loadSessions(userId: string, only: string | null = null): Promise<Session[]> {
   const { rows: sessionRows } = await pool.sql<SessionRow>`
-    select id, status, created_at, closed_at, members, name, activity_at, me
+    select id, status, created_at, closed_at, members, name, activity_at, me,
+           finished_with_collection
     from expense_sessions
     where user_id = ${userId} and (${only}::text is null or id = ${only})
     order by created_at`;
@@ -153,6 +155,7 @@ export async function loadSessions(userId: string, only: string | null = null): 
     name: s.name,
     activityAt: s.activity_at === null ? null : iso(s.activity_at),
     me: s.me,
+    finishedWithCollection: s.finished_with_collection === true,
     payments: paymentsBySession.get(s.id) ?? [],
   }));
 }

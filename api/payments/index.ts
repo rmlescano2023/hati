@@ -1,8 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { formatCents, settlementPairs } from '../../src/lib/collection.js';
 import type { Payment } from '../../src/types';
-import { getUserId, loadSessions, pool } from '../_shared.js';
-import { parsePaymentsInput } from '../_validate.js';
+import { getUserId, loadSessions, ownsSession, pool } from '../_shared.js';
+import { parsePaymentsInput, parseSessionIdQuery } from '../_validate.js';
 
 type PaymentRow = {
   id: string;
@@ -30,6 +30,10 @@ const toPayment = (row: PaymentRow): Payment => ({
  * twice. Everything else is checked against the stored session under a lock
  * on its row: the line must exist, and the payment must fit what is left on
  * it, even if another device paid the same line a moment ago (BR-12).
+ *
+ * `DELETE ?sessionId=` removes every payment of one session in one statement,
+ * which is how "already settled" is undone: all or nothing, so a session is
+ * never left half settled.
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   let userId: string | null;
@@ -41,8 +45,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   if (!userId) return res.status(401).json({ error: 'Not signed in.' });
 
+  if (req.method === 'DELETE') {
+    const sessionId = parseSessionIdQuery(req.query.sessionId);
+    if (sessionId === null) return res.status(400).json({ error: 'A session id is required.' });
+    // Covers another account's id, and a session deleted since it was opened.
+    if (!(await ownsSession(userId, sessionId))) {
+      return res.status(404).json({ error: 'No such session.' });
+    }
+    await pool.sql`
+      delete from session_payments p
+      using expense_sessions s
+      where p.session_id = s.id and s.id = ${sessionId} and s.user_id = ${userId}`;
+    // Nothing left to delete still means it's done.
+    return res.status(204).end();
+  }
+
   if (req.method !== 'POST') {
-    res.setHeader('Allow', 'POST');
+    res.setHeader('Allow', 'POST, DELETE');
     return res.status(405).json({ error: `${req.method} not allowed.` });
   }
 

@@ -1,11 +1,13 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { ensureUser, getUserId, pool } from './_shared.js';
-import { parseProfileInput } from './_validate.js';
+import { parseProfileInput, parseUserMark } from './_validate.js';
+import { WHATS_NEW_VERSION } from '../src/lib/whatsNew.js';
 import { NICKNAMES_MAX, applyProfileUpdate } from '../src/lib/profileName.js';
 
 /**
  * The account's own record: whether onboarding is done, and the profile name
- * and other names Collection matches against each session's members.
+ * and other names Collection matches against each session's members, and the
+ * two one-time questions (What's new, and Already settled) it has answered.
  *
  * `GET` is the first call the app makes after sign-in, and it upserts the
  * `users` row — until now nothing guaranteed one existed before a session was
@@ -24,19 +26,47 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'GET') {
     await ensureUser(userId);
     const { rows } = await pool.sql`
-      select onboarded_at, display_name, nicknames from users where id = ${userId}`;
+      select onboarded_at, display_name, nicknames, whats_new_version, already_settled_answered_at
+      from users where id = ${userId}`;
     const onboardedAt = rows[0]?.onboarded_at ?? null;
+    const answeredAt = rows[0]?.already_settled_answered_at ?? null;
     return res.status(200).json({
       onboardedAt: onboardedAt === null ? null : new Date(onboardedAt).toISOString(),
       displayName: rows[0]?.display_name ?? null,
       nicknames: rows[0]?.nicknames ?? [],
+      whatsNewVersion: rows[0]?.whats_new_version ?? null,
+      alreadySettledAnsweredAt: answeredAt === null ? null : new Date(answeredAt).toISOString(),
     });
   }
 
   if (req.method === 'PUT') {
+    const raw = typeof req.body === 'string' ? JSON.parse(req.body || 'null') : req.body;
+    const mark = parseUserMark(raw);
+    if (!mark) return res.status(400).json({ error: 'Malformed request.' });
+
     await ensureUser(userId);
-    // Finished and skipped are the same outcome: they have seen it.
-    await pool.sql`update users set onboarded_at = now() where id = ${userId}`;
+    if (mark === 'whatsNew') {
+      await pool.sql`
+        update users
+        set whats_new_version = greatest(coalesce(whats_new_version, 0), ${WHATS_NEW_VERSION})
+        where id = ${userId}`;
+      return res.status(204).end();
+    }
+    if (mark === 'alreadySettled') {
+      await pool.sql`
+        update users
+        set already_settled_answered_at = coalesce(already_settled_answered_at, now())
+        where id = ${userId}`;
+      return res.status(204).end();
+    }
+    // Finished and skipped are the same outcome: they have seen it. A new
+    // account never sees What's new, so the version is stamped in the same
+    // statement, and it can't end up onboarded but due one (BR-W3).
+    await pool.sql`
+      update users
+      set onboarded_at = now(),
+          whats_new_version = greatest(coalesce(whats_new_version, 0), ${WHATS_NEW_VERSION})
+      where id = ${userId}`;
     const { rows } = await pool.sql`select onboarded_at from users where id = ${userId}`;
     return res.status(200).json({ onboardedAt: new Date(rows[0].onboarded_at).toISOString() });
   }

@@ -1,4 +1,5 @@
 import { parseActivityAt } from '../src/lib/activity.js';
+import { PAYMENTS_PER_REQUEST_MAX } from '../src/lib/collection.js';
 import { NICKNAMES_MAX, normaliseProfileName, type ProfileUpdate } from '../src/lib/profileName.js';
 import { normaliseSessionName } from '../src/lib/sessionName.js';
 import { parseSession } from '../src/lib/storage.js';
@@ -63,7 +64,8 @@ export function parsePaymentsInput(
   if (!isPlainObject(raw)) return null;
   const { sessionId, payments: list } = raw;
   if (!isShortText(sessionId)) return null;
-  if (!Array.isArray(list) || list.length < 1 || list.length > 100) return null;
+  if (!Array.isArray(list) || list.length < 1 || list.length > PAYMENTS_PER_REQUEST_MAX)
+    return null;
 
   const payments: NewPayment[] = [];
   const ids = new Set<string>();
@@ -121,4 +123,20 @@ export function parseProfileInput(raw: unknown): ProfileUpdate | null {
       .filter((n): n is string => n !== null);
   }
   return update;
+}
+
+/**
+ * What a `PUT /api/user` is for. No body is the onboarding mark, which is what
+ * the tour and every older client send; the other two name themselves. Anything
+ * else is a 400, so a typo can never be read as "onboarded".
+ */
+export function parseUserMark(raw: unknown): 'onboarding' | 'whatsNew' | 'alreadySettled' | null {
+  if (raw === undefined || raw === null) return 'onboarding';
+  if (!isPlainObject(raw)) return null;
+  return raw.mark === 'whatsNew' || raw.mark === 'alreadySettled' ? raw.mark : null;
+}
+
+/** The `sessionId` of a query string: one short string, or null. */
+export function parseSessionIdQuery(raw: unknown): string | null {
+  return isShortText(raw) ? raw : null;
 }
