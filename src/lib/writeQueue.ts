@@ -299,9 +299,22 @@ export function recordFailedMessage(
   return messageOf(thrown, `Couldn't record ${what}. Check your connection and try again.`);
 }
 
+/** What each request that loads or writes a session is called in its failure message. */
+export type RequestAction =
+  'load your data' | 'save your changes' | 'create the session' | 'delete the session';
+
+/**
+ * The banner message for a request the server refused with `status`. A status
+ * number means nothing to the user, so only the one that changes what they
+ * should do is told apart: signed out means sign in again.
+ */
+export function failedMessage(action: RequestAction, status: number): string {
+  return status === 401 ? SIGNED_OUT : `Could not ${action}.`;
+}
+
 /** The banner message for a save the server refused with `status`. */
 export function saveFailedMessage(status: number): string {
-  return status === 404 ? DELETED_ELSEWHERE : `Could not save your changes (${status}).`;
+  return status === 404 ? DELETED_ELSEWHERE : failedMessage('save your changes', status);
 }
 
 /**
@@ -335,9 +348,15 @@ export type Failure = {
   message: string;
   /** For a `'payment'`: the order its write started in (see `createWriteOrder`). */
   seq?: number;
-  /** For a `'payment'`: the lines it covered, or `WHOLE_SESSION` (see `createWriteOrder`). */
+  /** For a `'payment'`: the lines it covered, `WHOLE_SESSION`, or `ALREADY_SETTLED` (see `createWriteOrder`). */
   lines?: readonly string[];
+  /** Retrying can't help, as when the server refused the payment itself, so the banner offers a reload instead. */
+  refresh?: boolean;
 };
+
+/** Whether the banner for `failure` should offer "Refresh" rather than "Try again". */
+export const needsRefresh = (failure: Failure | undefined): boolean =>
+  failure !== undefined && (failure.refresh === true || isDeletedElsewhere(failure.message));
 
 const sameFailure = (a: Failure, b: Failure) =>
   a.kind === b.kind &&
@@ -393,6 +412,14 @@ export function resolveSuperseded(
 /** The scope of a write that covers a whole session rather than particular lines. */
 export const WHOLE_SESSION = '*';
 
+/**
+ * The scope of a failed "Already settled", which asks about a session that has
+ * no payments. It is its own scope so that any payment on the session can
+ * answer it (see `resolveAlreadySettled`), where a line payment answers
+ * nothing about a whole-session failure.
+ */
+export const ALREADY_SETTLED = 'already-settled';
+
 /** A settlement line, by who pays whom, as the scope of a payment write. */
 export const lineKey = (p: { debtor: string; creditor: string }): string =>
   `${p.debtor}\n${p.creditor}`;
@@ -438,6 +465,21 @@ export function createWriteOrder(): {
           ) > seq,
       ),
   };
+}
+
+/**
+ * Removes a session's failed "Already settled". Once the session has a payment
+ * it is no longer offered, so "Tap Already settled to try again" could not be
+ * followed, and the failure has nothing left to say.
+ */
+export function resolveAlreadySettled(
+  list: readonly Failure[],
+  sessionId: string,
+): readonly Failure[] {
+  const next = list.filter(
+    (f) => f.kind !== 'payment' || f.sessionId !== sessionId || !f.lines?.includes(ALREADY_SETTLED),
+  );
+  return next.length === list.length ? list : next;
 }
 
 /**
