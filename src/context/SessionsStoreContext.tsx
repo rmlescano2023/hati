@@ -88,6 +88,8 @@ type SessionsStoreValue = {
   sync: {
     status: SyncStatus;
     error: string | null;
+    /** True when retrying can't help, so the banner's button reloads and says "Refresh". */
+    refresh: boolean;
     retry: () => void;
     /** True when "Try again" rolled back something whose write had failed. */
     reverted: boolean;
@@ -154,6 +156,7 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
     appendAll,
     status,
     error,
+    refresh,
     retry,
     reverted,
     dismissReverted,
@@ -426,11 +429,12 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
       replaceSessionData,
       replaceAllSessions,
       appendSessions,
-      sync: { status, error, retry, reverted, dismissReverted },
+      sync: { status, error, refresh, retry, reverted, dismissReverted },
     }),
     [
       status,
       error,
+      refresh,
       retry,
       reverted,
       dismissReverted,

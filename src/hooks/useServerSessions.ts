@@ -7,6 +7,7 @@ import { isFullyPaid, mergeServerPayments, newPayments, settlePayments } from '.
 import { createId } from '../lib/id';
 import {
   DELETED_ELSEWHERE,
+  ALREADY_SETTLED,
   DELETED_ELSEWHERE_MANY,
   FriendlyError,
   SIGNED_OUT,
@@ -19,12 +20,15 @@ import {
   createWriteOrder,
   createSaveConfirmations,
   createSaveQueue,
+  failedMessage,
   failedSessionIds,
   keepLocalPayments,
   lineKey,
   mergeLoaded,
   messageOf,
+  needsRefresh,
   recordFailedMessage,
+  resolveAlreadySettled,
   resolveFailure,
   resolveSuperseded,
   revertedAny,
@@ -134,6 +138,8 @@ type Result = {
   replaceAll: (next: Session[]) => void;
   status: SyncStatus;
   error: string | null;
+  /** True when retrying can't help, so the banner's button reloads and says "Refresh". */
+  refresh: boolean;
   retry: () => void;
   /** True when "Try again" replaced something whose write had failed. */
   reverted: boolean;
@@ -334,7 +340,7 @@ export function useServerSessions(): Result {
         // The deadline covers the body too, so a late result is never applied.
         const body = await withDeadline(WRITE_TIMEOUT_MS, async (signal) => {
           const res = await authedFetch(ENDPOINT, { method: 'GET' }, signal);
-          if (!res.ok) throw new FriendlyError(`Could not load your data (${res.status}).`);
+          if (!res.ok) throw new FriendlyError(failedMessage('load your data', res.status));
           return (await readJson(res)) as Session[];
         });
         if (cancelled) return;
@@ -523,7 +529,7 @@ export function useServerSessions(): Result {
               },
               signal,
             );
-            if (!res.ok) throw new FriendlyError(`Could not create the session (${res.status}).`);
+            if (!res.ok) throw new FriendlyError(failedMessage('create the session', res.status));
           });
         } catch (err) {
           // Filed as a save, because the next save of this session sends the
@@ -569,7 +575,7 @@ export function useServerSessions(): Result {
               signal,
             );
             if (!res.ok && res.status !== 404) {
-              throw new FriendlyError(`Could not delete the session (${res.status}).`);
+              throw new FriendlyError(failedMessage('delete the session', res.status));
             }
           });
         } catch (err) {
@@ -656,15 +662,26 @@ export function useServerSessions(): Result {
     (sessionId: string, seq: number, lines: readonly string[]) => {
       writeOrder.succeeded(sessionId, seq, lines);
       setFailures((f) => resolveSuperseded(f, writeOrder, sessionId));
+      // Once the session has any payment on screen, "Already settled" is no
+      // longer offered for it, so a failure telling the user to tap it can go.
+      if ((sessionsRef.current.find((s) => s.id === sessionId)?.payments.length ?? 0) > 0) {
+        setFailures((f) => resolveAlreadySettled(f, sessionId));
+      }
     },
     [writeOrder],
   );
 
   /** Reports a payment failure, unless later successes have already answered it. */
   const paymentFailed = useCallback(
-    (sessionId: string, seq: number, lines: readonly string[], message: string) => {
+    (
+      sessionId: string,
+      seq: number,
+      lines: readonly string[],
+      message: string,
+      refresh?: boolean,
+    ) => {
       if (!writeOrder.superseded(sessionId, seq, lines)) {
-        fail({ kind: 'payment', sessionId, message, seq, lines });
+        fail({ kind: 'payment', sessionId, message, seq, lines, refresh });
       }
     },
     [fail, writeOrder],
@@ -785,6 +802,9 @@ export function useServerSessions(): Result {
               : refusal !== null
                 ? `${refusedWhat(payments, sessionDisplayTitle(current))} not recorded. ${refusal}`
                 : recordFailedMessage(payments.length, status, thrown),
+            // The server refused the payment itself, so trying it again can't
+            // work; reloading shows how the line really stands.
+            refusal !== null,
           );
         }
       })().finally(() => {
@@ -871,7 +891,11 @@ export function useServerSessions(): Result {
         // Filed against each session, not the batch, so a later whole-session
         // success on one clears it, and it stays while any of them is failing.
         for (const id of failed) {
-          paymentFailed(id, started.get(id) ?? 0, [WHOLE_SESSION], message);
+          // A session that has payments by now isn't offered "Already settled"
+          // any more, so there is nothing for the message to send the user to.
+          const now = sessionsRef.current.find((s) => s.id === id);
+          if (!now || now.payments.length > 0) continue;
+          paymentFailed(id, started.get(id) ?? 0, [ALREADY_SETTLED], message);
         }
       }
       return { settled, failed };
@@ -1108,6 +1132,7 @@ export function useServerSessions(): Result {
   const status: SyncStatus = loading ? 'loading' : failures.length > 0 ? 'error' : 'ready';
   // One banner for every failure left, with the most recent one's message.
   const error = failures.length > 0 ? failures[failures.length - 1].message : null;
+  const refresh = needsRefresh(failures[failures.length - 1]);
 
   return {
     sessions,
@@ -1124,6 +1149,7 @@ export function useServerSessions(): Result {
     appendAll,
     status,
     error,
+    refresh,
     retry,
     reverted,
     dismissReverted,
