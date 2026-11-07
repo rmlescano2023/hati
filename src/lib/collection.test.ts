@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   NOT_IN_SESSION,
+  announcesSettled,
   buildCard,
   buildCollection,
   isKnownName,
@@ -639,6 +640,24 @@ describe('a payment that settles a session and is then refused (the announcement
     const reverted = buildCard(trip, names('Renmar'));
     expect(reverted.bucket).toBe('outstanding');
     expect(isFullyPaid(trip)).toBe(false);
+  });
+});
+
+describe('announcesSettled (two quick payments on one session)', () => {
+  it('announces once the card is Settled and no payment is left in flight', () => {
+    expect(announcesSettled(false, 'settled')).toBe(true);
+  });
+
+  // The optimistic card already counts the second payment, so the first one
+  // confirming would announce early, and the second would announce again.
+  it('waits while another payment on the session is still in flight', () => {
+    expect(announcesSettled(true, 'settled')).toBe(false);
+  });
+
+  it('stays quiet when the card is not Settled, or has gone', () => {
+    expect(announcesSettled(false, 'outstanding')).toBe(false);
+    expect(announcesSettled(false, 'needsSetup')).toBe(false);
+    expect(announcesSettled(false, undefined)).toBe(false);
   });
 });
 
