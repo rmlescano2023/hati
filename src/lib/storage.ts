@@ -110,6 +110,8 @@ export function parseSession(raw: unknown): Session | null {
     name: normaliseSessionName(raw.name),
     activityAt: parseActivityAt(raw.activityAt),
     me: parseMe(raw.me, members),
+    // An older body without it was finished before Collection.
+    finishedWithCollection: raw.finishedWithCollection === true,
     payments: [],
   };
 }
@@ -139,6 +141,7 @@ function migrateV1(parsed: Record<string, unknown>): Session[] {
       name: null,
       activityAt: null,
       me: null,
+      finishedWithCollection: false,
       payments: [],
     },
   ];

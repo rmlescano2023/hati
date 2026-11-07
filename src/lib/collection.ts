@@ -21,6 +21,13 @@ import type { NewPayment, Payment, Session } from '../types';
  */
 export const NOT_IN_SESSION = '';
 
+/**
+ * The most payments one request records. It covers every pair of a 20-member
+ * group (190), so marking such a session settled is still one all-or-nothing
+ * request (BR-S2).
+ */
+export const PAYMENTS_PER_REQUEST_MAX = 200;
+
 export const toCents = (pesos: number): number => Math.round(roundMoney(pesos) * 100);
 export const formatCents = (cents: number): string => formatMoney(cents / 100);
 
@@ -178,6 +185,18 @@ export type CollectionCard = {
   paidOutCents: number;
   /** The last counted payment, or the finish time when there is none. */
   settledAt: string;
+  /** How many settlement pairs the session has, the user's or not. */
+  pairCount: number;
+  /** Every pair is fully paid. True when there are none. */
+  allPairsPaid: boolean;
+  /**
+   * Finished before Collection, with at least one pair, and every pair paid:
+   * how a session marked "already settled" looks (S-A1). It gets the card's
+   * Undo and sorts by its finish date (Q3).
+   */
+  presettled: boolean;
+  /** BR-S1: offered "Already settled", on the card and in the question. */
+  offersAlreadySettled: boolean;
 };
 
 function buildLine(
@@ -219,10 +238,13 @@ export function buildCard(session: Session, names: KnownNames): CollectionCard {
   const finishedAt = session.closedAt ?? session.createdAt;
   const owedToYou: CollectionLine[] = [];
   const youOwe: CollectionLine[] = [];
+  // Every pair, the user's or not: whether the session is settled depends on
+  // all of them, and so does marking it settled.
+  const pairs = settlementPairs(session);
 
   if (me.kind === 'member') {
     // Only the lines involving the user are theirs to track (BR-2).
-    for (const pair of settlementPairs(session)) {
+    for (const pair of pairs) {
       if (pair.creditor === me.name) owedToYou.push(buildLine(pair, 'owedToYou', session.payments));
       else if (pair.debtor === me.name) youOwe.push(buildLine(pair, 'youOwe', session.payments));
     }
@@ -239,15 +261,26 @@ export function buildCard(session: Session, names: KnownNames): CollectionCard {
       null,
     );
 
+  const paidOn = (pair: SettlementPair) =>
+    session.payments
+      .filter((p) => p.debtor === pair.debtor && p.creditor === pair.creditor)
+      .reduce((sum, p) => sum + p.amountCents, 0);
+  const allPairsPaid = pairs.every((p) => paidOn(p) >= p.amountCents);
+
+  // Every pair paid means nothing is left to collect from anyone, so there is
+  // no reason to ask who the user is (BR-S3).
+  const bucket: Bucket = allPairsPaid
+    ? 'settled'
+    : me.kind === 'unknown'
+      ? 'needsSetup'
+      : settledLineCount === lines.length
+        ? 'settled'
+        : 'outstanding';
+
   return {
     session,
     me,
-    bucket:
-      me.kind === 'unknown'
-        ? 'needsSetup'
-        : settledLineCount === lines.length
-          ? 'settled'
-          : 'outstanding',
+    bucket,
     owedToYou,
     youOwe,
     lineCount: lines.length,
@@ -257,7 +290,35 @@ export function buildCard(session: Session, names: KnownNames): CollectionCard {
     receivedCents: sumPaid(owedToYou),
     paidOutCents: sumPaid(youOwe),
     settledAt: latest?.createdAt ?? finishedAt,
+    pairCount: pairs.length,
+    allPairsPaid,
+    presettled: !session.finishedWithCollection && pairs.length > 0 && allPairsPaid,
+    offersAlreadySettled:
+      !session.finishedWithCollection &&
+      session.payments.length === 0 &&
+      pairs.length > 0 &&
+      pairs.length <= PAYMENTS_PER_REQUEST_MAX &&
+      bucket !== 'settled',
   };
+}
+
+/**
+ * What marking a session "already settled" records: one payment per pair at
+ * what is left on it, in settlement order, whoever the user is (BR-S2). An
+ * eligible session has no payments, so each is the pair's full amount.
+ */
+export function settlePayments(
+  session: Pick<Session, 'members' | 'records' | 'payments'>,
+): Omit<NewPayment, 'id'>[] {
+  return settlementPairs(session).flatMap((pair) => {
+    const paid = session.payments
+      .filter((p) => p.debtor === pair.debtor && p.creditor === pair.creditor)
+      .reduce((sum, p) => sum + p.amountCents, 0);
+    const remaining = pair.amountCents - paid;
+    return remaining > 0
+      ? [{ debtor: pair.debtor, creditor: pair.creditor, amountCents: remaining }]
+      : [];
+  });
 }
 
 export type Collection = {
@@ -267,6 +328,8 @@ export type Collection = {
   /** Remaining on Outstanding cards only (BR-14). */
   owedToYouCents: number;
   youOweCents: number;
+  /** The cards offered "Already settled", newest finished first (BR-S1, BR-S9). */
+  alreadySettledOffers: CollectionCard[];
 };
 
 /** Finished sessions only (BR-1), sectioned and ordered as BR-17a sets out. */
@@ -274,8 +337,12 @@ export function buildCollection(sessions: Session[], names: KnownNames): Collect
   const cards = sessions.filter((s) => s.status === 'closed').map((s) => buildCard(s, names));
   const byFinished = (a: CollectionCard, b: CollectionCard) =>
     ms(b.session.closedAt) - ms(a.session.closedAt) || byId(a.session.id, b.session.id);
+  // A session marked already settled sorts by when it was finished, not when it
+  // was marked, so marking a batch doesn't push recently collected sessions
+  // down (Q3).
+  const settledOn = (c: CollectionCard) => (c.presettled ? c.session.closedAt : c.settledAt);
   const bySettled = (a: CollectionCard, b: CollectionCard) =>
-    ms(b.settledAt) - ms(a.settledAt) || byId(a.session.id, b.session.id);
+    ms(settledOn(b)) - ms(settledOn(a)) || byId(a.session.id, b.session.id);
 
   const outstanding = cards.filter((c) => c.bucket === 'outstanding').sort(byFinished);
   return {
@@ -284,6 +351,7 @@ export function buildCollection(sessions: Session[], names: KnownNames): Collect
     settled: cards.filter((c) => c.bucket === 'settled').sort(bySettled),
     owedToYouCents: outstanding.reduce((sum, c) => sum + c.owedToYouRemainingCents, 0),
     youOweCents: outstanding.reduce((sum, c) => sum + c.youOweRemainingCents, 0),
+    alreadySettledOffers: cards.filter((c) => c.offersAlreadySettled).sort(byFinished),
   };
 }
 

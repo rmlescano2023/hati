@@ -331,6 +331,7 @@ export function sameSessionContent(a: Session, b: Session): boolean {
     a.name === b.name &&
     a.status === b.status &&
     a.me === b.me &&
+    a.finishedWithCollection === b.finishedWithCollection &&
     deepEqual(a.members, b.members) &&
     deepEqual(records(a), records(b))
   );

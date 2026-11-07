@@ -21,6 +21,7 @@ const session = (over: Partial<Session> = {}): Session => ({
   name: null,
   activityAt: null,
   me: null,
+  finishedWithCollection: false,
   payments: [],
   ...over,
 });

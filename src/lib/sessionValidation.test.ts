@@ -155,3 +155,16 @@ describe('parseSession as the write boundary', () => {
     expect(item && 'amounts' in item ? item.amounts : null).toEqual({ Bea: 10 });
   });
 });
+
+describe('parseSession and finishedWithCollection', () => {
+  it('keeps true, and reads anything else as false without rejecting the session', () => {
+    expect(parseSession({ ...valid, finishedWithCollection: true })?.finishedWithCollection).toBe(
+      true,
+    );
+    for (const other of [undefined, 'true', 1, null, false]) {
+      const s = parseSession({ ...valid, finishedWithCollection: other });
+      expect(s).not.toBeNull();
+      expect(s?.finishedWithCollection).toBe(false);
+    }
+  });
+});

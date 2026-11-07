@@ -114,6 +114,7 @@ export function buildDemoSessions(): Session[] {
       name: null,
       activityAt: null,
       me: null,
+      finishedWithCollection: false,
       payments: [],
     };
     return status === 'closed' ? withCollectionState(session, closedIndex++) : session;
@@ -177,6 +178,7 @@ export function buildNeedsSetupSessions(): Session[] {
       name,
       activityAt: null,
       me: null,
+      finishedWithCollection: false,
       payments: [],
     };
   });

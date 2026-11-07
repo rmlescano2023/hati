@@ -75,6 +75,12 @@ export type Session = {
    * which leaves it to the profile-name match (see `resolveMe`).
    */
   me: string | null;
+  /**
+   * True once a Hati with Collection finished the session. A finished session
+   * without it was finished before Collection, and can be marked as already
+   * settled (BR-S1). Never set back to false.
+   */
+  finishedWithCollection: boolean;
   /** Recorded payments, oldest first. Read-only on the session; written through `/api/payments`. */
   payments: Payment[];
 };

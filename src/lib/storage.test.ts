@@ -28,6 +28,7 @@ describe('parseAppData', () => {
 
       const [session] = parsed.sessions;
       expect(session.status).toBe('draft');
+      expect(session.finishedWithCollection).toBe(false);
       expect(session.closedAt).toBeNull();
       expect(session.members).toEqual(['Ana', 'Bea']);
       expect(session.records).toHaveLength(1);
@@ -72,6 +73,7 @@ describe('parseAppData', () => {
           name: 'Bali Trip',
           activityAt: '2026-09-12T09:30:00.000Z',
           me: null,
+          finishedWithCollection: false,
           payments: [],
         },
         {
@@ -84,6 +86,7 @@ describe('parseAppData', () => {
           name: null,
           activityAt: null,
           me: 'Ana',
+          finishedWithCollection: true,
           payments: [],
         },
       ],

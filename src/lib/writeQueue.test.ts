@@ -613,6 +613,7 @@ describe('revertedAny and sameSessionContent', () => {
     name: null,
     activityAt: null,
     me: null,
+    finishedWithCollection: false,
     payments: [],
     members: ['Ana', 'Ben'],
     records: [
@@ -716,6 +717,7 @@ describe('revertedAny and sameSessionContent', () => {
   it('notices a changed pick, but not payments, which a save never carries', () => {
     const base = session('A');
     expect(sameSessionContent(base, session('A', { me: 'Ana' }))).toBe(false);
+    expect(sameSessionContent(base, session('A', { finishedWithCollection: true }))).toBe(false);
     const paid = session('A', {
       payments: [
         {

@@ -196,6 +196,7 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
       name: normaliseSessionName(name ?? null),
       activityAt: null,
       me: null,
+      finishedWithCollection: false,
       payments: [],
     });
     return id;
@@ -218,6 +219,9 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
               status: 'closed',
               closedAt: new Date().toISOString(),
               me: me ?? session.me,
+              // Finished by a Hati with Collection, in the same save that finishes it,
+              // so the mark can't be missing (Q1).
+              finishedWithCollection: true,
             },
       );
     },

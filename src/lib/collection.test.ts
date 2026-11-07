@@ -13,7 +13,9 @@ import {
   pairPaymentIds,
   parsePaymentAmount,
   rememberOffer,
+  PAYMENTS_PER_REQUEST_MAX,
   resolveMe,
+  settlePayments,
   settlementPairs,
   type KnownNames,
 } from './collection';
@@ -50,6 +52,7 @@ const finished = (
   name: null,
   activityAt: null,
   me: null,
+  finishedWithCollection: false,
   payments: [],
   ...over,
 });
@@ -464,9 +467,11 @@ describe('buildCollection with other names (US-N1, US-N3)', () => {
 
   it('does not place a one-member session from a nickname alone (E19)', () => {
     const solo = finished('session_solo', ['Pao'], []);
-    expect(buildCard(solo, names('Pao')).bucket).toBe('settled');
-    expect(buildCard(solo, names(null, 'Pao')).bucket).toBe('needsSetup');
-    expect(buildCard(solo, names(null)).bucket).toBe('needsSetup');
+    expect(buildCard(solo, names('Pao')).me).toMatchObject({ name: 'Pao', picked: false });
+    expect(buildCard(solo, names(null, 'Pao')).me).toEqual({ kind: 'unknown', suggested: 'Pao' });
+    expect(buildCard(solo, names(null)).me).toEqual({ kind: 'unknown', suggested: null });
+    // With no pairs there is nothing to collect, so it is Settled whoever "me" is (Q4).
+    expect(buildCard(solo, names(null)).bucket).toBe('settled');
   });
 });
 
@@ -512,6 +517,163 @@ describe('rememberOffer (BR-N10)', () => {
   it('offers nothing for a name that would not survive being stored (BR-N6, E15)', () => {
     expect(rememberOffer(ready('Paolo'), 'x'.repeat(61))).toBeNull();
     expect(rememberOffer(ready('Paolo'), 'Pao  L')).toBeNull();
+  });
+});
+
+/** Every pair of a trip paid in full, as the "already settled" mark records them. */
+const allPaid = (session: Session): Payment[] =>
+  settlementPairs(session).map((p, i) => pay(`pay_all_${i}`, p.debtor, p.creditor, p.amountCents));
+
+describe('the bucket rule when every pair is paid (BR-S3, Q4)', () => {
+  it('settles an unknown "me" once every pair is paid, with no question (R2)', () => {
+    const trip = tripA();
+    const card = buildCard({ ...trip, payments: allPaid(trip) }, names(null));
+    expect(card.bucket).toBe('settled');
+    expect(card.allPairsPaid).toBe(true);
+    expect(card.presettled).toBe(true);
+    expect(card.me).toEqual({ kind: 'unknown', suggested: null });
+  });
+
+  it('settles a known "me" too, with their lines Paid', () => {
+    const trip = tripA();
+    const card = buildCard({ ...trip, payments: allPaid(trip) }, names('Renmar'));
+    expect(card.bucket).toBe('settled');
+    expect([...card.owedToYou, ...card.youOwe].every((l) => l.status === 'paid')).toBe(true);
+  });
+
+  it('keeps an unknown "me" in Needs setup while any pair is unpaid', () => {
+    const trip = tripA({ payments: [pay('pay_1', 'Ana', 'Renmar', 30000)] });
+    const card = buildCard(trip, names(null));
+    expect(card.bucket).toBe('needsSetup');
+    expect(card.allPairsPaid).toBe(false);
+  });
+
+  it('is not presettled when the session was finished with Collection', () => {
+    const trip = tripA({ finishedWithCollection: true });
+    const card = buildCard({ ...trip, payments: allPaid(trip) }, names('Renmar'));
+    expect(card.bucket).toBe('settled');
+    expect(card.presettled).toBe(false);
+  });
+
+  it('settles a session with no pairs even when "me" is unknown (Q4)', () => {
+    const card = buildCard(tripD(), names(null));
+    expect(card.bucket).toBe('settled');
+    expect(card.pairCount).toBe(0);
+    expect(card.presettled).toBe(false);
+    expect(buildCard(tripD(), names('Renmar')).bucket).toBe('settled');
+  });
+});
+
+describe('offersAlreadySettled (BR-S1)', () => {
+  /** Twenty-one members, one purchase per pair i<j: 210 settlement pairs. */
+  const big = () => {
+    const members = Array.from({ length: 21 }, (_, i) => `M${String(i).padStart(2, '0')}`);
+    const records: PurchaseRecord[] = [];
+    for (let i = 0; i < members.length; i += 1) {
+      for (let j = i + 1; j < members.length; j += 1) {
+        records.push(purchase(`r_${i}_${j}`, members[i], 100 + i, [members[j]]));
+      }
+    }
+    return finished('session_big', members, records);
+  };
+
+  it('is offered for an unplaced session and for an unpaid placed one', () => {
+    expect(buildCard(tripA(), names(null)).offersAlreadySettled).toBe(true);
+    expect(buildCard(tripA(), names('Renmar')).offersAlreadySettled).toBe(true);
+  });
+
+  it('is not offered once finished with Collection', () => {
+    expect(
+      buildCard(tripA({ finishedWithCollection: true }), names(null)).offersAlreadySettled,
+    ).toBe(false);
+  });
+
+  it('is not offered once any payment exists', () => {
+    const trip = tripA({ payments: [pay('pay_1', 'Ana', 'Renmar', 100)] });
+    expect(buildCard(trip, names('Renmar')).offersAlreadySettled).toBe(false);
+  });
+
+  it('is not offered with no pairs, or when already Settled', () => {
+    expect(buildCard(tripD(), names(null)).offersAlreadySettled).toBe(false);
+    // A member with no lines of their own is Settled only when every pair is paid.
+    const trip = tripA();
+    const paid = buildCard({ ...trip, payments: allPaid(trip) }, names('Renmar'));
+    expect(paid.offersAlreadySettled).toBe(false);
+  });
+
+  it('is not offered for a session with more pairs than one request takes (S-A4)', () => {
+    const card = buildCard(big(), names(null));
+    expect(card.pairCount).toBe(210);
+    expect(card.pairCount).toBeGreaterThan(PAYMENTS_PER_REQUEST_MAX);
+    expect(card.offersAlreadySettled).toBe(false);
+  });
+});
+
+describe('settlePayments (BR-S2)', () => {
+  it('records every pair at its full amount, including pairs the user is not in', () => {
+    const entries = settlePayments(tripA());
+    expect(entries.map((e) => e.amountCents).sort((a, b) => a - b)).toEqual([10000, 30000, 30000]);
+    expect(new Set(entries.map((e) => `${e.debtor}>${e.creditor}`)).size).toBe(3);
+  });
+
+  it('records only what is left on a part-paid pair, and nothing on a paid one', () => {
+    const trip = tripA({
+      payments: [pay('pay_1', 'Ana', 'Renmar', 10000), pay('pay_2', 'Cara', 'Renmar', 30000)],
+    });
+    const entries = settlePayments(trip);
+    expect(entries.find((e) => e.debtor === 'Ana')?.amountCents).toBe(20000);
+    expect(entries.some((e) => e.debtor === 'Cara')).toBe(false);
+  });
+
+  it('gives nothing for a session with no pairs', () => {
+    expect(settlePayments(tripD())).toEqual([]);
+  });
+});
+
+describe('buildCollection with already settled sessions', () => {
+  it('lists the offered cards from Needs setup and Outstanding, newest finished first', () => {
+    const older = tripA({ id: 'session_old', closedAt: '2026-11-01T00:00:00.000Z' });
+    const newer = tripA({ id: 'session_new', closedAt: '2026-11-04T00:00:00.000Z' });
+    const finishedNow = tripA({ id: 'session_now', finishedWithCollection: true });
+    const settled = tripD({ id: 'session_even' });
+    const c = buildCollection([older, finishedNow, newer, settled], names('Renmar'));
+    expect(c.alreadySettledOffers.map((card) => card.session.id)).toEqual([
+      'session_new',
+      'session_old',
+    ]);
+  });
+
+  it('sorts a presettled session by its finish date among the others by settled date (Q3)', () => {
+    const marked = tripA({
+      id: 'session_marked',
+      closedAt: '2026-10-01T00:00:00.000Z',
+      payments: [],
+    });
+    const markedPaid = {
+      ...marked,
+      payments: allPaid(marked).map((p) => ({ ...p, createdAt: '2026-11-06T00:00:00.000Z' })),
+    };
+    const collected = tripB({
+      id: 'session_collected',
+      finishedWithCollection: true,
+      closedAt: '2026-10-20T00:00:00.000Z',
+      payments: [
+        pay('pay_a', 'Ana', 'Renmar', 3334, '2026-11-02T00:00:00.000Z'),
+        pay('pay_b', 'Ben', 'Renmar', 3333, '2026-11-02T00:00:00.000Z'),
+      ],
+    });
+    const c = buildCollection([markedPaid, collected], names('Renmar'));
+    expect(c.settled.map((card) => card.session.id)).toEqual([
+      'session_collected',
+      'session_marked',
+    ]);
+  });
+
+  it('leaves presettled sessions out of the totals (BR-S4)', () => {
+    const trip = tripA();
+    const c = buildCollection([{ ...trip, payments: allPaid(trip) }], names('Renmar'));
+    expect([c.owedToYouCents, c.youOweCents]).toEqual([0, 0]);
+    expect(c.alreadySettledOffers).toEqual([]);
   });
 });
 
