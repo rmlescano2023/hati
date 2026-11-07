@@ -25,7 +25,7 @@ type Props = {
  * a matter of which `sessionId` this provider is given.
  */
 export function SessionWorkspace({ sessionId, tab, onTabChange, onBack, onClosed }: Props) {
-  const { sessions, renameSession } = useSessionsStore();
+  const { sessions, renameSession, sync } = useSessionsStore();
   const session = sessions.find((s) => s.id === sessionId);
   const [renaming, setRenaming] = useState(false);
   const pencilRef = useRef<HTMLButtonElement>(null);
@@ -41,7 +41,15 @@ export function SessionWorkspace({ sessionId, tab, onTabChange, onBack, onClosed
   }, [renaming]);
 
   return (
-    <AppDataProvider sessionId={sessionId} onBack={onBack}>
+    <AppDataProvider
+      sessionId={sessionId}
+      onBack={() => {
+        // The session is gone, not reverted, so a note about unsaved changes
+        // left over from losing it would be wrong on every screen after this.
+        sync.dismissReverted();
+        onBack();
+      }}
+    >
       <div className={styles.bar}>
         <Button variant="ghost" size="sm" data-tour="workspace-back" onClick={onBack}>
           ← Back to Home
