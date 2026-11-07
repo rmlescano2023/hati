@@ -30,8 +30,8 @@ type Props = {
   failed: FailedPayment | undefined;
   /** Sets or clears this line's failed payment. */
   onFailed: (failed: FailedPayment | null) => void;
-  /** Called as a payment is recorded, so the page can announce a session settling. */
-  onPaid: () => void;
+  /** Called as a payment ends, `ok` once the server has it, so the page can announce a session settling. */
+  onPaid: (ok: boolean) => void;
 };
 
 const STATUS_LABEL: Record<LineStatus, string> = {
@@ -110,14 +110,15 @@ export function LineRow({ sessionId, line, failed, onFailed, onPaid }: Props) {
     amountCents: number,
     onFailure?: (message: string, payments: Payment[]) => boolean,
   ) => {
-    onPaid();
     addPayments(
       sessionId,
       [{ id, debtor: line.debtor, creditor: line.creditor, amountCents }],
-      // Only the form has somewhere to show a refusal; Mark fully paid leaves
-      // it to the banner.
-      onFailure &&
-        ((result) => (result.ok ? undefined : onFailure(result.message, result.payments))),
+      (result) => {
+        onPaid(result.ok);
+        // Only the form has somewhere to show a refusal; Mark fully paid leaves
+        // it to the banner.
+        return result.ok ? undefined : onFailure?.(result.message, result.payments);
+      },
     );
   };
 

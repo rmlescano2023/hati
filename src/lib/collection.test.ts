@@ -628,6 +628,20 @@ describe('isFullyPaid (the announcement after marking a session settled)', () =>
   });
 });
 
+describe('a payment that settles a session and is then refused (the announcement waits for the server)', () => {
+  it('moves the card to Settled optimistically, and back to Outstanding once the payments are taken off', () => {
+    const trip = tripA();
+    const optimistic = buildCard({ ...trip, payments: allPaid(trip) }, names('Renmar'));
+    expect(optimistic.bucket).toBe('settled');
+    expect(isFullyPaid({ ...trip, payments: allPaid(trip) })).toBe(true);
+    // So the page can only tell a confirmed settling from a refused one by
+    // waiting for the server's answer; the bucket alone says "settled" in both.
+    const reverted = buildCard(trip, names('Renmar'));
+    expect(reverted.bucket).toBe('outstanding');
+    expect(isFullyPaid(trip)).toBe(false);
+  });
+});
+
 describe('settlePayments (BR-S2)', () => {
   it('records every pair at its full amount, including pairs the user is not in', () => {
     const entries = settlePayments(tripA());
