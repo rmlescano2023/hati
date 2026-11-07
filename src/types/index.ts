@@ -69,7 +69,36 @@ export type Session = {
    * until there is one, and Home then falls back to purchases or `createdAt`.
    */
   activityAt: string | null;
+  /**
+   * Who the user said they are in this finished session: a member's name,
+   * `NOT_IN_SESSION` ('') for "I'm not in this session", or null for no pick,
+   * which leaves it to the profile-name match (see `resolveMe`).
+   */
+  me: string | null;
+  /**
+   * True once a Hati with Collection finished the session. A finished session
+   * without it was finished before Collection, and can be marked as already
+   * settled (BR-S1). Never set back to false.
+   */
+  finishedWithCollection: boolean;
+  /** Recorded payments, oldest first. Read-only on the session; written through `/api/payments`. */
+  payments: Payment[];
 };
+
+/** One payment against a finished session's settlement line. Never edited; undo deletes it. */
+export type Payment = {
+  /** Client-minted `pay_xxx`, so a retried request can't record it twice. */
+  id: string;
+  debtor: string;
+  creditor: string;
+  /** Whole centavos, always above 0. */
+  amountCents: number;
+  /** ISO time the server recorded it. */
+  createdAt: string;
+};
+
+/** What the client sends to record a payment; the server stamps the time. */
+export type NewPayment = Omit<Payment, 'createdAt'>;
 
 export type AppData = {
   schemaVersion: number;

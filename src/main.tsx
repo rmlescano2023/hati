@@ -8,6 +8,7 @@ import { createRoot } from 'react-dom/client';
 import { ClerkProvider, SignedIn, SignedOut } from '@clerk/clerk-react';
 import App from './App';
 import { SessionsStoreProvider } from './context/SessionsStoreContext';
+import { ProfileProvider } from './context/ProfileContext';
 import { SignedOutScreen } from './components/layout/SignedOutScreen';
 import { ConfigError } from './components/layout/ConfigError';
 
@@ -21,7 +22,9 @@ createRoot(document.getElementById('root')!).render(
           {/* The store only mounts once signed in, so it never fetches
               without a token to send. */}
           <SessionsStoreProvider>
-            <App />
+            <ProfileProvider>
+              <App />
+            </ProfileProvider>
           </SessionsStoreProvider>
         </SignedIn>
         <SignedOut>

@@ -1,0 +1,145 @@
+.line {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+
+.top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* A long name wraps rather than pushing the amount out of sight (AC-6.8). */
+.name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.amount {
+  flex: none;
+  white-space: nowrap;
+  font-family: var(--mono);
+  font-size: 14px;
+  color: var(--text);
+}
+
+.progress {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--text2);
+}
+
+.chip {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.unpaid {
+  background: var(--warn-bg);
+  color: var(--warn-text);
+}
+
+.partial {
+  background: var(--info-bg);
+  color: var(--info-text);
+}
+
+.paid {
+  background: var(--accent-bg);
+  color: var(--accent-text);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text2);
+}
+
+.input {
+  font-family: var(--mono);
+  max-width: 14rem;
+}
+
+.message {
+  min-height: 1em;
+  font-size: 12px;
+  color: var(--warn-text);
+}
+
+.message:empty {
+  display: none;
+}
+
+.error {
+  font-size: 12px;
+  color: var(--danger-text);
+}
+
+.history {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+  list-style: none;
+}
+
+.entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--text2);
+}
+
+.entryText {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 10px;
+  min-width: 0;
+}
+
+.time {
+  color: var(--text3);
+}
+
+@media (max-width: 640px) {
+  /* The two actions share the row rather than sitting at their label widths. */
+  .actions > button {
+    flex: 1 1 auto;
+  }
+
+  /* Undo drops under the payment's text when the row is too narrow for both. */
+  .entry {
+    flex-wrap: wrap;
+  }
+}

@@ -3,6 +3,7 @@ import { roundMoney } from './money.js';
 import { createId } from './id.js';
 import { normaliseSessionName } from './sessionName.js';
 import { parseActivityAt } from './activity.js';
+import { parseMe } from './collection.js';
 
 export const STORAGE_KEY = 'hati:data:v1';
 export const SCHEMA_VERSION = 2;
@@ -70,7 +71,13 @@ function parseRecord(raw: unknown): PurchaseRecord | null {
   };
 }
 
-/** Exported so the API can validate one session without parsing a whole document. */
+/**
+ * Exported so the API can validate one session without parsing a whole document.
+ *
+ * `payments` is always empty here. Payments are written only through
+ * `/api/payments`, never through a session body, so a save can't carry,
+ * replace or forge one; the client fills them in from the server's load.
+ */
 export function parseSession(raw: unknown): Session | null {
   if (!isRecordObject(raw)) return null;
   const id = typeof raw.id === 'string' ? raw.id : null;
@@ -102,6 +109,10 @@ export function parseSession(raw: unknown): Session | null {
     records,
     name: normaliseSessionName(raw.name),
     activityAt: parseActivityAt(raw.activityAt),
+    me: parseMe(raw.me, members),
+    // An older body without it was finished before Collection.
+    finishedWithCollection: raw.finishedWithCollection === true,
+    payments: [],
   };
 }
 
@@ -129,6 +140,9 @@ function migrateV1(parsed: Record<string, unknown>): Session[] {
       records,
       name: null,
       activityAt: null,
+      me: null,
+      finishedWithCollection: false,
+      payments: [],
     },
   ];
 }

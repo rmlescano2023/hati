@@ -1,5 +1,5 @@
-import { allocateProportionally, EPSILON, roundMoney, splitEvenly, sumMoney } from './money';
-import { compareNames } from './format';
+import { allocateProportionally, EPSILON, roundMoney, splitEvenly, sumMoney } from './money.js';
+import { compareNames } from './format.js';
 import type {
   BreakdownGroup,
   BreakdownRow,
