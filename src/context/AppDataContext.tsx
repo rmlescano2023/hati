@@ -29,7 +29,8 @@ type AppDataValue = {
     member: string,
     amount: number,
   ) => void;
-  closeSession: () => void;
+  /** Finishes the session; `me` is who the user said they are in it, or null for no pick. */
+  closeSession: (me: string | null) => void;
   replaceData: (data: { members: string[]; records: PurchaseRecord[] }) => void;
   resetAll: () => void;
 };
@@ -69,7 +70,7 @@ export function AppDataProvider({
         store.updateItemTotal(sessionId, recordId, itemId, total),
       updateItemMemberAmount: (recordId, itemId, member, amount) =>
         store.updateItemMemberAmount(sessionId, recordId, itemId, member, amount),
-      closeSession: () => store.closeSession(sessionId),
+      closeSession: (me) => store.closeSession(sessionId, me),
       replaceData: (data) => store.replaceSessionData(sessionId, data),
       // Scoped to this session on purpose: the dev Reset button should not be
       // able to wipe other drafts or anything already filed into History.

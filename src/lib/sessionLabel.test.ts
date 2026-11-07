@@ -20,6 +20,9 @@ const session = (over: Partial<Session> = {}): Session => ({
   records: [],
   name: null,
   activityAt: null,
+  me: null,
+  finishedWithCollection: false,
+  payments: [],
   ...over,
 });
 
@@ -123,14 +126,44 @@ describe('deleteSessionMessage', () => {
     );
   });
 
-  it('warns that a closed session with purchases loses its statement', () => {
+  it('warns that a closed session with purchases loses its statement and leaves Collection', () => {
     const named = session({ ...closed, name: 'Bali Trip', records: [record('2026-04-24')] });
     expect(deleteSessionMessage(named)).toBe(
-      '“Bali Trip” and its 1 purchase will be deleted, and its statement can no longer be downloaded. This cannot be undone.',
+      '“Bali Trip” and its 1 purchase will be deleted, and its statement can no longer be downloaded, and it will leave Collection. This cannot be undone.',
     );
     const unnamed = session({ ...closed, records: [record('2026-04-24'), record('2026-04-28')] });
     expect(deleteSessionMessage(unnamed)).toBe(
-      '“April 24, 2026 — April 28, 2026” and its 2 purchases will be deleted, and its statement can no longer be downloaded. This cannot be undone.',
+      '“April 24, 2026 — April 28, 2026” and its 2 purchases will be deleted, and its statement can no longer be downloaded, and it will leave Collection. This cannot be undone.',
+    );
+  });
+
+  // BR-19: every payment goes with the session, shown on Collection or not.
+  it('counts the recorded payments a closed session takes with it', () => {
+    const payment = (id: string) => ({
+      id,
+      debtor: 'Ana',
+      creditor: 'Ben',
+      amountCents: 100,
+      createdAt: '2026-05-03T08:00:00.000Z',
+    });
+    const three = [record('2026-04-24'), record('2026-04-25'), record('2026-04-26')];
+    const two = session({
+      ...closed,
+      name: 'Bali Trip',
+      records: three,
+      payments: [payment('pay_1'), payment('pay_2')],
+    });
+    expect(deleteSessionMessage(two)).toBe(
+      '“Bali Trip” and its 3 purchases will be deleted, along with its 2 recorded payments. Its statement can no longer be downloaded and the payments cannot be recovered. This cannot be undone.',
+    );
+    const one = session({
+      ...closed,
+      name: 'Bali Trip',
+      records: three,
+      payments: [payment('pay_1')],
+    });
+    expect(deleteSessionMessage(one)).toBe(
+      '“Bali Trip” and its 3 purchases will be deleted, along with its 1 recorded payment. Its statement can no longer be downloaded and the payments cannot be recovered. This cannot be undone.',
     );
   });
 

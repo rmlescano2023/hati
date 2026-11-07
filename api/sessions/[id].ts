@@ -50,22 +50,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       await client.sql`begin`;
       // The activity time only moves forward: `greatest` ignores a null, so an
       // older client's write never wipes it, and a late or retried save never
-      // pulls a session down below a later open or edit (BR-7).
+      // pulls a session down below a later open or edit (BR-7). A null pick
+      // means this write carries none, so `coalesce` keeps the stored one and
+      // an older client or a draft's save never wipes it. Payments are never
+      // read from the body: they are written only through /api/payments. The
+      // finished-with-Collection mark only ever turns on, so an older client's
+      // save, or a re-save of a finished session, never clears it.
       await client.sql`
-        insert into expense_sessions (id, user_id, status, created_at, closed_at, members, name, activity_at)
+        insert into expense_sessions (id, user_id, status, created_at, closed_at, members, name, activity_at, me, finished_with_collection)
         values (
           ${sessionId}, ${userId}, ${session.status},
           ${session.createdAt}, ${session.closedAt},
           ${JSON.stringify(session.members)}::jsonb,
           ${session.name},
-          ${activityAt}::timestamptz
+          ${activityAt}::timestamptz,
+          ${session.me},
+          ${session.finishedWithCollection}
         )
         on conflict (id) do update set
           status      = excluded.status,
           closed_at   = excluded.closed_at,
           members     = excluded.members,
           name        = excluded.name,
-          activity_at = greatest(expense_sessions.activity_at, excluded.activity_at)`;
+          activity_at = greatest(expense_sessions.activity_at, excluded.activity_at),
+          me          = coalesce(excluded.me, expense_sessions.me),
+          finished_with_collection =
+            coalesce(expense_sessions.finished_with_collection, false)
+            or excluded.finished_with_collection`;
 
       // Replacing this session's records is far smaller than rewriting the
       // account, and avoids diffing a list the client already rebuilt.

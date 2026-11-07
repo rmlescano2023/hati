@@ -1,0 +1,112 @@
+.loadError {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 2rem 0;
+  font-size: 13px;
+  color: var(--text2);
+  text-align: center;
+}
+
+/* Two tiles side by side at every width: they are the page's headline. */
+.strip {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.tileLabel {
+  font-size: 14px;
+}
+
+.tileAmount {
+  font-family: var(--mono);
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.stripNote {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text3);
+}
+
+.section {
+  margin-top: 1.5rem;
+}
+
+.quiet {
+  font-size: 13px;
+  color: var(--text2);
+}
+
+.settledHeading {
+  margin-bottom: 0.75rem;
+}
+
+/* The heading's own look, made pressable. */
+.settledToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+
+.settledToggle:hover {
+  color: var(--text);
+}
+
+.chevron {
+  width: 14px;
+  height: 14px;
+  transition: transform 0.15s ease;
+}
+
+.chevronOpen {
+  transform: rotate(180deg);
+}
+
+/* Read by screen readers, never seen: the announcement that a session settled. */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .tile {
+    padding: 12px;
+  }
+
+  /* A tile is about 142px wide inside its padding, and 18px mono leaves a
+     seven-figure total no room, so it would break mid-number. A little
+     smaller keeps it whole. */
+  .tileAmount {
+    font-size: 16px;
+  }
+}

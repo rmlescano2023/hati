@@ -2,7 +2,10 @@ import type { SessionTabId } from '../layout/SessionTabs';
 
 /** The shape of `App`'s screen state a step needs before its target exists. */
 export type ScreenShape =
-  { kind: 'home' } | { kind: 'history' } | { kind: 'session'; tab: SessionTabId };
+  | { kind: 'home' }
+  | { kind: 'collection' }
+  | { kind: 'history' }
+  | { kind: 'session'; tab: SessionTabId };
 
 export type TourStep = {
   /** Matches a `data-tour` attribute in the UI. */
@@ -18,7 +21,8 @@ export type TourStep = {
 
 /**
  * The walkthrough follows the app's real shape: start on Home, open a session,
- * move through its three tabs, come back out, finish on History.
+ * move through its three tabs, come back out, look at Collection, finish on
+ * History.
  *
  * Next carries the reader through it. Each step names the screen it needs, and
  * pressing Next takes them there — so someone can read the whole thing without
@@ -61,7 +65,7 @@ export const TOUR_STEPS: TourStep[] = [
     target: 'tab-summary',
     title: 'See who owes whom',
     content:
-      'Summary works out who pays whom, cancelling debts that run both ways. You can download it as a PDF, and once everyone has paid, finish the session to file it away.',
+      'Summary works out who pays whom, cancelling debts that run both ways. You can download it as a PDF, and when the numbers are final, finish the session to start collecting.',
     screen: { kind: 'session', tab: 'summary' },
   },
   {
@@ -69,6 +73,15 @@ export const TOUR_STEPS: TourStep[] = [
     title: 'Leave it for later',
     content: 'Leaving loses nothing — the session stays open and waiting for you on Home.',
     screen: { kind: 'session', tab: 'summary' },
+  },
+  {
+    // The tab itself, which is always mounted on Collection, so the step needs
+    // no data: the tour's session is never finished.
+    target: 'nav-collection',
+    title: 'Track who has paid',
+    content:
+      'Finished sessions show up here. Record payments as they come in, even part payments, and see who still hasn’t paid you.',
+    screen: { kind: 'collection' },
   },
   {
     target: 'nav-history',

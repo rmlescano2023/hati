@@ -1,4 +1,4 @@
-import { formatDateRange, formatLongDate, pluralize } from './format';
+import { formatDateRange, formatLongDate, pluralize } from './format.js';
 import type { Session } from '../types';
 
 /**
@@ -32,15 +32,24 @@ export function sessionDisplayTitle(session: Session): string {
 /**
  * The delete confirmation's message, shared by Home and History so both say the
  * same thing. Only a closed session with purchases warns about its statement:
- * one with no purchases never had a statement to download.
+ * one with no purchases never had a statement to download. A closed session
+ * also leaves Collection, and takes every recorded payment with it, shown there
+ * or not, so it names them and says they can't be recovered (BR-19).
  */
 export function deleteSessionMessage(session: Session): string {
   const n = session.records.length;
   const m = session.members.length;
   if (n > 0) {
-    const statement =
-      session.status === 'closed' ? ', and its statement can no longer be downloaded' : '';
-    return `“${sessionDisplayTitle(session)}” and its ${pluralize(n, 'purchase')} will be deleted${statement}. This cannot be undone.`;
+    const title = sessionDisplayTitle(session);
+    const purchases = pluralize(n, 'purchase');
+    if (session.status !== 'closed') {
+      return `“${title}” and its ${purchases} will be deleted. This cannot be undone.`;
+    }
+    const p = session.payments.length;
+    if (p > 0) {
+      return `“${title}” and its ${purchases} will be deleted, along with its ${pluralize(p, 'recorded payment')}. Its statement can no longer be downloaded and the payments cannot be recovered. This cannot be undone.`;
+    }
+    return `“${title}” and its ${purchases} will be deleted, and its statement can no longer be downloaded, and it will leave Collection. This cannot be undone.`;
   }
   const subject = session.name !== null ? `“${session.name}”` : 'This session';
   if (m > 0) {
