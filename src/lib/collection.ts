@@ -398,6 +398,17 @@ export function openLinePayments(card: CollectionCard): Omit<NewPayment, 'id'>[]
     .map((l) => ({ debtor: l.debtor, creditor: l.creditor, amountCents: l.remainingCents }));
 }
 
+/**
+ * Whether a payment the server has confirmed should announce its session
+ * settling. The card reads Settled from the on-screen payments, which include
+ * any other payment still on its way, so it may only be believed once none is:
+ * until then the later payment's own ending decides, and a refusal of it would
+ * put the card back after the announcement could not be taken back.
+ */
+export function announcesSettled(paymentInFlight: boolean, bucket: Bucket | undefined): boolean {
+  return !paymentInFlight && bucket === 'settled';
+}
+
 /** The Mark all as paid confirmation, naming each side that has something left. */
 export function markAllMessage(card: CollectionCard): string {
   const title = sessionDisplayTitle(card.session);
