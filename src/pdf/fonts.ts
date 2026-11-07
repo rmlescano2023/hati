@@ -35,3 +35,21 @@ export function registerPdfFonts(): void {
 
   registered = true;
 }
+
+/**
+ * Lets a face whose download failed be downloaded again. A face keeps its
+ * rejected promise for the life of the page (`Font.reset` only drops loaded
+ * data, not that promise), so without this every later export fails the same
+ * way until the page is reloaded, even once the network is back. It is not
+ * `Font.clear`, which would also drop the built-in Helvetica the renderer
+ * falls back on, and faces that did load are left alone, so fonts are still
+ * fetched only once when they succeed.
+ */
+export function resetFailedPdfFonts(): void {
+  const families = Font.getRegisteredFonts();
+  for (const family of ['DM Sans', 'DM Mono']) {
+    for (const source of families[family]?.sources ?? []) {
+      if (source.data === null) source.loadResultPromise = null;
+    }
+  }
+}

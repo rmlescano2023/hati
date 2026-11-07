@@ -28,7 +28,7 @@ type Args = {
  * initial page bundle.
  */
 export async function downloadSoa({ members, records, fileNameSuffix, name }: Args): Promise<void> {
-  const [{ pdf }, { registerPdfFonts }, { SoaDocument }] = await Promise.all([
+  const [{ pdf }, { registerPdfFonts, resetFailedPdfFonts }, { SoaDocument }] = await Promise.all([
     import('@react-pdf/renderer'),
     import('./fonts'),
     import('./SoaDocument'),
@@ -44,7 +44,14 @@ export async function downloadSoa({ members, records, fileNameSuffix, name }: Ar
     name,
   }) as unknown as ReactElement<DocumentProps>;
 
-  const blob = await pdf(element).toBlob();
+  let blob: Blob;
+  try {
+    blob = await pdf(element).toBlob();
+  } catch (err) {
+    // So "Try again" fetches the fonts again rather than replaying this failure.
+    resetFailedPdfFonts();
+    throw err;
+  }
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
