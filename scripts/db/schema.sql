@@ -24,6 +24,15 @@ alter table users add column if not exists display_name text;
 -- an empty array.
 alter table users add column if not exists nicknames text[];
 
+-- The newest "What's new" the account has seen, as a release number. Null
+-- means none. Finishing or skipping the tour sets it too, so new accounts
+-- never see one.
+alter table users add column if not exists whats_new_version integer;
+
+-- When the account answered Collection's one-time "Already settled?"
+-- question. Null means it hasn't been answered yet.
+alter table users add column if not exists already_settled_answered_at timestamptz;
+
 create table if not exists expense_sessions (
   id         text primary key,          -- keeps the existing "session_xxx" ids
   user_id    text not null references users (id) on delete cascade,
@@ -51,6 +60,11 @@ alter table expense_sessions add column if not exists activity_at timestamptz;
 -- string means "I'm not in this session", which can't collide with a member
 -- because a member name is never empty.
 alter table expense_sessions add column if not exists me text;
+
+-- True once a Hati with Collection finished the session. A finished session
+-- without it was finished before Collection, which is what decides whether
+-- it can be marked as already settled. It is never set back once true.
+alter table expense_sessions add column if not exists finished_with_collection boolean;
 
 create table if not exists purchase_records (
   id         text primary key,          -- keeps the existing "rec_xxx" ids
