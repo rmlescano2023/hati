@@ -192,10 +192,6 @@
 }
 
 .markAll {
-  /* "Mark all as paid" with "Already settled" beside it, wrapping on a phone. */
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
   padding-top: 10px;
   border-top: 1px solid var(--border);
 }

@@ -181,16 +181,20 @@ export function CollectionCard({
     { direction: 'youOwe', lines: card.youOwe },
   ];
 
-  // Focus on the "Already settled" button survives the card opening or closing,
-  // which moves the button between two places in the card: it is a different
-  // element each time, so focus would otherwise fall back to the page.
+  // The "Already settled" button is a different element in each place it shows,
+  // or gone, when the card opens or closes, so focus on it would fall back to
+  // the page. It follows the button to its new place, or to the header's
+  // toggle when the button has gone.
   const article = useRef<HTMLElement>(null);
   const buttonFocused = useRef(false);
   useEffect(() => {
     if (!buttonFocused.current) return;
     const active = document.activeElement;
     if (active && active !== document.body) return;
-    article.current?.querySelector<HTMLButtonElement>('[data-already-settled]')?.focus();
+    const target =
+      article.current?.querySelector<HTMLButtonElement>('[data-already-settled]') ??
+      article.current?.querySelector<HTMLButtonElement>('[aria-expanded]');
+    target?.focus();
   }, [expanded]);
   const alreadySettled = (size: 'sm' | 'md'): ReactNode =>
     card.offersAlreadySettled ? (
@@ -235,7 +239,7 @@ export function CollectionCard({
         )}
       </h3>
 
-      {/* Collapsed, the button sits under the summary; open, it moves in beside the card's own action. */}
+      {/* Collapsed, the button sits under the summary. Open, a Needs setup card moves it beside Confirm, and an Outstanding card drops it, so "Mark all as paid" stands alone. */}
       {!expanded && alreadySettled && (
         <div className={styles.alreadySettled}>{alreadySettled('sm')}</div>
       )}
@@ -271,9 +275,7 @@ export function CollectionCard({
           {allPaid && (
             <p className={styles.detail}>Every line in this session is marked as paid.</p>
           )}
-          {card.bucket === 'outstanding' && (
-            <MarkAll card={card} title={title} onPaid={onPaid} extra={alreadySettled('md')} />
-          )}
+          {card.bucket === 'outstanding' && <MarkAll card={card} title={title} onPaid={onPaid} />}
           {card.presettled && <UndoSettled card={card} title={title} />}
         </div>
       )}
@@ -406,18 +408,7 @@ function UndoSettled({ card, title }: { card: Card; title: string }) {
  * or nothing (US-8b). It confirms first, because one tap can write many
  * payments; each can still be undone on its own.
  */
-function MarkAll({
-  card,
-  title,
-  onPaid,
-  extra,
-}: {
-  card: Card;
-  title: string;
-  onPaid: () => void;
-  /** "Already settled", when offered, in the same row. */
-  extra: ReactNode;
-}) {
+function MarkAll({ card, title, onPaid }: { card: Card; title: string; onPaid: () => void }) {
   const { addPayments } = useSessionsStore();
   const [confirming, setConfirming] = useState(false);
   return (
@@ -425,7 +416,6 @@ function MarkAll({
       <Button aria-label={`Mark all as paid in ${title}`} onClick={() => setConfirming(true)}>
         Mark all as paid
       </Button>
-      {extra}
       <ConfirmDialog
         open={confirming}
         title="Mark everything as paid?"
