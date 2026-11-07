@@ -7,9 +7,12 @@ import { isFullyPaid, mergeServerPayments, newPayments, settlePayments } from '.
 import { createId } from '../lib/id';
 import {
   DELETED_ELSEWHERE,
+  DELETED_ELSEWHERE_MANY,
   FriendlyError,
+  SIGNED_OUT,
   TimeoutError,
   WRITE_TIMEOUT_MS,
+  WHOLE_SESSION,
   addFailure,
   authorisedFetch,
   createPendingWrites,
@@ -18,9 +21,12 @@ import {
   createSaveQueue,
   failedSessionIds,
   keepLocalPayments,
+  lineKey,
   mergeLoaded,
   messageOf,
+  recordFailedMessage,
   resolveFailure,
+  resolveSuperseded,
   revertedAny,
   sameSessionContent,
   saveFailedMessage,
@@ -142,14 +148,14 @@ const DELETE_TIMEOUT = 'Deleting is taking too long. Check your connection, then
 const LOAD_TIMEOUT = 'Loading is taking too long. Check your connection, then try again.';
 const PAYMENT_TIMEOUT =
   'Recording the payment is taking too long. Tap Try again to see whether it was saved.';
+const PAYMENTS_TIMEOUT =
+  'Recording the payments is taking too long. Tap Try again to see whether they were saved.';
 const UNDO_TIMEOUT =
   'Undoing the payment is taking too long. Tap Try again to see whether it was undone.';
 const UNDO_ALL_TIMEOUT =
   'Undoing “already settled” is taking too long. Tap Try again to see whether it was undone.';
 
 const PAYMENTS_ENDPOINT = '/api/payments';
-
-const PAYMENT_NETWORK = "Couldn't record the payment. Check your connection and try again.";
 
 /** What a refused payment request may say, read only as far as it is needed. */
 type PaymentErrorBody = { error?: unknown; code?: unknown; payments?: unknown };
@@ -645,12 +651,33 @@ export function useServerSessions(): Result {
 
   const isPaying = useCallback((sessionId: string) => paying.current.has(sessionId), []);
 
+  /** A payment write succeeded: it answers the failures it follows and covers (see `createWriteOrder`). */
+  const paymentSucceeded = useCallback(
+    (sessionId: string, seq: number, lines: readonly string[]) => {
+      writeOrder.succeeded(sessionId, seq, lines);
+      setFailures((f) => resolveSuperseded(f, writeOrder, sessionId));
+    },
+    [writeOrder],
+  );
+
+  /** Reports a payment failure, unless later successes have already answered it. */
+  const paymentFailed = useCallback(
+    (sessionId: string, seq: number, lines: readonly string[], message: string) => {
+      if (!writeOrder.superseded(sessionId, seq, lines)) {
+        fail({ kind: 'payment', sessionId, message, seq, lines });
+      }
+    },
+    [fail, writeOrder],
+  );
+
   const addPayments = useCallback(
     (
       sessionId: string,
       payments: NewPayment[],
       onSettled?: (result: PaymentResult) => boolean | void,
-      options?: { quiet?: boolean },
+      // `seq` and `wholeSession` are for `settleSessions`, which numbers its
+      // write once and covers the whole session rather than the lines it pays.
+      options?: { quiet?: boolean; seq?: number; wholeSession?: boolean },
     ): Promise<void> => {
       const session = sessionsRef.current.find((s) => s.id === sessionId);
       if (!session) {
@@ -663,7 +690,8 @@ export function useServerSessions(): Result {
       setPayments(sessionId, (list) => [...list, ...added]);
       countPaying(sessionId, 1);
       const ids = new Set(added.map((p) => p.id));
-      const seq = writeOrder.start();
+      const seq = options?.seq ?? writeOrder.start();
+      const lines = options?.wholeSession ? [WHOLE_SESSION] : payments.map(lineKey);
 
       const work = (async () => {
         let status: number | null = null;
@@ -692,8 +720,7 @@ export function useServerSessions(): Result {
             return { status: res.status, body: json };
           });
           if (result.status === 201) {
-            writeOrder.succeeded(sessionId, seq);
-            setFailures((f) => resolveFailure(f, 'payment', sessionId, seq));
+            paymentSucceeded(sessionId, seq, lines);
             onSettled?.({ ok: true });
             return;
           }
@@ -732,9 +759,11 @@ export function useServerSessions(): Result {
               refusal ??
               (status === 404
                 ? DELETED_ELSEWHERE
-                : timedOut
-                  ? 'This is taking too long. Check your connection and try again.'
-                  : 'Not recorded. Check your connection and try again.'),
+                : status === 401
+                  ? SIGNED_OUT
+                  : timedOut
+                    ? 'This is taking too long. Check your connection and try again.'
+                    : 'Not recorded. Check your connection and try again.'),
             payments: paymentsOf(sessionsRef.current, sessionId),
             code: typeof body?.code === 'string' ? body.code : undefined,
             status,
@@ -742,27 +771,21 @@ export function useServerSessions(): Result {
         // A refusal shown on the form the user just saved isn't repeated. Any
         // other failure, or a refusal whose form is gone, goes to the banner,
         // which stays in view and offers "Try again". A quiet write leaves
-        // the report to its caller. A failure that lands after a later payment
-        // on the session succeeded is already out of date, so it isn't shown.
-        if (
-          !options?.quiet &&
-          (refusal === null || !shownByCaller) &&
-          !writeOrder.laterSucceeded(sessionId, seq)
-        ) {
-          fail({
-            kind: 'payment',
+        // the report to its caller. A failure that lands after later successes
+        // answered it is already out of date, so it isn't shown.
+        if (!options?.quiet && (refusal === null || !shownByCaller)) {
+          paymentFailed(
             sessionId,
             seq,
-            message: timedOut
-              ? PAYMENT_TIMEOUT
+            lines,
+            timedOut
+              ? payments.length === 1
+                ? PAYMENT_TIMEOUT
+                : PAYMENTS_TIMEOUT
               : refusal !== null
                 ? `${refusedWhat(payments, sessionDisplayTitle(current))} not recorded. ${refusal}`
-                : status === 404
-                  ? DELETED_ELSEWHERE
-                  : status !== null
-                    ? `Couldn't record the payment (${status}), so it was taken off. Try recording it again.`
-                    : messageOf(thrown, PAYMENT_NETWORK),
-          });
+                : recordFailedMessage(payments.length, status, thrown),
+          );
         }
       })().finally(() => {
         settledDuringLoad.current.add(sessionId);
@@ -773,15 +796,24 @@ export function useServerSessions(): Result {
       pending.track(work);
       return work;
     },
-    [authedFetch, countPaying, fail, pending, queue, setPayments, writeOrder],
+    [
+      authedFetch,
+      countPaying,
+      paymentFailed,
+      paymentSucceeded,
+      pending,
+      queue,
+      setPayments,
+      writeOrder,
+    ],
   );
 
   const settleSessions = useCallback(
     async (sessionIds: string[]): Promise<{ settled: string[]; failed: string[] }> => {
       const settled: string[] = [];
       const failed: string[] = [];
-      // Why each failed session did, and when its write started.
-      const notFound = new Set<string>();
+      // How each failed session's write ended, and when it started.
+      const statuses = new Map<string, number | null>();
       const started = new Map<string, number>();
       await Promise.all(
         sessionIds.map(async (id) => {
@@ -791,7 +823,8 @@ export function useServerSessions(): Result {
           const entries = settlePayments(session).map((p) => ({ ...p, id: createId('pay') }));
           if (entries.length === 0) return;
           let ok = true;
-          started.set(id, writeOrder.start());
+          const seq = writeOrder.start();
+          started.set(id, seq);
           await addPayments(
             id,
             entries,
@@ -802,12 +835,12 @@ export function useServerSessions(): Result {
               const gone = !sessionsRef.current.some((s) => s.id === id);
               if (!result.ok && result.code !== 'over_remaining' && !gone) {
                 ok = false;
-                if (result.status === 404) notFound.add(id);
+                statuses.set(id, result.status);
               }
               // So no refusal is bannered here: the batch reports once.
               return true;
             },
-            { quiet: true },
+            { quiet: true, seq, wholeSession: true },
           );
           // Settled only if every pair really is paid once the server's answer is
           // merged: another device may have recorded just part of it, and the
@@ -822,26 +855,28 @@ export function useServerSessions(): Result {
           const s = sessionsRef.current.find((x) => x.id === id);
           return s ? sessionDisplayTitle(s) : '';
         };
-        // Retrying a session that no longer exists can never work, so those
-        // are told apart from a failure that might pass on a second try.
-        const message = failed.every((id) => notFound.has(id))
+        // Retrying a session that no longer exists can never work, and a
+        // signed-out user must sign in first, so those are told apart from a
+        // failure that might pass on a second try.
+        const every = (status: number) => failed.every((id) => statuses.get(id) === status);
+        const message = every(404)
           ? failed.length === 1
             ? DELETED_ELSEWHERE
-            : `${failed.length} sessions were deleted on another device.`
-          : failed.length === 1
-            ? `Couldn't mark “${title(failed[0])}” as settled. Tap “Already settled” on it to try again.`
-            : `Couldn't mark ${failed.length} sessions as settled. Tap “Already settled” on each to try again.`;
-        // Filed against each session, not the batch, so a later payment on a
-        // session clears it, and it stays while any of them is still failing.
+            : DELETED_ELSEWHERE_MANY
+          : every(401)
+            ? SIGNED_OUT
+            : failed.length === 1
+              ? `Couldn't mark “${title(failed[0])}” as settled. Tap “Already settled” on it to try again.`
+              : `Couldn't mark ${failed.length} sessions as settled. Tap “Already settled” on each to try again.`;
+        // Filed against each session, not the batch, so a later whole-session
+        // success on one clears it, and it stays while any of them is failing.
         for (const id of failed) {
-          const seq = started.get(id) ?? 0;
-          if (!writeOrder.laterSucceeded(id, seq))
-            fail({ kind: 'payment', sessionId: id, message, seq });
+          paymentFailed(id, started.get(id) ?? 0, [WHOLE_SESSION], message);
         }
       }
       return { settled, failed };
     },
-    [addPayments, fail, writeOrder],
+    [addPayments, paymentFailed, writeOrder],
   );
 
   const removeAllPayments = useCallback(
@@ -870,8 +905,7 @@ export function useServerSessions(): Result {
           });
           // Not found means there is nothing left to undo, which is done too.
           if (status === 204 || status === 404) {
-            writeOrder.succeeded(sessionId, seq);
-            setFailures((f) => resolveFailure(f, 'payment', sessionId, seq));
+            paymentSucceeded(sessionId, seq, [WHOLE_SESSION]);
             return;
           }
         } catch (err) {
@@ -883,15 +917,16 @@ export function useServerSessions(): Result {
           ...list,
           ...snapshot.filter((p) => !list.some((x) => x.id === p.id)),
         ]);
-        if (writeOrder.laterSucceeded(sessionId, seq)) return;
-        fail({
-          kind: 'payment',
+        paymentFailed(
           sessionId,
           seq,
-          message: timedOut
+          [WHOLE_SESSION],
+          timedOut
             ? UNDO_ALL_TIMEOUT
-            : `Couldn't undo “already settled” (${status ?? 'no connection'}), so its payments are still recorded.`,
-        });
+            : status === 401
+              ? SIGNED_OUT
+              : "Couldn't undo “already settled”, so its payments are still recorded.",
+        );
       })().finally(() => {
         settledDuringLoad.current.add(sessionId);
         countPaying(sessionId, -1);
@@ -899,7 +934,7 @@ export function useServerSessions(): Result {
       });
       pending.track(work);
     },
-    [authedFetch, countPaying, fail, pending, setPayments, writeOrder],
+    [authedFetch, countPaying, paymentFailed, paymentSucceeded, pending, setPayments, writeOrder],
   );
 
   const removePayment = useCallback(
@@ -930,8 +965,7 @@ export function useServerSessions(): Result {
           });
           // Not found means there is nothing left to undo, which is done too.
           if (status === 204 || status === 404) {
-            writeOrder.succeeded(sessionId, seq);
-            setFailures((f) => resolveFailure(f, 'payment', sessionId, seq));
+            paymentSucceeded(sessionId, seq, [lineKey(payment)]);
             onSettled?.({ ok: true });
             return;
           }
@@ -945,11 +979,10 @@ export function useServerSessions(): Result {
         );
         const message = timedOut
           ? UNDO_TIMEOUT
-          : status !== null
-            ? `Couldn't undo the payment (${status}), so it's still recorded.`
+          : status === 401
+            ? SIGNED_OUT
             : "Couldn't undo the payment, so it's still recorded.";
-        if (!writeOrder.laterSucceeded(sessionId, seq))
-          fail({ kind: 'payment', sessionId, message, seq });
+        paymentFailed(sessionId, seq, [lineKey(payment)], message);
         onSettled?.({
           ok: false,
           message,
@@ -963,7 +996,7 @@ export function useServerSessions(): Result {
       });
       pending.track(work);
     },
-    [authedFetch, countPaying, fail, pending, setPayments, writeOrder],
+    [authedFetch, countPaying, paymentFailed, paymentSucceeded, pending, setPayments, writeOrder],
   );
 
   /** Creates one seeded session on the server: the row, its content, then its payments. */

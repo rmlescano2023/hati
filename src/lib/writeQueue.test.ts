@@ -7,11 +7,18 @@ import {
   addFailure,
   authorisedFetch,
   FriendlyError,
+  SIGNED_OUT,
+  WHOLE_SESSION,
+  DELETED_ELSEWHERE_MANY,
   createPendingWrites,
   createSaveConfirmations,
   createSaveQueue,
   createWriteOrder,
   failedSessionIds,
+  isDeletedElsewhere,
+  lineKey,
+  recordFailedMessage,
+  resolveSuperseded,
   keepLocalPayments,
   mergeLoaded,
   messageOf,
@@ -547,10 +554,10 @@ describe('authorisedFetch', () => {
     expect(send).not.toHaveBeenCalled();
   });
 
-  it('rejects with "Not signed in." without sending when there is no token', async () => {
+  it('rejects with the signed-out message without sending when there is no token', async () => {
     const send = ok();
     await expect(authorisedFetch(async () => null, send, '/api/sessions', {})).rejects.toThrow(
-      'Not signed in.',
+      SIGNED_OUT,
     );
     expect(send).not.toHaveBeenCalled();
   });
@@ -610,33 +617,122 @@ describe('failures', () => {
   });
 });
 
-describe('a payment failure and a later success', () => {
-  const payment = (sessionId: string, seq: number): Failure => ({
+describe('payment failures and the successes that answer them', () => {
+  const X = lineKey({ debtor: 'Ben', creditor: 'Ana' });
+  const Y = lineKey({ debtor: 'Cal', creditor: 'Ana' });
+  const failure = (lines: string[], seq: number, sessionId = 'A'): Failure => ({
     kind: 'payment',
     sessionId,
-    message: `payment ${sessionId} #${seq}`,
+    message: `payment ${lines.join('+')} #${seq}`,
     seq,
+    lines,
   });
 
-  it('is cleared by a write that started after it', () => {
-    const list = addFailure([], payment('A', 1));
-    expect(resolveFailure(list, 'payment', 'A', 2)).toEqual([]);
+  it('is answered by a later success on the same line', () => {
+    const order = createWriteOrder();
+    const slow = order.start();
+    const quick = order.start();
+    order.succeeded('A', quick, [X]);
+    expect(order.superseded('A', slow, [X])).toBe(true);
+    const list = addFailure([], failure([X], slow));
+    expect(resolveSuperseded(list, order, 'A')).toEqual([]);
   });
 
-  // The failed write is the newer one, so the success says nothing about it.
-  it('stays when the success came from a write that started before it', () => {
-    const list = addFailure([], payment('A', 2));
-    expect(resolveFailure(list, 'payment', 'A', 1)).toBe(list);
+  // Mark fully paid on X is slow, Y's payment succeeds first, then X fails: X
+  // is a real failure and its banner must show.
+  it('is not answered by a later success on another line', () => {
+    const order = createWriteOrder();
+    const slowX = order.start();
+    const quickY = order.start();
+    order.succeeded('A', quickY, [Y]);
+    expect(order.superseded('A', slowX, [X])).toBe(false);
+    const list = addFailure([], failure([X], slowX));
+    expect(resolveSuperseded(list, order, 'A')).toBe(list);
   });
 
-  it("stays on another session's success", () => {
-    const list = addFailure([], payment('A', 1));
-    expect(resolveFailure(list, 'payment', 'B', 2)).toBe(list);
+  it('is not answered by a success that started before it', () => {
+    const order = createWriteOrder();
+    const slowSuccess = order.start();
+    const quickFailure = order.start();
+    order.succeeded('A', slowSuccess, [X]);
+    expect(order.superseded('A', quickFailure, [X])).toBe(false);
   });
 
-  it('is cleared by any success when it carries no order, as a load or save always is', () => {
-    const list = addFailure([], { kind: 'payment', sessionId: 'A', message: 'payment A' });
-    expect(resolveFailure(list, 'payment', 'A', 1)).toEqual([]);
+  it('is not answered by its own success, or by a success on another session', () => {
+    const order = createWriteOrder();
+    const mine = order.start();
+    order.succeeded('A', mine, [X]);
+    expect(order.superseded('A', mine, [X])).toBe(false);
+    order.succeeded('B', order.start(), [X]);
+    expect(order.superseded('A', mine, [X])).toBe(false);
+  });
+
+  it('remembers the latest success when an older write succeeds afterwards', () => {
+    const order = createWriteOrder();
+    const first = order.start();
+    const second = order.start();
+    const third = order.start();
+    order.succeeded('A', third, [X]);
+    order.succeeded('A', second, [X]);
+    expect(order.superseded('A', first, [X])).toBe(true);
+    expect(order.superseded('A', second, [X])).toBe(true);
+  });
+
+  it('keeps a Mark all failure until every line it covered has had a later success', () => {
+    const order = createWriteOrder();
+    const markAll = order.start();
+    const list = addFailure([], failure([X, Y], markAll));
+    order.succeeded('A', order.start(), [X]);
+    expect(resolveSuperseded(list, order, 'A')).toBe(list);
+    order.succeeded('A', order.start(), [Y]);
+    expect(resolveSuperseded(list, order, 'A')).toEqual([]);
+  });
+
+  it("clears only the succeeded session's failures", () => {
+    const order = createWriteOrder();
+    const a = failure([X], order.start(), 'A');
+    const b = failure([X], order.start(), 'B');
+    const list = addFailure(addFailure([], a), b);
+    order.succeeded('A', order.start(), [X]);
+    expect(resolveSuperseded(list, order, 'A')).toEqual([b]);
+  });
+
+  it('is answered by a later whole-session success, for a line or the whole session', () => {
+    const order = createWriteOrder();
+    const lineFailure = order.start();
+    const wholeFailure = order.start();
+    order.succeeded('A', order.start(), [WHOLE_SESSION]);
+    expect(order.superseded('A', lineFailure, [X])).toBe(true);
+    expect(order.superseded('A', wholeFailure, [WHOLE_SESSION])).toBe(true);
+  });
+
+  it("does not answer a whole-session failure with one line's success", () => {
+    const order = createWriteOrder();
+    const undoAll = order.start();
+    order.succeeded('A', order.start(), [X]);
+    expect(order.superseded('A', undoAll, [WHOLE_SESSION])).toBe(false);
+  });
+
+  it('leaves failures that carry no order or lines, and other kinds, alone', () => {
+    const order = createWriteOrder();
+    order.succeeded('A', order.start(), [WHOLE_SESSION]);
+    let list = addFailure([], { kind: 'payment', sessionId: 'A', message: 'bare' });
+    list = addFailure(list, { kind: 'save', sessionId: 'A', message: 'save' });
+    expect(resolveSuperseded(list, order, 'A')).toBe(list);
+  });
+
+  it('keeps a failure from a newer write when an older write fails afterwards', () => {
+    const list = addFailure([], failure([X], 5));
+    const after = addFailure(list, failure([X], 3));
+    expect(after).toEqual(list);
+    expect(after[0].seq).toBe(5);
+  });
+
+  it('replaces a failure with a newer write of the same lines, and keeps other lines apart', () => {
+    let list = addFailure([], failure([X], 3));
+    list = addFailure(list, failure([Y], 4));
+    list = addFailure(list, failure([X], 6));
+    expect(list.map((f) => f.seq)).toEqual([4, 6]);
   });
 });
 
@@ -646,36 +742,55 @@ describe('createWriteOrder', () => {
     const first = order.start();
     expect(order.start()).toBeGreaterThan(first);
   });
+});
 
-  it('says a failure is out of date once a write that started after it has succeeded', () => {
-    const order = createWriteOrder();
-    const slow = order.start();
-    const quick = order.start();
-    order.succeeded('A', quick);
-    expect(order.laterSucceeded('A', slow)).toBe(true);
+describe('failedSessionIds and a session deleted elsewhere', () => {
+  it('leaves out a session the server says has gone, which a reload removes rather than reverts', () => {
+    let list = addFailure([], { kind: 'save', sessionId: 'A', message: DELETED_ELSEWHERE });
+    list = addFailure(list, { kind: 'save', sessionId: 'B', message: 'Could not save (500).' });
+    expect(failedSessionIds(list)).toEqual(['B']);
+  });
+});
+
+describe('recordFailedMessage (no status codes in a banner)', () => {
+  it('says a deleted session was deleted, since retrying cannot work', () => {
+    expect(recordFailedMessage(1, 404)).toBe(DELETED_ELSEWHERE);
+    expect(recordFailedMessage(3, 404)).toBe(DELETED_ELSEWHERE);
   });
 
-  it('does not count its own success, an earlier write, or another session', () => {
-    const order = createWriteOrder();
-    const earlier = order.start();
-    const mine = order.start();
-    order.succeeded('A', earlier);
-    expect(order.laterSucceeded('A', mine)).toBe(false);
-    order.succeeded('A', mine);
-    expect(order.laterSucceeded('A', mine)).toBe(false);
-    order.succeeded('B', order.start());
-    expect(order.laterSucceeded('A', mine)).toBe(false);
+  it('tells a signed-out user to sign in', () => {
+    expect(recordFailedMessage(1, 401)).toBe(SIGNED_OUT);
   });
 
-  it('remembers the latest success when an older write succeeds afterwards', () => {
-    const order = createWriteOrder();
-    const first = order.start();
-    const second = order.start();
-    const third = order.start();
-    order.succeeded('A', third);
-    order.succeeded('A', second);
-    expect(order.laterSucceeded('A', first)).toBe(true);
-    expect(order.laterSucceeded('A', second)).toBe(true);
+  it.each([400, 409, 500])('words status %i plainly, with no number', (status) => {
+    const message = recordFailedMessage(1, status);
+    expect(message).toBe("Couldn't record the payment, so it was taken off. Try again.");
+    expect(message).not.toMatch(/\d/);
+  });
+
+  it('says payments, plural, for Mark all', () => {
+    expect(recordFailedMessage(3, 500)).toBe(
+      "Couldn't record the payments, so they were taken off. Try again.",
+    );
+    expect(recordFailedMessage(3, null, new TypeError('Failed to fetch'))).toBe(
+      "Couldn't record the payments. Check your connection and try again.",
+    );
+  });
+
+  it('keeps wording Hati wrote when no answer came, and never raw error text', () => {
+    expect(recordFailedMessage(1, null, new FriendlyError(SIGNED_OUT))).toBe(SIGNED_OUT);
+    expect(recordFailedMessage(1, null, new TypeError('Failed to fetch'))).toBe(
+      "Couldn't record the payment. Check your connection and try again.",
+    );
+  });
+});
+
+describe('isDeletedElsewhere (the banner button only reloads)', () => {
+  it('is true for the deleted messages and nothing else', () => {
+    expect(isDeletedElsewhere(DELETED_ELSEWHERE)).toBe(true);
+    expect(isDeletedElsewhere(DELETED_ELSEWHERE_MANY)).toBe(true);
+    expect(isDeletedElsewhere(SIGNED_OUT)).toBe(false);
+    expect(isDeletedElsewhere(null)).toBe(false);
   });
 });
 
@@ -698,7 +813,7 @@ describe('messageOf (a banner never shows raw error text)', () => {
 
   it('keeps the sign-in message from authorisedFetch', async () => {
     const err = await authorisedFetch(async () => null, vi.fn(), '/x', {}).catch((e: unknown) => e);
-    expect(messageOf(err, 'fallback')).toBe('Not signed in.');
+    expect(messageOf(err, 'fallback')).toBe(SIGNED_OUT);
   });
 });
 
