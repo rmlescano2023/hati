@@ -11,6 +11,9 @@
     border-color 0.15s ease,
     background 0.15s ease,
     box-shadow 0.15s ease;
+  /* A card scrolled into view keeps a small gap above it, rather than sitting
+     flush with the top of the screen. */
+  scroll-margin-top: 10px;
 }
 
 /* Follows Home's In Progress cards: a collapsed card that can open gets the
@@ -21,6 +24,33 @@
   .clickable:hover {
     border-color: var(--accent-text);
     background: var(--surface2);
+  }
+}
+
+/* A card that has just been placed in a section, so the user can find where it
+   went: the open card's outline, fading back to the normal one. With reduced
+   motion it holds the outline, without fading, until the page clears it. */
+.placed {
+  animation: placed 1.6s ease-out;
+}
+
+@keyframes placed {
+  0%,
+  40% {
+    border-color: var(--accent-text);
+    box-shadow: var(--shadow-md);
+  }
+  100% {
+    border-color: var(--border);
+    box-shadow: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .placed {
+    animation: none;
+    border-color: var(--accent-text);
+    box-shadow: var(--shadow-md);
   }
 }
 

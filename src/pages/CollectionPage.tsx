@@ -110,6 +110,35 @@ export function CollectionPage({ openSessionId }: Props) {
     setLanding(false);
   }, [collection, landing, openSessionId, profile.status, settledOpen]);
 
+  // Confirming a Needs setup card moves it to another section, possibly far down
+  // the page or into the collapsed Settled section. Once it has moved, bring the
+  // user to it and outline it briefly, so the card doesn't just vanish.
+  const placing = useRef<string | null>(null);
+  const [placedId, setPlacedId] = useState<string | null>(null);
+  useEffect(() => {
+    const id = placing.current;
+    if (id === null) return;
+    const card = cards.get(id);
+    // Still unplaced (or gone) once the pick has landed: nothing moved, so
+    // there's nowhere to bring the user.
+    if (!card || card.bucket === 'needsSetup') {
+      placing.current = null;
+      return;
+    }
+    if (card.bucket === 'settled' && !settledOpen) {
+      setSettledOpen(true);
+      return;
+    }
+    placing.current = null;
+    document.getElementById(`collection-${id}`)?.scrollIntoView({ block: 'start' });
+    setPlacedId(id);
+  }, [cards, settledOpen]);
+  useEffect(() => {
+    if (placedId === null) return;
+    const timer = setTimeout(() => setPlacedId(null), 1600);
+    return () => clearTimeout(timer);
+  }, [placedId]);
+
   // A payment that settles a session moves its card, and the focus with it, so
   // the move is announced and focus lands on the Settled toggle (AC-11.2).
   const lastPaid = useRef<string | null>(null);
@@ -181,6 +210,10 @@ export function CollectionPage({ openSessionId }: Props) {
         onPaid={() => {
           lastPaid.current = id;
         }}
+        onPlaced={() => {
+          placing.current = id;
+        }}
+        placed={placedId === id}
       />
     );
   };

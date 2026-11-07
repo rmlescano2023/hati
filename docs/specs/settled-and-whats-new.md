@@ -861,3 +861,20 @@ Technical choices, no input needed:
 - "Settled this way" is derived.
 - Bulk marking runs in parallel.
 - `OnboardingDialog` is reused for both new dialogs, with `ReactNode` messages and an opt-in stacked layout.
+
+## 13. Owner additions (2026-11-07)
+
+Two refinements from the tester's UX suggestions, added by the owner at approval. They touch only Collection's
+cards and page, and need no schema or API change.
+
+- **(a) A gap above a card scrolled into view.** When Collection scrolls a card into view (the keep-in-view scroll
+  after opening a card, round 2, and the landing scroll), it leaves about 10px above the card instead of putting
+  it flush with the top of the screen. It's `scroll-margin-top: 10px` on `.card` in `CollectionCard.module.css`,
+  which the existing `scrollIntoView({ block: 'start' })` calls already honour.
+- **(b) Finding a card after it's placed.** After "Yes, that's me" or "Confirm" moves a Needs setup card to another
+  section, the page scrolls to it, with the same 10px gap, and opens the Settled section first if that is where it
+  landed. The card is outlined briefly: the open card's `--accent-text` border and `--shadow-md`, fading back to
+  the normal border over 1.6s (the `placed` animation), with no new colours. With `prefers-reduced-motion`, there
+  is no fade: the outline is held for the same 1.6s and then removed. Nothing happens when the pick doesn't move
+  the card, and the card isn't opened.
+

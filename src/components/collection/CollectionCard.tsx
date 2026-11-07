@@ -30,6 +30,10 @@ type Props = {
   onFailed: (lineKey: string, failed: FailedPayment | null) => void;
   /** Called as a payment is recorded here, so the page can announce the session settling. */
   onPaid: () => void;
+  /** Called as a Needs setup card is confirmed, so the page can bring the user to where it lands. */
+  onPlaced: () => void;
+  /** Briefly outlined: this card has just been placed in this section. */
+  placed: boolean;
 };
 
 /** Rotates with the card's open state; the header's `aria-expanded` carries the meaning. */
@@ -120,7 +124,16 @@ function MoneySummary({ card }: { card: Card }) {
  * with no lines, has nothing to expand, so it has no toggle. There is deliberately no delete here (AC-13.5):
  * deleting a session belongs to History.
  */
-export function CollectionCard({ card, expanded, onToggle, failed, onFailed, onPaid }: Props) {
+export function CollectionCard({
+  card,
+  expanded,
+  onToggle,
+  failed,
+  onFailed,
+  onPaid,
+  onPlaced,
+  placed,
+}: Props) {
   const { session } = card;
   const title = sessionDisplayTitle(session);
   const finished = `Finished ${formatLocalDate(session.closedAt ?? session.createdAt)}`;
@@ -158,7 +171,7 @@ export function CollectionCard({ card, expanded, onToggle, failed, onFailed, onP
   return (
     <article
       id={`collection-${session.id}`}
-      className={`${styles.card} ${expandable ? (expanded ? styles.open : styles.clickable) : ''}`}
+      className={`${styles.card} ${expandable ? (expanded ? styles.open : styles.clickable) : ''} ${placed ? styles.placed : ''}`}
     >
       <h3 className={styles.headerHeading}>
         {expandable ? (
@@ -179,7 +192,7 @@ export function CollectionCard({ card, expanded, onToggle, failed, onFailed, onP
 
       {expandable && expanded && setup && (
         <div id={bodyId} className={styles.body}>
-          <NeedsSetup card={card} />
+          <NeedsSetup card={card} onPlaced={onPlaced} />
         </div>
       )}
 
@@ -248,7 +261,7 @@ function YouAre({ card, title }: { card: Card; title: string }) {
 }
 
 /** Asks who the user is in a session Hati couldn't place (US-5). */
-function NeedsSetup({ card }: { card: Card }) {
+function NeedsSetup({ card, onPlaced }: { card: Card; onPlaced: () => void }) {
   const { setMe } = useSessionsStore();
   const profile = useProfile();
   // The member a nickname matched, preselected for the user to confirm: a
@@ -276,6 +289,7 @@ function NeedsSetup({ card }: { card: Card }) {
           disabled={selected === null}
           onClick={() => {
             if (selected === null) return;
+            onPlaced();
             setMe(card.session.id, selected);
             const offer = rememberOffer(profile, selected);
             if (remember && offer !== null) void profile.remember(selected, offer);
