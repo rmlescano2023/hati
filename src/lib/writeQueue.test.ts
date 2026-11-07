@@ -15,6 +15,7 @@ import {
   createSaveConfirmations,
   createSaveQueue,
   createWriteOrder,
+  discardsFailedCreate,
   failedMessage,
   failedSessionIds,
   isDeletedElsewhere,
@@ -1127,5 +1128,51 @@ describe('needsRefresh (the banner button reloads when retrying cannot help)', (
       needsRefresh(failure("Couldn't record the payment. Check your connection and try again.")),
     ).toBe(false);
     expect(needsRefresh(undefined)).toBe(false);
+  });
+});
+
+describe('a failed create of an untouched session', () => {
+  const open = { optedIn: true, onScreen: true, edited: false };
+
+  it('takes the session off the screen, as long as nothing was entered in it', () => {
+    expect(discardsFailedCreate(open)).toBe(true);
+  });
+
+  it('keeps an edited session, whose next save sends the create again', () => {
+    expect(discardsFailedCreate({ ...open, edited: true })).toBe(false);
+  });
+
+  it('keeps the session for a caller that did not opt in, as the tour does', () => {
+    expect(discardsFailedCreate({ ...open, optedIn: false })).toBe(false);
+  });
+
+  it('has nothing to take off once the session has already gone from the screen', () => {
+    expect(discardsFailedCreate({ ...open, onScreen: false })).toBe(false);
+  });
+
+  // The failure names no session, so "Try again" has no session to look for in
+  // its reload and can't report the missing one as "Session not found" or as a
+  // reverted edit.
+  it('is not a failed session, so Try again never makes it a revert candidate', () => {
+    let list = addFailure([], {
+      kind: 'create',
+      sessionId: null,
+      message: 'Could not create the session.',
+    });
+    expect(failedSessionIds(list)).toEqual([]);
+    expect(revertedAny(failedSessionIds(list), [], [], sameSessionContent)).toBe(false);
+    list = addFailure(list, { kind: 'save', sessionId: 'A', message: 'save A' });
+    expect(failedSessionIds(list)).toEqual(['A']);
+  });
+
+  it('is answered by the next create that lands, and by no save or delete', () => {
+    const list = addFailure([], {
+      kind: 'create',
+      sessionId: null,
+      message: 'Could not create the session.',
+    });
+    expect(resolveFailure(list, 'save', null)).toBe(list);
+    expect(resolveFailure(list, 'delete', null)).toBe(list);
+    expect(resolveFailure(list, 'create', null)).toEqual([]);
   });
 });

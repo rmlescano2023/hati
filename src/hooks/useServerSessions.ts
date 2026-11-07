@@ -20,6 +20,7 @@ import {
   createWriteOrder,
   createSaveConfirmations,
   createSaveQueue,
+  discardsFailedCreate,
   failedMessage,
   failedSessionIds,
   keepLocalPayments,
@@ -78,8 +79,14 @@ type Result = {
     fn: (session: Session) => Session,
     onSettled?: (saved: boolean) => void,
   ) => void;
-  /** Add a session locally and create it on the server in the background. */
-  addSession: (session: Session) => void;
+  /**
+   * Add a session locally and create it on the server in the background. When
+   * the create fails and the session has not been edited, passing `onDiscarded`
+   * takes the session off the screen again and calls it, so the caller can
+   * leave the session's workspace. Without it, or once the session has been
+   * edited, the session stays and the next save sends the create again.
+   */
+  addSession: (session: Session, onDiscarded?: () => void) => void;
   removeSession: (sessionId: string) => void;
   /**
    * Marks a session as just opened, on screen at once and on the server in the
@@ -150,6 +157,8 @@ type Result = {
 const ENDPOINT = '/api/sessions';
 
 const SAVE_TIMEOUT = 'Saving is taking too long. Check your connection, then try again.';
+const CREATE_TIMEOUT =
+  'Creating the session is taking too long. Check your connection, then try again.';
 const DELETE_TIMEOUT = 'Deleting is taking too long. Check your connection, then try again.';
 const LOAD_TIMEOUT = 'Loading is taking too long. Check your connection, then try again.';
 const PAYMENT_TIMEOUT =
@@ -511,7 +520,7 @@ export function useServerSessions(): Result {
   );
 
   const addSession = useCallback(
-    (session: Session) => {
+    (session: Session, onDiscarded?: () => void) => {
       commit([...sessionsRef.current, session]);
       // The caller has already navigated into it, so this catches up rather
       // than being awaited.
@@ -531,18 +540,52 @@ export function useServerSessions(): Result {
             );
             if (!res.ok) throw new FriendlyError(failedMessage('create the session', res.status));
           });
+          // A failed create has nothing left to report once another one lands.
+          setFailures((f) => resolveFailure(f, 'create', null));
         } catch (err) {
-          // Filed as a save, because the next save of this session sends the
-          // create again before saving, and its success resolves this failure.
-          uncreated.current.add(session.id);
-          fail({
-            kind: 'save',
-            sessionId: session.id,
-            message:
-              err instanceof TimeoutError
-                ? SAVE_TIMEOUT
-                : messageOf(err, 'Could not create the session.'),
-          });
+          const timedOut = err instanceof TimeoutError;
+          if (
+            discardsFailedCreate({
+              optedIn: onDiscarded !== undefined,
+              onScreen: sessionsRef.current.some((s) => s.id === session.id),
+              // Any edit queues a save, which waits behind this create, so a
+              // busy queue means the user has put something in the session.
+              edited: queue.isBusy(session.id),
+            })
+          ) {
+            commit(sessionsRef.current.filter((s) => s.id !== session.id));
+            // A create that timed out may still land, which would leave an empty
+            // session behind to reappear on the next load. A delete after it is
+            // a cheap best effort, and a 404 means there was nothing to remove.
+            // It is held in `deleting` so a load meanwhile doesn't bring it back.
+            deleting.current.add(session.id);
+            void withDeadline(WRITE_TIMEOUT_MS, (signal) =>
+              authedFetch(
+                `${ENDPOINT}/${encodeURIComponent(session.id)}`,
+                { method: 'DELETE' },
+                signal,
+              ),
+            )
+              .catch(() => {})
+              .finally(() => deleting.current.delete(session.id));
+            // Not filed against the session, which is gone, so "Try again"
+            // neither looks for it nor reports it as a reverted edit.
+            fail({
+              kind: 'create',
+              sessionId: null,
+              message: timedOut ? CREATE_TIMEOUT : messageOf(err, 'Could not create the session.'),
+            });
+            onDiscarded?.();
+          } else {
+            // Filed as a save, because the next save of this session sends the
+            // create again before saving, and its success resolves this failure.
+            uncreated.current.add(session.id);
+            fail({
+              kind: 'save',
+              sessionId: session.id,
+              message: timedOut ? SAVE_TIMEOUT : messageOf(err, 'Could not create the session.'),
+            });
+          }
         } finally {
           // The deadline settles a stuck create at 30 seconds, so a delete
           // waiting on it goes ahead then rather than never.
@@ -552,7 +595,7 @@ export function useServerSessions(): Result {
       creating.current.set(session.id, create);
       pending.track(create);
     },
-    [authedFetch, commit, fail, pending],
+    [authedFetch, commit, fail, pending, queue],
   );
 
   const removeSession = useCallback(

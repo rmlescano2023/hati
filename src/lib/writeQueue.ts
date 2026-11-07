@@ -318,6 +318,20 @@ export function saveFailedMessage(status: number): string {
 }
 
 /**
+ * Whether a create that failed should take its session off the screen and send
+ * the user out of it. That is only right for a session the user has not edited:
+ * an edited one is kept, because the next save sends the create again and
+ * nothing typed is lost. A session that has already gone from the screen has
+ * nothing to take off, and `optedIn` is false for a caller that must keep the
+ * session, as the onboarding tour does.
+ */
+export const discardsFailedCreate = (c: {
+  optedIn: boolean;
+  onScreen: boolean;
+  edited: boolean;
+}): boolean => c.optedIn && c.onScreen && !c.edited;
+
+/**
  * Sends a save only once the session's row can exist. A save never creates a
  * session, so it waits for a create still in flight, and `send` is told to
  * create it first when that create failed. `createFailed` is read after the
@@ -332,15 +346,17 @@ export async function saveOnceCreated(
   await send(createFailed());
 }
 
-export type FailureKind = 'save' | 'delete' | 'load' | 'seed' | 'payment';
+export type FailureKind = 'save' | 'create' | 'delete' | 'load' | 'seed' | 'payment';
 
 /**
  * One write or load that failed and hasn't been resolved yet. Keeping them
  * apart, rather than one global error, is what stops a success on one
  * session from hiding a failure on another. A `'save'` also covers a failed
- * create, because a later save of the session creates the row too. A
- * `'payment'` has already been reverted on screen, so it is left out of
- * `failedSessionIds` and never shows the reverted-edit note.
+ * create of an edited session, because a later save of it creates the row too.
+ * A `'create'` is for a session that was never edited and has been taken off
+ * the screen, so there is nothing of it left to revert. A `'payment'` has
+ * already been reverted on screen, so it is left out of `failedSessionIds` and
+ * never shows the reverted-edit note.
  */
 export type Failure = {
   kind: FailureKind;

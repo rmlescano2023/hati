@@ -103,7 +103,16 @@ export default function App() {
     openSession(sessionId);
   };
   const startSession = (name: string | null) => {
-    const id = createSession(name);
+    // If the create fails before anything is entered, the session is taken off
+    // the screen, so leave it for Home rather than for "Session not found". The
+    // tour keeps its session as it is, since it narrates the screen it is on.
+    const id = createSession(
+      name,
+      phase === 'running'
+        ? undefined
+        : () =>
+            setScreen((s) => (s.kind === 'session' && s.sessionId === id ? { kind: 'home' } : s)),
+    );
     if (phase === 'running' && tourSession.current === null) tourSession.current = id;
     openSession(id);
   };
