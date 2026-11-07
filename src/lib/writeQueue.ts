@@ -221,6 +221,26 @@ export function withDeadline<T>(ms: number, work: (signal: AbortSignal) => Promi
 }
 
 /**
+ * An error whose message was written for the user. Anything else that is
+ * thrown, such as the browser's "Failed to fetch" or a JSON parse error, is
+ * about the machinery and means nothing to them.
+ */
+export class FriendlyError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'FriendlyError';
+  }
+}
+
+/**
+ * What a banner says for a thrown error: Hati's own words when it wrote them,
+ * otherwise `fallback`, so a dropped connection never shows raw error text.
+ */
+export function messageOf(err: unknown, fallback: string): string {
+  return err instanceof FriendlyError ? err.message : fallback;
+}
+
+/**
  * Sends one request with the user's token. A token that only arrives after
  * `signal` has aborted sends nothing: the attempt has already been reported
  * as failed, and a late write could undo a newer one.
@@ -234,7 +254,7 @@ export async function authorisedFetch(
 ): Promise<Response> {
   const token = await getToken();
   if (signal?.aborted) throw new TimeoutError();
-  if (!token) throw new Error('Not signed in.');
+  if (!token) throw new FriendlyError('Not signed in.');
   return send(path, {
     ...init,
     signal,
@@ -275,7 +295,13 @@ export type FailureKind = 'save' | 'delete' | 'load' | 'seed' | 'payment';
  * `'payment'` has already been reverted on screen, so it is left out of
  * `failedSessionIds` and never shows the reverted-edit note.
  */
-export type Failure = { kind: FailureKind; sessionId: string | null; message: string };
+export type Failure = {
+  kind: FailureKind;
+  sessionId: string | null;
+  message: string;
+  /** For a `'payment'`: the order its write started in (see `createWriteOrder`). */
+  seq?: number;
+};
 
 /** Adds `next`, replacing any failure with the same kind and session, so it becomes the most recent. */
 export function addFailure(list: readonly Failure[], next: Failure): Failure[] {
@@ -285,14 +311,48 @@ export function addFailure(list: readonly Failure[], next: Failure): Failure[] {
 /**
  * Removes the failure with this kind and session. Returns `list` itself when
  * there is none, so a state setter given the result skips the re-render.
+ * With `by`, the order a successful write started in, a failure that started
+ * after it stays, because that write's success says nothing about it.
  */
 export function resolveFailure(
   list: readonly Failure[],
   kind: FailureKind,
   sessionId: string | null,
+  by?: number,
 ): readonly Failure[] {
-  const next = list.filter((f) => f.kind !== kind || f.sessionId !== sessionId);
+  const next = list.filter(
+    (f) =>
+      f.kind !== kind ||
+      f.sessionId !== sessionId ||
+      (by !== undefined && f.seq !== undefined && f.seq > by),
+  );
   return next.length === list.length ? list : next;
+}
+
+/**
+ * Puts a session's payment writes in the order they started, so a success
+ * clears only the failures of writes that started before it. Writes settle in
+ * whatever order the network allows: a failure that lands after a later write
+ * succeeded is already out of date, and a success must not hide the failure of
+ * a write that started after it.
+ */
+export function createWriteOrder(): {
+  /** Numbers a write as it starts. */
+  start(): number;
+  /** The write numbered `seq` succeeded for `id`. */
+  succeeded(id: string, seq: number): void;
+  /** Whether a write that started after `seq` has succeeded for `id`. */
+  laterSucceeded(id: string, seq: number): boolean;
+} {
+  let last = 0;
+  const lastSuccess = new Map<string, number>();
+  return {
+    start: () => ++last,
+    succeeded(id, seq) {
+      lastSuccess.set(id, Math.max(lastSuccess.get(id) ?? 0, seq));
+    },
+    laterSucceeded: (id, seq) => (lastSuccess.get(id) ?? 0) > seq,
+  };
 }
 
 /** The sessions whose save, create or delete failed, for the reverted-edit note. */

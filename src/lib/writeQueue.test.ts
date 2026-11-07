@@ -6,12 +6,15 @@ import {
   WRITE_TIMEOUT_MS,
   addFailure,
   authorisedFetch,
+  FriendlyError,
   createPendingWrites,
   createSaveConfirmations,
   createSaveQueue,
+  createWriteOrder,
   failedSessionIds,
   keepLocalPayments,
   mergeLoaded,
+  messageOf,
   resolveFailure,
   revertedAny,
   sameSessionContent,
@@ -604,6 +607,98 @@ describe('failures', () => {
     let list = addFailure([], save('A'));
     list = addFailure(list, { kind: 'payment', sessionId: 'C', message: 'payment C' });
     expect(failedSessionIds(list)).toEqual(['A']);
+  });
+});
+
+describe('a payment failure and a later success', () => {
+  const payment = (sessionId: string, seq: number): Failure => ({
+    kind: 'payment',
+    sessionId,
+    message: `payment ${sessionId} #${seq}`,
+    seq,
+  });
+
+  it('is cleared by a write that started after it', () => {
+    const list = addFailure([], payment('A', 1));
+    expect(resolveFailure(list, 'payment', 'A', 2)).toEqual([]);
+  });
+
+  // The failed write is the newer one, so the success says nothing about it.
+  it('stays when the success came from a write that started before it', () => {
+    const list = addFailure([], payment('A', 2));
+    expect(resolveFailure(list, 'payment', 'A', 1)).toBe(list);
+  });
+
+  it("stays on another session's success", () => {
+    const list = addFailure([], payment('A', 1));
+    expect(resolveFailure(list, 'payment', 'B', 2)).toBe(list);
+  });
+
+  it('is cleared by any success when it carries no order, as a load or save always is', () => {
+    const list = addFailure([], { kind: 'payment', sessionId: 'A', message: 'payment A' });
+    expect(resolveFailure(list, 'payment', 'A', 1)).toEqual([]);
+  });
+});
+
+describe('createWriteOrder', () => {
+  it('numbers writes in the order they start', () => {
+    const order = createWriteOrder();
+    const first = order.start();
+    expect(order.start()).toBeGreaterThan(first);
+  });
+
+  it('says a failure is out of date once a write that started after it has succeeded', () => {
+    const order = createWriteOrder();
+    const slow = order.start();
+    const quick = order.start();
+    order.succeeded('A', quick);
+    expect(order.laterSucceeded('A', slow)).toBe(true);
+  });
+
+  it('does not count its own success, an earlier write, or another session', () => {
+    const order = createWriteOrder();
+    const earlier = order.start();
+    const mine = order.start();
+    order.succeeded('A', earlier);
+    expect(order.laterSucceeded('A', mine)).toBe(false);
+    order.succeeded('A', mine);
+    expect(order.laterSucceeded('A', mine)).toBe(false);
+    order.succeeded('B', order.start());
+    expect(order.laterSucceeded('A', mine)).toBe(false);
+  });
+
+  it('remembers the latest success when an older write succeeds afterwards', () => {
+    const order = createWriteOrder();
+    const first = order.start();
+    const second = order.start();
+    const third = order.start();
+    order.succeeded('A', third);
+    order.succeeded('A', second);
+    expect(order.laterSucceeded('A', first)).toBe(true);
+    expect(order.laterSucceeded('A', second)).toBe(true);
+  });
+});
+
+describe('messageOf (a banner never shows raw error text)', () => {
+  it('passes through a message Hati wrote for the user', () => {
+    expect(messageOf(new FriendlyError(DELETED_ELSEWHERE), 'fallback')).toBe(DELETED_ELSEWHERE);
+  });
+
+  it('replaces the browser\'s "Failed to fetch" with the action\'s own wording', () => {
+    const fallback = "Couldn't record the payment. Check your connection and try again.";
+    expect(messageOf(new TypeError('Failed to fetch'), fallback)).toBe(fallback);
+  });
+
+  it('replaces any other error, and any non-error, with the fallback', () => {
+    expect(messageOf(new SyntaxError('Unexpected token < in JSON'), 'fallback')).toBe('fallback');
+    expect(messageOf(new Error('boom'), 'fallback')).toBe('fallback');
+    expect(messageOf('boom', 'fallback')).toBe('fallback');
+    expect(messageOf(null, 'fallback')).toBe('fallback');
+  });
+
+  it('keeps the sign-in message from authorisedFetch', async () => {
+    const err = await authorisedFetch(async () => null, vi.fn(), '/x', {}).catch((e: unknown) => e);
+    expect(messageOf(err, 'fallback')).toBe('Not signed in.');
   });
 });
 
