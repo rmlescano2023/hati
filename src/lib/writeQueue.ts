@@ -169,6 +169,14 @@ export function mergeLoaded<S extends { id: string }>(
 }
 
 /**
+ * Whether a screen with nothing to list may say so. An empty list is only the
+ * truth after a load that succeeded: while the first load has failed the list
+ * is empty because nothing arrived, and "No sessions" would read as lost data.
+ * The banner carries that message instead.
+ */
+export const showsEmptyState = (loaded: boolean, shown: number): boolean => loaded && shown === 0;
+
+/**
  * The loaded list with the on-screen payments of the sessions `keep` names,
  * and the server's copy of everything else about them. A session whose save
  * failed must take the server's copy, so its rollback is shown and reported,

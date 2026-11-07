@@ -19,6 +19,7 @@ import { OnboardingDialog } from './components/onboarding/OnboardingDialog';
 import onboardingStyles from './components/onboarding/OnboardingDialog.module.css';
 import type { ScreenShape } from './components/onboarding/steps';
 import { useOnboarding } from './hooks/useOnboarding';
+import { showsEmptyState } from './lib/writeQueue';
 import styles from './App.module.css';
 
 /**
@@ -183,8 +184,12 @@ export default function App() {
   );
 
   // An empty Home carries the action in its own empty state, so the nav row
-  // drops it there rather than offering the same button twice.
-  const homeIsEmpty = !sessions.some((s) => s.status === 'draft');
+  // drops it there rather than offering the same button twice. While the load
+  // has failed Home shows no empty state, so the nav row keeps the action.
+  const homeIsEmpty = showsEmptyState(
+    sync.loaded,
+    sessions.filter((s) => s.status === 'draft').length,
+  );
   const showNewSession = !(screen.kind === 'home' && homeIsEmpty);
 
   const nav = !TOP_LEVEL.has(screen.kind) ? null : (

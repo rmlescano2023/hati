@@ -144,6 +144,11 @@ type Result = {
   /** Dev-only seeding: swap the whole list, session by session. */
   replaceAll: (next: Session[]) => void;
   status: SyncStatus;
+  /**
+   * True once a load has succeeded, and from then on. Until then an empty list
+   * means nothing arrived rather than that there is nothing to show.
+   */
+  loaded: boolean;
   error: string | null;
   /** True when retrying can't help, so the banner's button reloads and says "Refresh". */
   refresh: boolean;
@@ -221,6 +226,7 @@ export function useServerSessions(): Result {
   const { getToken, isLoaded, isSignedIn } = useAuth();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loaded, setLoaded] = useState(false);
   /**
    * Every write or load that failed and hasn't been resolved, so a success on
    * one session can't hide a failure on another. The banner shows while any
@@ -384,6 +390,7 @@ export function useServerSessions(): Result {
         commit(after);
         setFailures((f) => resolveFailure(f, 'load', null));
         if (rolledBack) setReverted(true);
+        setLoaded(true);
         setLoading(false);
       } catch (err) {
         if (cancelled) return;
@@ -1191,6 +1198,7 @@ export function useServerSessions(): Result {
     replaceAll,
     appendAll,
     status,
+    loaded,
     error,
     refresh,
     retry,

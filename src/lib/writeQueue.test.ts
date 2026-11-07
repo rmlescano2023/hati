@@ -32,6 +32,7 @@ import {
   sameSessionContent,
   saveFailedMessage,
   saveOnceCreated,
+  showsEmptyState,
   withDeadline,
   type Failure,
 } from './writeQueue';
@@ -1174,5 +1175,20 @@ describe('a failed create of an untouched session', () => {
     expect(resolveFailure(list, 'save', null)).toBe(list);
     expect(resolveFailure(list, 'delete', null)).toBe(list);
     expect(resolveFailure(list, 'create', null)).toEqual([]);
+  });
+});
+
+describe('showsEmptyState (no "No sessions" while the load has failed)', () => {
+  it('says so after a load that succeeded and found nothing', () => {
+    expect(showsEmptyState(true, 0)).toBe(true);
+  });
+
+  it('stays silent while no load has succeeded, as after a failed first load', () => {
+    expect(showsEmptyState(false, 0)).toBe(false);
+  });
+
+  it('stays silent when there is something to list, loaded or not', () => {
+    expect(showsEmptyState(true, 2)).toBe(false);
+    expect(showsEmptyState(false, 2)).toBe(false);
   });
 });

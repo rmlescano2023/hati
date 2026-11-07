@@ -89,6 +89,8 @@ type SessionsStoreValue = {
   /** Where the current data stands with the server. */
   sync: {
     status: SyncStatus;
+    /** True once a load has succeeded; until then an empty list is not an empty account. */
+    loaded: boolean;
     error: string | null;
     /** True when retrying can't help, so the banner's button reloads and says "Refresh". */
     refresh: boolean;
@@ -157,6 +159,7 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
     replaceAll,
     appendAll,
     status,
+    loaded,
     error,
     refresh,
     retry,
@@ -437,10 +440,11 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
       replaceSessionData,
       replaceAllSessions,
       appendSessions,
-      sync: { status, error, refresh, retry, reverted, dismissReverted },
+      sync: { status, loaded, error, refresh, retry, reverted, dismissReverted },
     }),
     [
       status,
+      loaded,
       error,
       refresh,
       retry,
