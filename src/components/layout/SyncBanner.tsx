@@ -2,7 +2,6 @@ import type { ReactNode } from 'react';
 import { Button } from '../shared/Button';
 import { useProfile } from '../../context/ProfileContext';
 import { useSessionsStore } from '../../context/SessionsStoreContext';
-import { isDeletedElsewhere } from '../../lib/writeQueue';
 import styles from './SyncBanner.module.css';
 
 /**
@@ -30,9 +29,9 @@ export function SyncBanner({
     syncStrip = (
       <div className={styles.banner} role="alert">
         <span className={styles.message}>{sync.error ?? 'Could not reach the server.'}</span>
-        {/* A deleted session can't be retried, and the button only reloads. */}
+        {/* When retrying can't help the button only reloads, and says so. */}
         <Button size="sm" onClick={sync.retry}>
-          {isDeletedElsewhere(sync.error) ? 'Refresh' : 'Try again'}
+          {sync.refresh ? 'Refresh' : 'Try again'}
         </Button>
       </div>
     );
