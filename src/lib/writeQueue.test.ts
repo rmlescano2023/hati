@@ -6,6 +6,7 @@ import {
   WRITE_TIMEOUT_MS,
   addFailure,
   authorisedFetch,
+  ALREADY_SETTLED,
   FriendlyError,
   SIGNED_OUT,
   WHOLE_SESSION,
@@ -14,6 +15,7 @@ import {
   createSaveConfirmations,
   createSaveQueue,
   createWriteOrder,
+  failedMessage,
   failedSessionIds,
   isDeletedElsewhere,
   lineKey,
@@ -22,6 +24,8 @@ import {
   keepLocalPayments,
   mergeLoaded,
   messageOf,
+  needsRefresh,
+  resolveAlreadySettled,
   resolveFailure,
   revertedAny,
   sameSessionContent,
@@ -1022,7 +1026,106 @@ describe('saveFailedMessage', () => {
     expect(DELETED_ELSEWHERE).toBe('This session was deleted on another device.');
   });
 
-  it('gives any other status as a plain save failure', () => {
-    expect(saveFailedMessage(500)).toBe('Could not save your changes (500).');
+  it('gives any other status as a plain save failure, with no number', () => {
+    expect(saveFailedMessage(500)).toBe('Could not save your changes.');
+  });
+
+  it('says a signed-out save needs a sign-in', () => {
+    expect(saveFailedMessage(401)).toBe(SIGNED_OUT);
+  });
+});
+
+describe('failedMessage (no status codes for load, save, create or delete)', () => {
+  it.each([
+    ['load your data', 'Could not load your data.'],
+    ['save your changes', 'Could not save your changes.'],
+    ['create the session', 'Could not create the session.'],
+    ['delete the session', 'Could not delete the session.'],
+  ] as const)('words a refused request to %s plainly', (action, text) => {
+    for (const status of [400, 403, 500, 503]) {
+      expect(failedMessage(action, status)).toBe(text);
+    }
+    expect(text).not.toMatch(/\d/);
+  });
+
+  it('says a signed-out request needs a sign-in, whatever it was doing', () => {
+    expect(failedMessage('load your data', 401)).toBe(SIGNED_OUT);
+    expect(failedMessage('create the session', 401)).toBe(SIGNED_OUT);
+    expect(failedMessage('delete the session', 401)).toBe(SIGNED_OUT);
+  });
+});
+
+describe('resolveAlreadySettled (a failed "Already settled" the user can no longer follow)', () => {
+  const settle = (sessionId: string): Failure => ({
+    kind: 'payment',
+    sessionId,
+    message: "Couldn't mark it as settled.",
+    seq: 1,
+    lines: [ALREADY_SETTLED],
+  });
+
+  it("removes that session's failed Already settled", () => {
+    expect(resolveAlreadySettled(addFailure([], settle('A')), 'A')).toEqual([]);
+  });
+
+  it('leaves other sessions, and ordinary line or whole-session failures, alone', () => {
+    let list = addFailure([], settle('B'));
+    list = addFailure(list, {
+      kind: 'payment',
+      sessionId: 'A',
+      message: 'line',
+      seq: 2,
+      lines: ['x'],
+    });
+    list = addFailure(list, {
+      kind: 'payment',
+      sessionId: 'A',
+      message: 'undo all',
+      seq: 3,
+      lines: [WHOLE_SESSION],
+    });
+    expect(resolveAlreadySettled(list, 'A')).toBe(list);
+  });
+
+  it('is answered by a later whole-session success too, such as a second Already settled', () => {
+    const order = createWriteOrder();
+    const failed = order.start();
+    order.succeeded('A', order.start(), [WHOLE_SESSION]);
+    expect(order.superseded('A', failed, [ALREADY_SETTLED])).toBe(true);
+  });
+
+  it("is not answered by a line's success on its own, which the page answers by the session's payments", () => {
+    const order = createWriteOrder();
+    const failed = order.start();
+    order.succeeded('A', order.start(), ['x']);
+    expect(order.superseded('A', failed, [ALREADY_SETTLED])).toBe(false);
+  });
+});
+
+describe('needsRefresh (the banner button reloads when retrying cannot help)', () => {
+  const failure = (message: string, refresh?: boolean): Failure => ({
+    kind: 'payment',
+    sessionId: 'A',
+    message,
+    refresh,
+  });
+
+  it('is true for a refusal the server made of the payment itself', () => {
+    expect(
+      needsRefresh(failure('Payment ... not recorded. Only ₱50.00 is left on this line.', true)),
+    ).toBe(true);
+  });
+
+  it('is true for a deleted session, however it was reported', () => {
+    expect(needsRefresh(failure(DELETED_ELSEWHERE))).toBe(true);
+    expect(needsRefresh(failure(DELETED_ELSEWHERE_MANY))).toBe(true);
+  });
+
+  it('is false for anything a second try could fix, and when there is no failure', () => {
+    expect(needsRefresh(failure(SIGNED_OUT))).toBe(false);
+    expect(
+      needsRefresh(failure("Couldn't record the payment. Check your connection and try again.")),
+    ).toBe(false);
+    expect(needsRefresh(undefined)).toBe(false);
   });
 });
