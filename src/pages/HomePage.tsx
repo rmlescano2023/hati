@@ -22,6 +22,8 @@ type Props = {
   onNewSession: () => void;
   /** Dev-only: starts the onboarding tour without touching the account flag. */
   onPreviewTour?: () => void;
+  onPreviewWhatsNew?: () => void;
+  onAskAlreadySettled?: () => void;
 };
 
 /**
@@ -29,7 +31,13 @@ type Props = {
  * parallel; closed sessions live on the History tab. New sessions are started
  * from the action in the nav row.
  */
-export function HomePage({ onOpenSession, onNewSession, onPreviewTour }: Props) {
+export function HomePage({
+  onOpenSession,
+  onNewSession,
+  onPreviewTour,
+  onPreviewWhatsNew,
+  onAskAlreadySettled,
+}: Props) {
   const { sessions, deleteSession } = useSessionsStore();
   // Held by id and looked up on render, so the confirmation always reads the
   // session's current name.
@@ -47,7 +55,11 @@ export function HomePage({ onOpenSession, onNewSession, onPreviewTour }: Props) 
 
   const devBar = DevSessionsBar && (
     <Suspense fallback={null}>
-      <DevSessionsBar onPreviewTour={onPreviewTour} />
+      <DevSessionsBar
+        onPreviewTour={onPreviewTour}
+        onPreviewWhatsNew={onPreviewWhatsNew}
+        onAskAlreadySettled={onAskAlreadySettled}
+      />
     </Suspense>
   );
 

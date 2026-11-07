@@ -12,37 +12,58 @@ import { useSessionsStore } from './context/SessionsStoreContext';
 import { HomePage } from './pages/HomePage';
 import { HistoryPage } from './pages/HistoryPage';
 import { HistoryDetailPage } from './pages/HistoryDetailPage';
+import { CollectionPage } from './pages/CollectionPage';
+import { ProfileDialog } from './components/profile/ProfileDialog';
 import { OnboardingTour } from './components/onboarding/OnboardingTour';
 import { OnboardingDialog } from './components/onboarding/OnboardingDialog';
+import onboardingStyles from './components/onboarding/OnboardingDialog.module.css';
 import type { ScreenShape } from './components/onboarding/steps';
 import { useOnboarding } from './hooks/useOnboarding';
 import styles from './App.module.css';
 
 /**
- * Top level is just Home and History; opening a session swaps the whole shell
- * for that session's workspace, which carries its own inner tabs.
+ * Top level is three tabs, Home, Collection and History; opening a session
+ * swaps the whole shell for that session's workspace, which carries its own
+ * inner tabs. Collection can be landed on with one session open, which is
+ * where finishing a session goes.
  */
 type Screen =
   | { kind: 'home' }
+  | { kind: 'collection'; openSessionId?: string; previewSettled?: boolean }
   | { kind: 'history' }
   | { kind: 'historyDetail'; sessionId: string }
   | { kind: 'session'; sessionId: string; tab: SessionTabId };
 
-/** The two screens that sit under a top-level tab and keep the tab bar. */
-const TOP_LEVEL = new Set<Screen['kind']>(['home', 'history']);
+/** The three screens that sit under a top-level tab and keep the tab bar. */
+const TOP_LEVEL = new Set<Screen['kind']>(['home', 'collection', 'history']);
 
 export default function App() {
   const { sessions, createSession, deleteSession, recordOpen, sync } = useSessionsStore();
   const [screen, setScreen] = useState<Screen>({ kind: 'home' });
   /** Whether the New Session prompt is open. */
   const [naming, setNaming] = useState(false);
-  const { shouldRun: firstLogin, markSeen } = useOnboarding();
+  /** Whether the profile name dialog is open. */
+  const [profileOpen, setProfileOpen] = useState(false);
+  const { shouldRun: firstLogin, markSeen, whatsNewDue, markWhatsNewSeen } = useOnboarding();
 
   /**
    * Onboarding is a small sequence rather than a flag: the offer, the tour
    * itself, then the sign-off. Only 'running' puts the tour on screen.
    */
   const [phase, setPhase] = useState<'off' | 'intro' | 'running' | 'done'>('off');
+
+  /**
+   * Dev-only: shows "What's new" from the Preview What's new button even if it
+   * was already seen. Closing a preview never writes the marker.
+   */
+  const [whatsNewPreview, setWhatsNewPreview] = useState(false);
+  // A returning account sees it once, on whatever screen the app opens to. It
+  // waits out the welcome and the tour, which a new account gets instead (BR-W5).
+  const whatsNewOpen = phase === 'off' && (whatsNewDue || whatsNewPreview);
+  const closeWhatsNew = () => {
+    if (whatsNewPreview) setWhatsNewPreview(false);
+    else markWhatsNewSeen();
+  };
 
   // The offer opens as soon as we know this is a first login, and only then —
   // the guard keeps a later state change from reopening a finished sequence.
@@ -178,9 +199,17 @@ export default function App() {
     />
   );
 
+  // Whether a load has ever landed. Set while rendering rather than in an
+  // effect, so the render that follows the first load already knows.
+  const [hasLoaded, setHasLoaded] = useState(false);
+  if (!hasLoaded && sync.status !== 'loading') setHasLoaded(true);
+
   // Nothing can be shown until the first load lands; an empty app would read
-  // as lost data rather than as data still on its way.
-  if (sync.status === 'loading') {
+  // as lost data rather than as data still on its way. A later reload on
+  // Collection, from "Try again" after a failed payment, keeps the page up, so
+  // its open cards and the amount typed into a refused form survive and can be
+  // saved again once the server's copy shows the payment wasn't recorded.
+  if (sync.status === 'loading' && !(hasLoaded && screen.kind === 'collection')) {
     return (
       <PageShell header={<Header />}>
         <div className={styles.loading} role="status">
@@ -198,7 +227,7 @@ export default function App() {
       : { kind: screen.kind === 'historyDetail' ? 'history' : screen.kind };
 
   return (
-    <PageShell header={<Header />} nav={nav}>
+    <PageShell header={<Header onOpenProfile={() => setProfileOpen(true)} />} nav={nav}>
       <OnboardingDialog
         open={phase === 'intro'}
         title="Welcome to Hati!"
@@ -238,6 +267,36 @@ export default function App() {
           Get started
         </Button>
       </OnboardingDialog>
+      <OnboardingDialog
+        open={whatsNewOpen}
+        title="What's new in Hati"
+        message={
+          <span className={onboardingStyles.points}>
+            <span>
+              <strong>Collection.</strong> A new tab for finished sessions: see who owes you and who
+              you owe, and record payments as they come in, even part payments.
+            </span>
+            <span>
+              <strong>Your name.</strong> Set it in Profile, in your account menu, so Hati knows
+              which member is you.
+            </span>
+          </span>
+        }
+        onDismiss={closeWhatsNew}
+      >
+        <Button variant="ghost" onClick={closeWhatsNew}>
+          Got it
+        </Button>
+        <Button
+          variant="primary"
+          onClick={() => {
+            closeWhatsNew();
+            setScreen({ kind: 'collection' });
+          }}
+        >
+          Take me to Collection
+        </Button>
+      </OnboardingDialog>
       {naming && (
         <NewSessionDialog
           onCancel={() => setNaming(false)}
@@ -247,12 +306,31 @@ export default function App() {
           }}
         />
       )}
-      <SyncBanner />
+      {profileOpen && <ProfileDialog onClose={() => setProfileOpen(false)} />}
+      <SyncBanner
+        sticky={screen.kind === 'collection'}
+        showProfileError={screen.kind === 'collection'}
+      />
       {screen.kind === 'home' && (
         <HomePage
           onOpenSession={openFromHome}
           onNewSession={newSession}
           onPreviewTour={import.meta.env.DEV ? previewTour : undefined}
+          onPreviewWhatsNew={import.meta.env.DEV ? () => setWhatsNewPreview(true) : undefined}
+          onAskAlreadySettled={
+            import.meta.env.DEV
+              ? () => setScreen({ kind: 'collection', previewSettled: true })
+              : undefined
+          }
+        />
+      )}
+      {screen.kind === 'collection' && (
+        <CollectionPage
+          key={screen.openSessionId ?? ''}
+          openSessionId={screen.openSessionId}
+          // Never over the tour, What's new or another dialog (BR-W10, E-S11).
+          canAsk={phase === 'off' && !whatsNewOpen && !profileOpen && !naming}
+          previewSettled={screen.previewSettled}
         />
       )}
       {screen.kind === 'history' && (
@@ -276,9 +354,12 @@ export default function App() {
             window.scrollTo(0, 0);
             setScreen({ kind: 'home' });
           }}
-          // Landing on History after closing is the confirmation that the
-          // session was archived rather than lost.
-          onClosed={() => setScreen({ kind: 'history' })}
+          // Landing on Collection, with the session open, is the confirmation
+          // that the numbers are final and collecting has started.
+          onClosed={() => {
+            window.scrollTo(0, 0);
+            setScreen({ kind: 'collection', openSessionId: screen.sessionId });
+          }}
         />
       )}
     </PageShell>

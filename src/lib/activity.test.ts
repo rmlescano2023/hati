@@ -26,6 +26,9 @@ const session = (id: string, overrides: Partial<Session> = {}): Session => ({
   records: [],
   name: null,
   activityAt: null,
+  me: null,
+  finishedWithCollection: false,
+  payments: [],
   ...overrides,
 });
 

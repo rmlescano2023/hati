@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Button } from '../shared/Button';
-import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { useAppData } from '../../context/AppDataContext';
+import { useProfile } from '../../context/ProfileContext';
+import { FinishSessionDialog } from './FinishSessionDialog';
 import styles from './CloseSessionButton.module.css';
 
 /**
@@ -10,7 +11,8 @@ import styles from './CloseSessionButton.module.css';
  * since it is the one action that takes a session out of editing for good.
  */
 export function CloseSessionButton({ onClosed }: { onClosed: () => void }) {
-  const { records, closeSession } = useAppData();
+  const { records, members, closeSession } = useAppData();
+  const profile = useProfile();
   const [confirming, setConfirming] = useState(false);
 
   return (
@@ -23,20 +25,22 @@ export function CloseSessionButton({ onClosed }: { onClosed: () => void }) {
       >
         Finish Session
       </Button>
-      <p className={styles.hint}>Files this session under History.</p>
+      <p className={styles.hint}>Locks the numbers and starts collecting.</p>
 
-      <ConfirmDialog
-        open={confirming}
-        title="Finish this session?"
-        message="It moves to History and can no longer be edited."
-        confirmLabel="Finish Session"
-        onCancel={() => setConfirming(false)}
-        onConfirm={() => {
-          setConfirming(false);
-          closeSession();
-          onClosed();
-        }}
-      />
+      {confirming && (
+        <FinishSessionDialog
+          members={members}
+          onCancel={() => setConfirming(false)}
+          onConfirm={(me, remember) => {
+            setConfirming(false);
+            closeSession(me);
+            // Not awaited: the session is finished either way, and a failed
+            // save shows in Collection's alert strip (A2).
+            if (remember !== null && me !== null) void profile.remember(me, remember);
+            onClosed();
+          }}
+        />
+      )}
     </div>
   );
 }

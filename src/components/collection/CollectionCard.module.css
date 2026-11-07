@@ -1,0 +1,210 @@
+/* The SessionCard look, so a finished session reads the same here as on History. */
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+  /* A card scrolled into view keeps a small gap above it, rather than sitting
+     flush with the top of the screen. */
+  scroll-margin-top: 10px;
+}
+
+/* Follows Home's In Progress cards: a collapsed card that can open gets the
+   green outline and lighter fill on hover. Only where a pointer can really
+   hover: on a touch screen a tap leaves :hover stuck on the card until the next
+   tap elsewhere. */
+@media (hover: hover) {
+  .clickable:hover {
+    border-color: var(--accent-text);
+    background: var(--surface2);
+  }
+}
+
+/* A card that has just been placed in a section, so the user can find where it
+   went: the open card's outline, fading back to the normal one. With reduced
+   motion it holds the outline, without fading, until the page clears it. */
+.placed {
+  animation: placed 1.6s ease-out;
+}
+
+@keyframes placed {
+  0%,
+  40% {
+    border-color: var(--accent-text);
+    box-shadow: var(--shadow-md);
+  }
+  100% {
+    border-color: var(--border);
+    box-shadow: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .placed {
+    animation: none;
+    border-color: var(--accent-text);
+    box-shadow: var(--shadow-md);
+  }
+}
+
+/* The one open card has the same outline and a lift, but no lighter fill, so
+   it stays on --surface and hovering it changes nothing. */
+.open {
+  border-color: var(--accent-text);
+  box-shadow: var(--shadow-md);
+}
+
+.headerHeading {
+  font: inherit;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+
+/* A card with nothing to expand keeps the header's layout without its pointer. */
+.static {
+  cursor: auto;
+}
+
+.titles {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.title {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.meta {
+  font-size: 12px;
+  color: var(--text3);
+}
+
+.detail {
+  font-size: 13px;
+  color: var(--text2);
+}
+
+.money {
+  display: block;
+  font-size: 13px;
+  /* The dot sits in the second side's left padding, which the row pulls out
+     to the left by the same amount. When that side wraps to a new line its
+     dot lands outside this box and is clipped, so none is left dangling at
+     the end of the line above. */
+  overflow: hidden;
+}
+
+.moneyRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 0;
+  margin-left: -16px;
+}
+
+/* A side wraps as a whole, never mid-amount. */
+.side {
+  position: relative;
+  padding-left: 16px;
+  white-space: nowrap;
+}
+
+.sep {
+  position: absolute;
+  left: 0;
+  width: 16px;
+  text-align: center;
+  color: var(--text3);
+}
+
+.chevron {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-top: 3px;
+  color: var(--text3);
+  transition: transform 0.15s ease;
+}
+
+.chevronOpen {
+  transform: rotate(180deg);
+}
+
+.youAre {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text2);
+}
+
+.youAre strong {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+}
+
+.groupHeading {
+  font-size: 14px;
+  margin: 6px 0 2px;
+}
+
+.alreadySettled {
+  display: flex;
+}
+
+.markAll {
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+/* Confirm with "Already settled" beside it, wrapping on a phone. */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.setup {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
