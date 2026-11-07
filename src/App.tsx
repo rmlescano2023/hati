@@ -246,7 +246,7 @@ export default function App() {
         >
           Skip tutorial
         </Button>
-        <Button variant="primary" onClick={() => setPhase('running')} autoFocus>
+        <Button variant="primary" onClick={() => setPhase('running')}>
           Take the tour
         </Button>
       </OnboardingDialog>
@@ -263,7 +263,7 @@ export default function App() {
         message="That's the whole app. Start a session whenever your group spends something together, and Hati will keep track of the rest."
         onDismiss={() => setPhase('off')}
       >
-        <Button variant="primary" onClick={() => setPhase('off')} autoFocus>
+        <Button variant="primary" onClick={() => setPhase('off')}>
           Get started
         </Button>
       </OnboardingDialog>
