@@ -268,3 +268,15 @@ can't leave them half-added.
 3. **LQ3. Should each row show the item's current owners, for example "Ana, Ben, Dan" under "Taxi ₱100.00"?**
    - It would tell apart two items with the same name on the same date and payor, such as two taxis.
    - **Recommended:** no. Keep the name and price only, as decided, since such duplicates are rare and the rows follow Breakdown's order.
+
+## 8. Owner answers (2026-11-13)
+
+Recorded by the tech lead when writing the spec. The text above is unchanged; these answers
+override section 7 and the "pending LQ1" notes in AC-LM4.2 and BR-LM7.
+
+- **LQ1, cancel the add:** Escape or tapping outside the dialog cancels the add. The member
+  isn't added and the name stays in the box.
+- **LQ2, removal shrinks the price:** removing a member who was included later keeps today's
+  removal rule. The item's price shrinks by their share, and nobody else's share moves. A
+  ₱900.00 hotel at ₱225.00 each for four becomes ₱675.00.
+- **LQ3, name and price only:** the dialog shows each item's name and price, not its owners.
