@@ -242,7 +242,7 @@ updateSession(sessionId, (session) => ({
 - The message therefore still describes the whole click with today's machinery:
   - "Saving…", then "Still saving…" after 10 s
   - then "Saved to Breakdown." only when that one write lands, or "Not saved." if it fails
-- On a failure the records stay on screen and the banner's retry sends them all, unchanged from
+- On a failure the records stay on screen with "Not saved." and the sync banner, and "Try again" restores the last saved version, so nothing is half-saved, unchanged from
   today (AC-5.2).
 
 `saveMessage.ts` rework (AC-5.3, AC-5.4):
@@ -601,7 +601,7 @@ Run each check at 320px, 390px and desktop width, in `npm run dev:full`.
 | BR-9 | Within a card, one click's items keep staging order, including **after a page reload**, which proves the `createdAt` ordering. |
 | AC-4.1 to 4.13 | Edit button and its label. The fields fill correctly for each mode, and All Members is ticked only when the owners are everyone. Highlight and "Editing" tag. Locks. Save Edits keeps the row's position and moves the item to its new card on save. Cancel leaves the item exactly as it was. Restore after an edit. Mode switches during an edit, with the name kept. On a phone, Edit scrolls the form into view. |
 | NQ1 | Outside an edit, switching split mode keeps the name and clears the rest. |
-| AC-5.1, 5.2 | Saving… / Still saving… / Saved for a mixed click. With the network blocked: "Not saved.", the items stay visible in Breakdown, and the retry sends them all. |
+| AC-5.1, 5.2 | Saving… / Still saving… / Saved for a mixed click. With the network blocked: "Not saved.", the items stay visible in Breakdown with the sync banner, and "Try again" restores the last saved version, so nothing is half-saved. |
 | AC-5.3, 5.4 | An empty-list save shows "Add an item first.". "Pick a date." and "Choose who paid." never appear. |
 | AC-6.1 to 6.9 | Each confirmation wording case. Removal cleans rows, fields, the payor pick and an open edit, including the edit ending when its row disappears. Clear All resets to a fresh form. Cancel in the confirmation changes nothing. |
 | AC-7.1 to 7.7, 7.10, 7.11, 7.13, 7.14 | Dialog on Breakdown, Summary and Back to Home, with the singular and plural wording. Stay, Escape and the backdrop keep everything. Discard and leave goes to the target, and Expenses comes back fresh. No dialog without staged items, mid-save, or on the same tab. A rename typed and then a tab tap saves the name. The dialog fits at 320px. |

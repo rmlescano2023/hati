@@ -35,8 +35,8 @@ here carry an `LM` prefix so they don't clash with that document's IDs.
    is `mutateSession` in `src/hooks/useServerSessions.ts`.
    - It applies `fn` to the session on screen at once.
    - It queues a save of the **whole session** (members and records together) as one write.
-   - On a failure, the change stays on screen, the sync banner reports it and its retry sends
-     the session again.
+   - On a failure, the change stays on screen, the sync banner reports it and its "Try again"
+     restores the last saved version.
    - Because one `fn` changes members and records together, one action is saved whole or not
      at all.
 6. **Removing a member** (flexible Paid By, `removeMember` with `purgeMemberFromItem`):
@@ -130,7 +130,7 @@ can't leave them half-added.
 - **AC-LM5.2** Given that write fails, then:
   - the change stays on screen
   - the sync banner reports the failure as for any other change
-  - the banner's retry sends the member and the re-split together
+  - "Try again" in the banner restores the last saved version, so the member and the re-split are both gone together
   - at no point is the member saved without their shares, or the shares without the member
 - **AC-LM5.3** Given the failure can't be recovered and a reload brings back the server's copy, then neither the member nor the re-split is there, and today's note about a reverted edit applies.
 

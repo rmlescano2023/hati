@@ -146,7 +146,7 @@ As the person logging, I want the message beside Save to Breakdown to describe t
 click, so that I know whether everything landed.
 
 - **AC-5.1** Given mixed staged items, when I click Save, then the message reads "Saving…", turns into "Still saving…" after 10 s if the save is still running, and ends on "Saved to Breakdown." only once every item from that click is saved.
-- **AC-5.2** Given the server fails that save, then the message reads "Not saved." and none of the click's items is saved. Some can't be saved while others fail. The items stay visible in Breakdown and the banner's retry sends them all, as today.
+- **AC-5.2** Given the server fails that save, then the message reads "Not saved." and none of the click's items is saved. Some can't be saved while others fail. The items stay visible in Breakdown with "Not saved." and the sync banner. "Try again" restores the last saved version, so nothing is half-saved, as today.
 - **AC-5.3** Given the staging list is empty, when I click Save, then the message reads "Add an item first."
 - **AC-5.4** "Pick a date." and "Choose who paid." never appear beside Save to Breakdown any more.
 - **AC-5.5** "+ Add Item" and Save Edits clear "Saved to Breakdown.", but leave "Saving…" and "Not saved." alone.
@@ -294,7 +294,7 @@ staged item.
 | Leaving the tab mid-edit | US-7: dialog, then Stay or Discard and leave |
 | Leaving while a save is in flight | No dialog; the list is already empty (AC-7.10). |
 | Reload or close on an iPhone | iOS Safari generally doesn't show `beforeunload` prompts, so this part may not warn on iPhones. The in-app dialog still works. Testers should check AC-7.8 on a desktop browser. |
-| Failed save of mixed items | AC-5.2: all or nothing for the click, "Not saved.", and the banner retries. |
+| Failed save of mixed items | AC-5.2: all or nothing for the click, "Not saved." and the sync banner, and "Try again" restores the last saved version. |
 | Saving with a half-typed item in the fields | It's ignored and cleared, as today. Save is disabled during an edit. |
 | Session with no purchases | "Add an item first."; no rows and no Edit buttons |
 | Zero or negative values | BR-2 and BR-5 |

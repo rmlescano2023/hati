@@ -158,7 +158,7 @@ Inside the action:
 
 What follows from that:
 - One `updateSession` call is one `mutateSession`, which is one PUT carrying members and records.
-- A failure keeps the change on screen, the banner's retry resends it whole, and a reload after
+- A failure keeps the change on screen, "Try again" in the banner restores the last saved version, and a reload after
   an unrecoverable failure brings back neither the member nor the shares (AC-LM5.2, AC-LM5.3).
   All of that is existing behaviour.
 - The duplicate check inside the updater still covers a name that arrived from another device
@@ -448,7 +448,7 @@ reviewed and tested together.
 | AC-LM2.1 to 2.4 | A tap anywhere on a row toggles it. Select all ticks everything, then clears it, and shows its partial state. Include is disabled with nothing ticked. A screen reader reads "Hotel, ₱900.00". |
 | AC-LM3.1 to 3.6 | Include: Hotel stays ₱900.00 at ₱225.00 each, and payor badges are unchanged. Summary and the PDF match Examples A and B. Unticked items show "—" for Cy. A later Item Total edit re-splits across four. |
 | AC-LM4.1 to 4.3 | Skip adds Cy and nothing else changes. Escape, and a tap on the backdrop, add nothing and keep "Cy" typed. Adding again reopens the dialog with nothing ticked. |
-| AC-LM5.1 to 5.3 | With the network blocked, Include shows the banner, and the retry saves the member and the shares together. After a reload where the save didn't land, neither is there. |
+| AC-LM5.1 to 5.3 | With the network blocked, Include shows the banner, and "Try again" restores the last saved version, with neither the member nor the shares. After a reload where the save didn't land, neither is there. |
 | BR-LM11 | With staged items and an open Edit, adding a member through Include or Skip leaves the staged rows unchanged. The leave warning still counts them. An edit with All Members ticked picks the member up on Save Edits. |
 | BR-LM12 | Removing an included member shrinks the hotel to ₱675.00 at ₱225.00 each. |
 | BR-LM13 | Run the whole tour. A member added during it gets no dialog. |
