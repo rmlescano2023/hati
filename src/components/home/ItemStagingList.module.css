@@ -33,7 +33,7 @@
 .head,
 .row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 110px minmax(0, 1.2fr) 36px;
+  grid-template-columns: minmax(0, 1fr) 110px minmax(0, 1.2fr) 76px;
   gap: 8px;
   align-items: center;
 }
@@ -58,9 +58,55 @@
   background: var(--bg);
 }
 
+.editing,
+.editing:hover {
+  background: var(--accent-bg);
+}
+
+.editingTag {
+  margin-left: 6px;
+  font-size: 10px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-bg);
+  color: var(--accent-text);
+  border: 1px solid var(--accent);
+  white-space: nowrap;
+}
+
+.actions {
+  display: flex;
+  gap: 4px;
+  justify-content: flex-end;
+}
+
+.editIcon {
+  display: block;
+  width: 15px;
+  height: 15px;
+}
+
+/* Edit isn't a delete, so it doesn't take the icon button's red hover. */
+.row .edit:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--surface2);
+}
+
+/* Wraps rather than widening the row: the name is an inline span inside
+   .itemCell, where an ellipsis would need a nowrap that nothing sets. */
 .name {
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
+}
+
+/* Wraps rather than widening the row, so a long payor name can't push the page wide. */
+.meta {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text2);
+  overflow-wrap: anywhere;
 }
 
 .r {
@@ -96,16 +142,16 @@
   }
 
   .row {
-    grid-template-columns: minmax(0, 1fr) 36px;
+    grid-template-columns: minmax(0, 1fr) 92px;
     grid-template-areas:
-      'name remove'
+      'item actions'
       'price price'
       'pills pills';
     row-gap: 6px;
   }
 
-  .row > .name {
-    grid-area: name;
+  .row > .itemCell {
+    grid-area: item;
     font-weight: 500;
   }
 
@@ -118,7 +164,14 @@
     grid-area: pills;
   }
 
-  .row > .removeCell {
-    grid-area: remove;
+  .row > .actions {
+    grid-area: actions;
+  }
+
+  /* Two touch-sized targets side by side: 44px each plus the 4px gap is the
+     92px column above. */
+  .row > .actions > button {
+    min-width: 44px;
+    min-height: 44px;
   }
 }

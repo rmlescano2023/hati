@@ -4,16 +4,15 @@
  * component only dispatches and renders, and the rules are tested directly.
  */
 
-/** What a click can find missing, in the order it is checked. */
-export type Missing = 'items' | 'date' | 'payor';
+/**
+ * What a click can find missing, in the order it is checked. Only the items:
+ * the date and the payor are stamped on each item when it is added, so an item
+ * that is staged always has both.
+ */
+export type Missing = 'items';
 export type MissingFlags = Record<Missing, boolean>;
 
-/**
- * Items first because the form is for logging them, then the date and the
- * payor in the order they sit on screen. Checking the date at all is new:
- * without it, a purchase missing only its date was told to choose who paid.
- */
-const CHECK_ORDER: readonly Missing[] = ['items', 'date', 'payor'];
+const CHECK_ORDER: readonly Missing[] = ['items'];
 
 export function firstMissing(missing: MissingFlags): Missing | null {
   return CHECK_ORDER.find((m) => missing[m]) ?? null;
@@ -52,11 +51,11 @@ export const initialSaveMessage: SaveMessageState = { save: 0, status: 'idle', v
 const isWaiting = (status: SaveStatus) => status === 'saving' || status === 'stillSaving';
 
 /**
- * A save resets the form, leaving no items and no payor but keeping the date,
- * so a quick second tap meets exactly these gaps. Telling that tap to add an
- * item would hide "Saving…" for no reason, so it is ignored instead.
+ * A save empties the staging list, so a quick second tap meets exactly this
+ * gap. Telling that tap to add an item would hide "Saving…" for no reason, so
+ * it is ignored instead.
  */
-const onlyResetGaps = (missing: MissingFlags) => missing.items && !missing.date;
+const onlyResetGaps = (missing: MissingFlags) => missing.items;
 
 /**
  * Returns `state` itself when nothing changes, so a repeated click or a stale
@@ -109,14 +108,12 @@ const SAVE_TEXT: Record<SaveStatus, string> = {
 };
 
 /**
- * Short enough that each fits two lines beside the button at 320px, so the
+ * Short enough to fit two lines beside the button at 320px, so the
  * row never grows. "Not saved." is shorter still, because the banner above
  * already explains the failure.
  */
 const VALIDATION_TEXT: Record<Missing, string> = {
   items: 'Add an item first.',
-  date: 'Pick a date.',
-  payor: 'Choose who paid.',
 };
 
 export type SaveMessageTone = 'muted' | 'accent' | 'error';
