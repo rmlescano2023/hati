@@ -2,12 +2,14 @@ import { useEffect, useRef, useState } from 'react';
 import { AppDataProvider } from '../../context/AppDataContext';
 import { useSessionsStore } from '../../context/SessionsStoreContext';
 import { Button } from '../shared/Button';
+import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { PencilIcon } from '../shared/icons';
 import { SessionNameInput } from '../sessions/SessionNameInput';
 import { SessionTabs, type SessionTabId } from './SessionTabs';
 import { ExpensesPage } from '../../pages/ExpensesPage';
 import { BreakdownPage } from '../../pages/BreakdownPage';
 import { SummaryPage } from '../../pages/SummaryPage';
+import { pluralize } from '../../lib/format';
 import { sessionTitle } from '../../lib/sessionLabel';
 import styles from './SessionWorkspace.module.css';
 
@@ -32,6 +34,11 @@ export function SessionWorkspace({ sessionId, tab, onTabChange, onBack, onClosed
   // Set when an edit ends from the keyboard, so focus goes back to the pencil
   // rather than being dropped on the page.
   const restoreFocus = useRef(false);
+  // How many items are staged on the Expenses tab, reported by that page. Any
+  // way out of the tab while it is above 0 asks first, where `leaveTo` holds
+  // the place waiting on the answer.
+  const [stagedCount, setStagedCount] = useState(0);
+  const [leaveTo, setLeaveTo] = useState<SessionTabId | 'home' | null>(null);
 
   useEffect(() => {
     if (!renaming && restoreFocus.current) {
@@ -51,7 +58,12 @@ export function SessionWorkspace({ sessionId, tab, onTabChange, onBack, onClosed
       }}
     >
       <div className={styles.bar}>
-        <Button variant="ghost" size="sm" data-tour="workspace-back" onClick={onBack}>
+        <Button
+          variant="ghost"
+          size="sm"
+          data-tour="workspace-back"
+          onClick={() => (stagedCount > 0 ? setLeaveTo('home') : onBack())}
+        >
           ← Back to Home
         </Button>
         {session && (
@@ -105,13 +117,33 @@ export function SessionWorkspace({ sessionId, tab, onTabChange, onBack, onClosed
           // Closing the box first means its unmount saves the name even when
           // the browser doesn't blur it on the tap.
           setRenaming(false);
-          onTabChange(t);
+          // The current tab is not a way out, so it never asks.
+          if (stagedCount > 0 && t !== tab) setLeaveTo(t);
+          else onTabChange(t);
         }}
       />
 
-      {tab === 'expenses' && <ExpensesPage />}
+      {tab === 'expenses' && <ExpensesPage onStagedCountChange={setStagedCount} />}
       {tab === 'breakdown' && <BreakdownPage />}
       {tab === 'summary' && <SummaryPage onClosed={onClosed} />}
+
+      <ConfirmDialog
+        open={leaveTo !== null}
+        title="Leave without saving?"
+        message={`You have ${pluralize(stagedCount, 'staged item')} that ${stagedCount === 1 ? "isn't" : "aren't"} saved.`}
+        confirmLabel="Discard and leave"
+        cancelLabel="Stay"
+        destructive
+        onCancel={() => setLeaveTo(null)}
+        onConfirm={() => {
+          const to = leaveTo;
+          setLeaveTo(null);
+          // Leaving unmounts the Expenses page, which is what drops the staged
+          // items. Nothing is saved.
+          if (to === 'home') onBack();
+          else if (to) onTabChange(to);
+        }}
+      />
     </AppDataProvider>
   );
 }

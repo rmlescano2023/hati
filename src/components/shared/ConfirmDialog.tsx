@@ -7,6 +7,8 @@ type Props = {
   title: string;
   message: string;
   confirmLabel: string;
+  /** The way-out button's label. */
+  cancelLabel?: string;
   /** Styles the confirm action as destructive. */
   destructive?: boolean;
   onConfirm: () => void;
@@ -27,6 +29,7 @@ export function ConfirmDialog({
   title,
   message,
   confirmLabel,
+  cancelLabel = 'Cancel',
   destructive = false,
   onConfirm,
   onCancel,
@@ -88,7 +91,7 @@ export function ConfirmDialog({
               action and the destructive one stays quiet, so the safe choice is
               what the eye lands on first. */}
           <Button variant={destructive ? 'primary' : 'default'} onClick={onCancel}>
-            Cancel
+            {cancelLabel}
           </Button>
           <Button data-confirm="" variant={destructive ? 'danger' : 'primary'} onClick={onConfirm}>
             {confirmLabel}
