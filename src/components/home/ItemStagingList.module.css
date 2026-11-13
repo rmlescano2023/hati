@@ -93,9 +93,10 @@
   background: var(--surface2);
 }
 
+/* Wraps rather than widening the row: the name is an inline span inside
+   .itemCell, where an ellipsis would need a nowrap that nothing sets. */
 .name {
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
 
 /* Wraps rather than widening the row, so a long payor name can't push the page wide. */
@@ -141,7 +142,7 @@
   }
 
   .row {
-    grid-template-columns: minmax(0, 1fr) 76px;
+    grid-template-columns: minmax(0, 1fr) 92px;
     grid-template-areas:
       'item actions'
       'price price'
@@ -165,5 +166,12 @@
 
   .row > .actions {
     grid-area: actions;
+  }
+
+  /* Two touch-sized targets side by side: 44px each plus the 4px gap is the
+     92px column above. */
+  .row > .actions > button {
+    min-width: 44px;
+    min-height: 44px;
   }
 }
