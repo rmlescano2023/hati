@@ -33,7 +33,7 @@
 .head,
 .row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 110px minmax(0, 1.2fr) 36px;
+  grid-template-columns: minmax(0, 1fr) 110px minmax(0, 1.2fr) 76px;
   gap: 8px;
   align-items: center;
 }
@@ -56,6 +56,41 @@
 
 .row:hover {
   background: var(--bg);
+}
+
+.editing,
+.editing:hover {
+  background: var(--accent-bg);
+}
+
+.editingTag {
+  margin-left: 6px;
+  font-size: 10px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-bg);
+  color: var(--accent-text);
+  border: 1px solid var(--accent);
+  white-space: nowrap;
+}
+
+.actions {
+  display: flex;
+  gap: 4px;
+  justify-content: flex-end;
+}
+
+.editIcon {
+  display: block;
+  width: 15px;
+  height: 15px;
+}
+
+/* Edit isn't a delete, so it doesn't take the icon button's red hover. */
+.row .edit:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--surface2);
 }
 
 .name {
@@ -106,7 +141,7 @@
   }
 
   .row {
-    grid-template-columns: minmax(0, 1fr) 36px;
+    grid-template-columns: minmax(0, 1fr) 76px;
     grid-template-areas:
       'item actions'
       'price price'

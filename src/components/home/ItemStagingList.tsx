@@ -1,4 +1,5 @@
 import { Button } from '../shared/Button';
+import { PencilIcon } from '../shared/icons';
 import { getItemShares, getItemTotal } from '../../lib/calculations';
 import { compareNames, formatLongDate, formatMoney, pluralize } from '../../lib/format';
 import { sumMoney } from '../../lib/money';
@@ -7,10 +8,13 @@ import styles from './ItemStagingList.module.css';
 
 type Props = {
   items: StagedItem[];
+  /** The row being edited, if any. While one is, every row's Edit and × are locked. */
+  editingId: string | null;
+  onEdit: (itemId: string) => void;
   onRemove: (itemId: string) => void;
 };
 
-export function ItemStagingList({ items, onRemove }: Props) {
+export function ItemStagingList({ items, editingId, onEdit, onRemove }: Props) {
   const total = sumMoney(items.map((s) => getItemTotal(s.item)));
 
   return (
@@ -33,9 +37,14 @@ export function ItemStagingList({ items, onRemove }: Props) {
             const shares = getItemShares(item);
             const owners = Object.keys(shares).sort(compareNames);
             return (
-              <div className={styles.row} key={item.id}>
+              <div
+                className={`${styles.row} ${item.id === editingId ? styles.editing : ''}`}
+                key={item.id}
+              >
                 <div className={styles.itemCell}>
                   <span className={styles.name}>{item.name}</span>
+                  {/* Words as well as the highlight, so the state doesn't rest on colour. */}
+                  {item.id === editingId && <span className={styles.editingTag}>Editing</span>}
                   <span className={styles.meta}>
                     {formatLongDate(date)} · Paid by{' '}
                     {payorMode === 'single'
@@ -54,6 +63,18 @@ export function ItemStagingList({ items, onRemove }: Props) {
                 <span className={styles.actions}>
                   <Button
                     variant="icon"
+                    className={styles.edit}
+                    id={`edit-${item.id}`}
+                    onClick={() => onEdit(item.id)}
+                    disabled={editingId !== null}
+                    title="Edit item"
+                    aria-label={`Edit ${item.name}`}
+                  >
+                    <PencilIcon className={styles.editIcon} />
+                  </Button>
+                  <Button
+                    variant="icon"
+                    disabled={editingId !== null}
                     onClick={() => onRemove(item.id)}
                     title="Remove item"
                     aria-label={`Remove ${item.name}`}

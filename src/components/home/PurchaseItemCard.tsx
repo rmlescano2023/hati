@@ -47,6 +47,36 @@ const EMPTY_DRAFT: ItemDraft = {
   amounts: {},
 };
 
+/**
+ * What an edit puts back when it ends, taken just before Edit loads the row
+ * (BR-15). A half-typed item isn't part of it, so it is never restored.
+ */
+type EditRestore = { date: string; payorMode: PayorMode; singlePayor: string; mode: ItemMode };
+
+/** The fields as they stand to show `item`, which is what Edit loads. */
+function draftFromItem(item: PurchaseItem, members: string[]): ItemDraft {
+  if (item.mode === 'equal') {
+    // "All Members" is ticked only when the owners are every current member,
+    // because a staged item stores the actual names.
+    const everyone = members.length > 0 && members.every((m) => item.owners.includes(m));
+    return {
+      ...EMPTY_DRAFT,
+      mode: 'equal',
+      name: item.name,
+      price: item.totalPrice.toFixed(2),
+      allSelected: everyone,
+      owners: everyone ? {} : Object.fromEntries(item.owners.map((o) => [o, true])),
+    };
+  }
+  return {
+    ...EMPTY_DRAFT,
+    mode: 'custom',
+    name: item.name,
+    totalAmount: getItemTotal(item).toFixed(2),
+    amounts: Object.fromEntries(Object.entries(item.amounts).map(([m, a]) => [m, a.toFixed(2)])),
+  };
+}
+
 const TONE_CLASS: Record<SaveMessageTone, string> = {
   muted: styles.saving,
   accent: styles.success,
@@ -68,6 +98,8 @@ export function PurchaseItemCard({ staged, setStaged }: Props) {
   const [singlePayor, setSinglePayor] = useState('');
   const [contributions, setContributions] = useState<Record<string, string>>({});
   const [draft, setDraft] = useState<ItemDraft>(EMPTY_DRAFT);
+  /** The row being edited, with what to put back when the edit ends; null when none is. */
+  const [editing, setEditing] = useState<{ id: string; restore: EditRestore } | null>(null);
   const [message, dispatch] = useReducer(saveMessageReducer, initialSaveMessage);
   /**
    * Numbers the saves from this form, so only the latest one's timer and
@@ -75,6 +107,10 @@ export function PurchaseItemCard({ staged, setStaged }: Props) {
    * "Saved" covers them too.
    */
   const latestSave = useRef(0);
+  const sectionRef = useRef<HTMLDivElement>(null);
+  // Set when an edit ends, so focus goes back to that row's Edit button rather
+  // than being dropped on the page when its own button was the one disabled.
+  const restoreFocusTo = useRef<string | null>(null);
 
   const selectedOwners = useMemo(
     () => (draft.allSelected ? members : members.filter((m) => draft.owners[m])),
@@ -148,20 +184,14 @@ export function PurchaseItemCard({ staged, setStaged }: Props) {
       : contributionsMatch(typedContributions, itemTotal);
   const canAddItem = itemValid && date !== '' && payorValid;
 
-  const addItem = () => {
-    if (!canAddItem) return;
+  /** The fields as a staged item with the given id: its item, date and payors (BR-1). */
+  const stampItem = (id: string): StagedItem => {
     const name = draft.name.trim();
     const item: PurchaseItem =
       draft.mode === 'equal'
-        ? {
-            id: createId('item'),
-            mode: 'equal',
-            name,
-            totalPrice: num(draft.price),
-            owners: selectedOwners,
-          }
+        ? { id, mode: 'equal', name, totalPrice: num(draft.price), owners: selectedOwners }
         : {
-            id: createId('item'),
+            id,
             mode: 'custom',
             name,
             amounts: Object.fromEntries(
@@ -170,7 +200,7 @@ export function PurchaseItemCard({ staged, setStaged }: Props) {
                 .map((m) => [m, num(draft.amounts[m])]),
             ),
           };
-    const stamped: StagedItem = {
+    return {
       item,
       date,
       payorMode,
@@ -179,7 +209,11 @@ export function PurchaseItemCard({ staged, setStaged }: Props) {
           ? [{ member: singlePayor, amount: getItemTotal(item) }]
           : typedContributions,
     };
-    setStaged((prev) => [...prev, stamped]);
+  };
+
+  const addItem = () => {
+    if (!canAddItem) return;
+    setStaged((prev) => [...prev, stampItem(createId('item'))]);
     // The date and the payor pick stay for the next item. The mode that isn't
     // on screen is cleared, so it can't come back later (BR-13).
     if (payorMode === 'multiple') setSinglePayor('');
@@ -187,6 +221,56 @@ export function PurchaseItemCard({ staged, setStaged }: Props) {
     resetItemDraft();
     dispatch({ type: 'itemAdded' });
   };
+
+  const startEdit = (id: string) => {
+    const row = staged.find((s) => s.item.id === id);
+    if (!row) return;
+    // Whatever was half-typed is replaced without asking (AC-4.3).
+    setEditing({ id, restore: { date, payorMode, singlePayor, mode: draft.mode } });
+    setDate(row.date);
+    setPayorMode(row.payorMode);
+    setSinglePayor(row.payorMode === 'single' ? row.payors[0].member : '');
+    setContributions(
+      row.payorMode === 'multiple'
+        ? Object.fromEntries(row.payors.map((p) => [p.member, p.amount.toFixed(2)]))
+        : {},
+    );
+    setDraft(draftFromItem(row.item, members));
+    // So a phone user sees the fields fill. Date takes focus only with a fine
+    // pointer: on touch it would open the keyboard or the date picker unasked.
+    sectionRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    if (!window.matchMedia('(pointer: coarse)').matches) {
+      document.getElementById('purchase-date')?.focus({ preventScroll: true });
+    }
+  };
+
+  /** Ends the edit the same way for Save Edits and Cancel (BR-15). */
+  const endEdit = (current: { id: string; restore: EditRestore }) => {
+    const { restore } = current;
+    setDate(restore.date);
+    setPayorMode(restore.payorMode);
+    setSinglePayor(restore.singlePayor);
+    setContributions({});
+    setDraft({ ...EMPTY_DRAFT, mode: restore.mode });
+    restoreFocusTo.current = current.id;
+    setEditing(null);
+  };
+
+  const saveEdits = () => {
+    if (!editing || !canAddItem) return;
+    // Same id, same place in the list, newly stamped (BR-11).
+    const stamped = stampItem(editing.id);
+    setStaged((prev) => prev.map((s) => (s.item.id === editing.id ? stamped : s)));
+    endEdit(editing);
+    dispatch({ type: 'itemAdded' });
+  };
+
+  useEffect(() => {
+    if (editing !== null || restoreFocusTo.current === null) return;
+    const id = restoreFocusTo.current;
+    restoreFocusTo.current = null;
+    document.getElementById(`edit-${id}`)?.focus();
+  }, [editing]);
 
   const missing: MissingFlags = { items: staged.length === 0 };
 
@@ -215,8 +299,8 @@ export function PurchaseItemCard({ staged, setStaged }: Props) {
   }, [validationSupplied]);
 
   const save = () => {
-    // The button is never disabled, so a click with nothing staged says
-    // what, rather than the button just not responding.
+    // The button is disabled only during an edit, so a click with nothing
+    // staged says what, rather than the button just not responding.
     if (firstMissing(missing)) {
       dispatch({ type: 'invalid', missing });
       return;
@@ -241,7 +325,7 @@ export function PurchaseItemCard({ staged, setStaged }: Props) {
 
   return (
     <Card label="Purchase Details" className={styles.card}>
-      <div className={styles.section}>
+      <div className={styles.section} ref={sectionRef}>
         <PurchaseDetailsFields
           members={members}
           date={date}
@@ -269,7 +353,9 @@ export function PurchaseItemCard({ staged, setStaged }: Props) {
             ariaLabel="Item split mode"
             value={draft.mode}
             onChange={(mode) => {
-              resetItemDraft(mode);
+              // The name stays, whether or not an edit is open; the rest is
+              // specific to the mode being left.
+              setDraft((d) => ({ ...EMPTY_DRAFT, mode, name: d.name }));
               dispatch({ type: 'clearValidation' });
             }}
             options={[
@@ -292,9 +378,20 @@ export function PurchaseItemCard({ staged, setStaged }: Props) {
         />
 
         <div className={styles.actions}>
-          <Button onClick={addItem} disabled={!canAddItem}>
-            + Add Item
-          </Button>
+          {editing ? (
+            <>
+              <Button variant="ghost" onClick={() => endEdit(editing)}>
+                Cancel
+              </Button>
+              <Button onClick={saveEdits} disabled={!canAddItem}>
+                Save Edits
+              </Button>
+            </>
+          ) : (
+            <Button onClick={addItem} disabled={!canAddItem}>
+              + Add Item
+            </Button>
+          )}
         </div>
       </div>
 
@@ -302,6 +399,8 @@ export function PurchaseItemCard({ staged, setStaged }: Props) {
 
       <ItemStagingList
         items={staged}
+        editingId={editing?.id ?? null}
+        onEdit={startEdit}
         onRemove={(itemId) => setStaged((prev) => prev.filter((s) => s.item.id !== itemId))}
       />
 
@@ -311,7 +410,7 @@ export function PurchaseItemCard({ staged, setStaged }: Props) {
         <span className={`${styles.message} ${TONE_CLASS[shown.tone]}`} role="status">
           {shown.text}
         </span>
-        <Button variant="primary" onClick={save}>
+        <Button variant="primary" onClick={save} disabled={editing !== null}>
           Save to Breakdown →
         </Button>
       </div>
