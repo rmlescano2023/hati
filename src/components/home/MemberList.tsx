@@ -3,7 +3,9 @@ import { Card } from '../shared/Card';
 import { Button } from '../shared/Button';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { useAppData } from '../../context/AppDataContext';
-import { toTitleCase } from '../../lib/format';
+import { IncludeMemberDialog } from './IncludeMemberDialog';
+import { compareNames, toTitleCase } from '../../lib/format';
+import { includableGroups, type ItemRef } from '../../lib/includeMember';
 import { stagedNamesMember, type StagedItem } from '../../lib/staging';
 import styles from './MemberList.module.css';
 
@@ -23,13 +25,34 @@ export function MemberList({ staged, onClearAll }: Props) {
     { kind: 'clear' } | { kind: 'remove'; name: string } | null
   >(null);
 
+  /** The name waiting on the "Include in earlier items?" answer; not added until it comes. */
+  const [including, setIncluding] = useState<string | null>(null);
+
   const submit = () => {
     const name = toTitleCase(draft);
     if (!name) {
       setDraft('');
       return;
     }
-    if (!addMember(name)) {
+    // Checked here as well as in addMember, whose own check would come too late
+    // to stop the dialog opening for a name that is already in the group.
+    if (members.some((m) => compareNames(m, name) === 0)) {
+      setError(`${name} is already in the group.`);
+      return;
+    }
+    // Nothing to offer means nothing to ask, so the member goes straight in.
+    if (includableGroups(records, members, name).length > 0) {
+      setIncluding(name);
+      return;
+    }
+    finishAdd(name, []);
+  };
+
+  const finishAdd = (name: string, include: ItemRef[]) => {
+    setIncluding(null);
+    // Checked again now, in case the name arrived from another device while the
+    // dialog was open.
+    if (!addMember(name, include)) {
       setError(`${name} is already in the group.`);
       return;
     }
@@ -132,6 +155,19 @@ export function MemberList({ staged, onClearAll }: Props) {
       )}
 
       {error && <p className={styles.error}>{error}</p>}
+
+      {/* Mounted only while open, so it starts with nothing ticked each time. The
+          list is read live, so a background reload can't leave it offering items
+          that have gone. Escape and the backdrop add nobody. */}
+      {including !== null && (
+        <IncludeMemberDialog
+          name={including}
+          groups={includableGroups(records, members, including)}
+          onInclude={(include) => finishAdd(including, include)}
+          onSkip={() => finishAdd(including, [])}
+          onCancel={() => setIncluding(null)}
+        />
+      )}
 
       <ConfirmDialog
         open={pending !== null}
