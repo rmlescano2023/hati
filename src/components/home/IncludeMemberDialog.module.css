@@ -1,0 +1,81 @@
+.body {
+  /* The title, Select all and the buttons stay put, and only the list scrolls.
+     The cap keeps the whole dialog inside the visible screen, and the visible
+     height comes from ModalDialog's viewport tracking on a phone. */
+  max-height: calc(100vh - 2rem - 8px);
+  max-height: calc(var(--visible-height, 100dvh) - 2rem - 8px);
+  min-height: 0;
+}
+
+/* A very long new name wraps in the title instead of widening the dialog. */
+.title {
+  overflow-wrap: anywhere;
+}
+
+.list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  border-block: 1px solid var(--border);
+  /* Full width inside the body's 22px padding. */
+  margin-inline: -22px;
+  padding: 4px 22px;
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.option input {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.selectAll {
+  font-weight: 500;
+}
+
+.groupHead {
+  margin: 10px 0 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text2);
+  overflow-wrap: anywhere;
+}
+
+.group:first-child .groupHead {
+  margin-top: 0;
+}
+
+/* Neither a long name nor the price can push the checkbox or the other out. */
+.name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.price {
+  flex: none;
+  font-family: var(--mono);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  /* Touch-sized rows. */
+  .option {
+    min-height: 44px;
+  }
+}

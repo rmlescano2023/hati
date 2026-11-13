@@ -1,6 +1,5 @@
 import { ModeToggle } from '../shared/ModeToggle';
 import { formatMoney } from '../../lib/format';
-import { sumMoney } from '../../lib/money';
 import type { PayorMode } from '../../types';
 import styles from './PayorModeFields.module.css';
 
@@ -12,8 +11,10 @@ type Props = {
   onSinglePayorChange: (member: string) => void;
   contributions: Record<string, string>;
   onContributionChange: (member: string, raw: string) => void;
-  /** Total of the staged items, used to flag a contributions mismatch. */
-  stagedTotal: number;
+  /** The price of the item being added, which the contributions have to cover. */
+  itemTotal: number;
+  /** What the contributions add up to, read the way the Add Item check reads them. */
+  contributed: number;
 };
 
 export function PayorModeFields({
@@ -24,12 +25,10 @@ export function PayorModeFields({
   onSinglePayorChange,
   contributions,
   onContributionChange,
-  stagedTotal,
+  itemTotal,
+  contributed,
 }: Props) {
-  const contributed = sumMoney(
-    members.map((m) => Number.parseFloat(contributions[m] ?? '')).map((v) => (isNaN(v) ? 0 : v)),
-  );
-  const mismatch = stagedTotal > 0 && Math.abs(contributed - stagedTotal) >= 0.01;
+  const mismatch = itemTotal > 0 && Math.abs(contributed - itemTotal) >= 0.01;
 
   return (
     <div className={styles.wrap}>
@@ -84,7 +83,7 @@ export function PayorModeFields({
             <span className={`${styles.amount} ${mismatch ? styles.mismatch : ''}`}>
               {formatMoney(contributed)}
             </span>
-            {mismatch && <span className={styles.mismatch}>of {formatMoney(stagedTotal)}</span>}
+            {mismatch && <span className={styles.mismatch}>of {formatMoney(itemTotal)}</span>}
           </div>
         </>
       )}

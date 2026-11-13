@@ -13,7 +13,8 @@ type Props = {
   onSinglePayorChange: (member: string) => void;
   contributions: Record<string, string>;
   onContributionChange: (member: string, raw: string) => void;
-  stagedTotal: number;
+  itemTotal: number;
+  contributed: number;
 };
 
 /** Matches the max-width query in PurchaseDetailsFields.module.css. */
@@ -29,7 +30,8 @@ export function PurchaseDetailsFields({
   onSinglePayorChange,
   contributions,
   onContributionChange,
-  stagedTotal,
+  itemTotal,
+  contributed,
 }: Props) {
   return (
     <div className={styles.grid}>
@@ -70,7 +72,8 @@ export function PurchaseDetailsFields({
         onSinglePayorChange={onSinglePayorChange}
         contributions={contributions}
         onContributionChange={onContributionChange}
-        stagedTotal={stagedTotal}
+        itemTotal={itemTotal}
+        contributed={contributed}
       />
     </div>
   );
