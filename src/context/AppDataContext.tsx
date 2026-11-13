@@ -2,6 +2,7 @@ import { createContext, useContext, useMemo, type ReactNode } from 'react';
 import { Button } from '../components/shared/Button';
 import { EmptyState } from '../components/shared/EmptyState';
 import { useSessionsStore } from './SessionsStoreContext';
+import type { ItemRef } from '../lib/includeMember';
 import type { NewPurchaseRecord, PurchaseRecord } from '../types';
 
 /**
@@ -15,7 +16,7 @@ type AppDataValue = {
   name: string | null;
   members: string[];
   records: PurchaseRecord[];
-  addMember: (rawName: string) => boolean;
+  addMember: (rawName: string, include?: ItemRef[]) => boolean;
   removeMember: (name: string) => void;
   clearMembers: () => void;
   /** `onSettled` hears whether the server accepted the purchases; see the store's `addRecords`. */
@@ -62,7 +63,7 @@ export function AppDataProvider({
       name: session.name,
       members: session.members,
       records: session.records,
-      addMember: (name) => store.addMember(sessionId, name),
+      addMember: (name, include) => store.addMember(sessionId, name, include),
       removeMember: (name) => store.removeMember(sessionId, name),
       clearMembers: () => store.clearMembers(sessionId),
       addRecords: (inputs, onSettled) => store.addRecords(sessionId, inputs, onSettled),

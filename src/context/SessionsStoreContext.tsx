@@ -3,6 +3,7 @@ import { useServerSessions, type PaymentResult, type SyncStatus } from '../hooks
 import { compareNames, toTitleCase } from '../lib/format';
 import { roundMoney } from '../lib/money';
 import { getItemShares, purgeMemberFromItem } from '../lib/calculations';
+import { includeMember, type ItemRef } from '../lib/includeMember';
 import { createId } from '../lib/id';
 import { applySessionName, normaliseSessionName } from '../lib/sessionName';
 import type {
@@ -55,7 +56,11 @@ type SessionsStoreValue = {
   deleteSession: (sessionId: string) => void;
   /** Moves a draft to the top of Home because the user opened it. Silent; see BR-8. */
   recordOpen: (sessionId: string) => void;
-  addMember: (sessionId: string, rawName: string) => boolean;
+  /**
+   * `include` makes the new member an owner of those saved Equal Split items in
+   * the same change, so the member and their shares are saved together.
+   */
+  addMember: (sessionId: string, rawName: string, include?: ItemRef[]) => boolean;
   removeMember: (sessionId: string, name: string) => void;
   clearMembers: (sessionId: string) => void;
   /**
@@ -257,7 +262,7 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
   );
 
   const addMember = useCallback(
-    (sessionId: string, rawName: string): boolean => {
+    (sessionId: string, rawName: string, include: ItemRef[] = []): boolean => {
       const name = toTitleCase(rawName);
       if (!name) return false;
       const session = sessions.find((s) => s.id === sessionId);
@@ -266,7 +271,13 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
       updateSession(sessionId, (s) =>
         s.members.some((m) => compareNames(m, name) === 0)
           ? s
-          : { ...s, members: [...s.members, name].sort(compareNames) },
+          : {
+              ...s,
+              members: [...s.members, name].sort(compareNames),
+              // The member and their shares travel in the same change, so
+              // they're saved together or not at all.
+              records: include.length > 0 ? includeMember(s.records, name, include) : s.records,
+            },
       );
       return true;
     },
