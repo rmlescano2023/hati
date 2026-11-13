@@ -13,6 +13,9 @@ export function ExpensesPage() {
   // Held here rather than in the card so Group Members can see what is staged.
   // Unmounting this page still drops it, which is what leaving the tab means.
   const [staged, setStaged] = useState<StagedItem[]>([]);
+  // Changing the key gives Clear All a fresh Purchase Details: today's date,
+  // One Payor with no pick, Equal Split, empty fields and no edit open.
+  const [formKey, setFormKey] = useState(0);
 
   return (
     <>
@@ -21,8 +24,14 @@ export function ExpensesPage() {
           <DevDataBar />
         </Suspense>
       )}
-      <MemberList />
-      <PurchaseItemCard staged={staged} setStaged={setStaged} />
+      <MemberList
+        staged={staged}
+        onClearAll={() => {
+          setStaged([]);
+          setFormKey((k) => k + 1);
+        }}
+      />
+      <PurchaseItemCard key={formKey} staged={staged} setStaged={setStaged} />
     </>
   );
 }

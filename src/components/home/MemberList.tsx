@@ -4,9 +4,17 @@ import { Button } from '../shared/Button';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { useAppData } from '../../context/AppDataContext';
 import { toTitleCase } from '../../lib/format';
+import { stagedNamesMember, type StagedItem } from '../../lib/staging';
 import styles from './MemberList.module.css';
 
-export function MemberList() {
+type Props = {
+  /** What is staged on the Expenses tab, which removing members also affects. */
+  staged: StagedItem[];
+  /** Called after Clear All goes through, so the page can reset what it holds. */
+  onClearAll: () => void;
+};
+
+export function MemberList({ staged, onClearAll }: Props) {
   const { members, records, addMember, removeMember, clearMembers } = useAppData();
   const [draft, setDraft] = useState('');
   const [error, setError] = useState('');
@@ -31,15 +39,34 @@ export function MemberList() {
 
   const clearAll = () => {
     clearMembers();
+    onClearAll();
     setError('');
   };
 
-  // With nothing saved yet there is nothing to lose, so these go straight
-  // through; the confirmation only appears once records exist.
-  const handleClearAll = () => (records.length > 0 ? setPending({ kind: 'clear' }) : clearAll());
+  // With nothing saved or staged there is nothing to lose, so these go
+  // straight through; the confirmation only appears once there is something.
+  const handleClearAll = () =>
+    records.length > 0 || staged.length > 0 ? setPending({ kind: 'clear' }) : clearAll();
 
   const handleRemove = (name: string) =>
-    records.length > 0 ? setPending({ kind: 'remove', name }) : removeMember(name);
+    records.length > 0 || stagedNamesMember(staged, name)
+      ? setPending({ kind: 'remove', name })
+      : removeMember(name);
+
+  // Names only what the action actually touches.
+  const pendingMessage = () => {
+    if (pending?.kind === 'remove') {
+      const staging = stagedNamesMember(staged, pending.name);
+      if (records.length === 0) return 'Their shares are taken out of the staged items.';
+      return staging
+        ? 'Their shares are taken out of every saved record and staged item.'
+        : 'Their shares are taken out of every saved record.';
+    }
+    if (records.length === 0) return 'This also clears the staged items.';
+    return staged.length > 0
+      ? 'This also clears every saved record and staged item in this session.'
+      : 'This also clears every saved record in this session.';
+  };
 
   const confirmPending = () => {
     if (pending?.kind === 'clear') clearAll();
@@ -109,11 +136,7 @@ export function MemberList() {
       <ConfirmDialog
         open={pending !== null}
         title={pending?.kind === 'remove' ? `Remove ${pending.name}?` : 'Clear all members?'}
-        message={
-          pending?.kind === 'remove'
-            ? 'Their shares are taken out of every saved record.'
-            : 'This also clears every saved record in this session.'
-        }
+        message={pendingMessage()}
         confirmLabel={pending?.kind === 'remove' ? 'Remove' : 'Clear All'}
         destructive
         onCancel={() => setPending(null)}

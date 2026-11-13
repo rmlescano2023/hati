@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useMemo,
   useReducer,
@@ -20,6 +21,7 @@ import { parsePositiveAmount as num, roundMoney, sumMoney } from '../../lib/mone
 import {
   buildRecords,
   contributionsMatch,
+  purgeMemberFromStaged,
   readContributions,
   type StagedItem,
 } from '../../lib/staging';
@@ -245,7 +247,7 @@ export function PurchaseItemCard({ staged, setStaged }: Props) {
   };
 
   /** Ends the edit the same way for Save Edits and Cancel (BR-15). */
-  const endEdit = (current: { id: string; restore: EditRestore }) => {
+  const endEdit = useCallback((current: { id: string; restore: EditRestore }) => {
     const { restore } = current;
     setDate(restore.date);
     setPayorMode(restore.payorMode);
@@ -254,7 +256,7 @@ export function PurchaseItemCard({ staged, setStaged }: Props) {
     setDraft({ ...EMPTY_DRAFT, mode: restore.mode });
     restoreFocusTo.current = current.id;
     setEditing(null);
-  };
+  }, []);
 
   const saveEdits = () => {
     if (!editing || !canAddItem) return;
@@ -264,6 +266,45 @@ export function PurchaseItemCard({ staged, setStaged }: Props) {
     endEdit(editing);
     dispatch({ type: 'itemAdded' });
   };
+
+  // A member can go from this device, another one or the dev bar, so this
+  // works from what changed in `members` rather than from the Remove button.
+  // Staged items and the fields are cleaned the way saved records are (BR-16 to
+  // BR-18), and an edit whose row is gone ends as Cancel does (AC-6.6).
+  const previousMembers = useRef(members);
+  useEffect(() => {
+    const removed = previousMembers.current.filter((m) => !members.includes(m));
+    previousMembers.current = members;
+    if (removed.length === 0) return;
+
+    const next = removed.reduce(purgeMemberFromStaged, staged);
+    setStaged(next);
+    setDraft((d) => {
+      // `allSelected` is left alone: it means "every current member".
+      const owners = { ...d.owners };
+      const amounts = { ...d.amounts };
+      for (const m of removed) {
+        delete owners[m];
+        delete amounts[m];
+      }
+      return { ...d, owners, amounts };
+    });
+    setContributions((c) => {
+      const kept = { ...c };
+      for (const m of removed) delete kept[m];
+      return kept;
+    });
+    setSinglePayor((p) => (removed.includes(p) ? '' : p));
+
+    if (editing) {
+      const restore = removed.includes(editing.restore.singlePayor)
+        ? { ...editing.restore, singlePayor: '' }
+        : editing.restore;
+      const current = { ...editing, restore };
+      if (!next.some((s) => s.item.id === editing.id)) endEdit(current);
+      else if (restore !== editing.restore) setEditing(current);
+    }
+  }, [members, staged, editing, setStaged, endEdit]);
 
   useEffect(() => {
     if (editing !== null || restoreFocusTo.current === null) return;
