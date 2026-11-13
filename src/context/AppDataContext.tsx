@@ -2,6 +2,7 @@ import { createContext, useContext, useMemo, type ReactNode } from 'react';
 import { Button } from '../components/shared/Button';
 import { EmptyState } from '../components/shared/EmptyState';
 import { useSessionsStore } from './SessionsStoreContext';
+import type { ItemRef } from '../lib/includeMember';
 import type { NewPurchaseRecord, PurchaseRecord } from '../types';
 
 /**
@@ -15,11 +16,11 @@ type AppDataValue = {
   name: string | null;
   members: string[];
   records: PurchaseRecord[];
-  addMember: (rawName: string) => boolean;
+  addMember: (rawName: string, include?: ItemRef[]) => boolean;
   removeMember: (name: string) => void;
   clearMembers: () => void;
-  /** `onSettled` hears whether the server accepted the purchase; see the store's `addRecord`. */
-  addRecord: (input: NewPurchaseRecord, onSettled?: (saved: boolean) => void) => void;
+  /** `onSettled` hears whether the server accepted the purchases; see the store's `addRecords`. */
+  addRecords: (inputs: NewPurchaseRecord[], onSettled?: (saved: boolean) => void) => void;
   removeRecord: (recordId: string) => void;
   removeItem: (recordId: string, itemId: string) => void;
   updateItemName: (recordId: string, itemId: string, name: string) => void;
@@ -62,10 +63,10 @@ export function AppDataProvider({
       name: session.name,
       members: session.members,
       records: session.records,
-      addMember: (name) => store.addMember(sessionId, name),
+      addMember: (name, include) => store.addMember(sessionId, name, include),
       removeMember: (name) => store.removeMember(sessionId, name),
       clearMembers: () => store.clearMembers(sessionId),
-      addRecord: (input, onSettled) => store.addRecord(sessionId, input, onSettled),
+      addRecords: (inputs, onSettled) => store.addRecords(sessionId, inputs, onSettled),
       removeRecord: (recordId) => store.removeRecord(sessionId, recordId),
       removeItem: (recordId, itemId) => store.removeItem(sessionId, recordId, itemId),
       updateItemName: (recordId, itemId, name) =>

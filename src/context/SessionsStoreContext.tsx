@@ -2,7 +2,8 @@ import { createContext, useCallback, useContext, useMemo, type ReactNode } from 
 import { useServerSessions, type PaymentResult, type SyncStatus } from '../hooks/useServerSessions';
 import { compareNames, toTitleCase } from '../lib/format';
 import { roundMoney } from '../lib/money';
-import { getItemShares } from '../lib/calculations';
+import { getItemShares, purgeMemberFromItem } from '../lib/calculations';
+import { includeMember, type ItemRef } from '../lib/includeMember';
 import { createId } from '../lib/id';
 import { applySessionName, normaliseSessionName } from '../lib/sessionName';
 import type {
@@ -55,16 +56,21 @@ type SessionsStoreValue = {
   deleteSession: (sessionId: string) => void;
   /** Moves a draft to the top of Home because the user opened it. Silent; see BR-8. */
   recordOpen: (sessionId: string) => void;
-  addMember: (sessionId: string, rawName: string) => boolean;
+  /**
+   * `include` makes the new member an owner of those saved Equal Split items in
+   * the same change, so the member and their shares are saved together.
+   */
+  addMember: (sessionId: string, rawName: string, include?: ItemRef[]) => boolean;
   removeMember: (sessionId: string, name: string) => void;
   clearMembers: (sessionId: string) => void;
   /**
-   * `onSettled` hears true once the server accepts a save carrying the new
-   * record, or false once a failure is reported for it.
+   * Adds several records in one change, so they are saved together or not at
+   * all. `onSettled` hears true once the server accepts a save carrying them,
+   * or false once a failure is reported for it.
    */
-  addRecord: (
+  addRecords: (
     sessionId: string,
-    input: NewPurchaseRecord,
+    inputs: NewPurchaseRecord[],
     onSettled?: (saved: boolean) => void,
   ) => void;
   removeRecord: (sessionId: string, recordId: string) => void;
@@ -102,24 +108,6 @@ type SessionsStoreValue = {
 };
 
 const SessionsStoreContext = createContext<SessionsStoreValue | null>(null);
-
-/** Drop a member out of an item, keeping the remaining members' shares unchanged. */
-function purgeMemberFromItem(item: PurchaseItem, member: string): PurchaseItem | null {
-  if (item.mode === 'custom') {
-    if (!(member in item.amounts)) return item;
-    const amounts = { ...item.amounts };
-    delete amounts[member];
-    return Object.keys(amounts).length > 0 ? { ...item, amounts } : null;
-  }
-
-  if (!item.owners.includes(member)) return item;
-  const owners = item.owners.filter((o) => o !== member);
-  if (owners.length === 0) return null;
-  // Shrink the total by the departing member's share so nobody else's share moves.
-  const shares = getItemShares(item);
-  const totalPrice = roundMoney(item.totalPrice - (shares[member] ?? 0));
-  return { ...item, owners, totalPrice };
-}
 
 /** Convert an equal-split item into the custom-amount item with the same shares. */
 function toCustomItem(item: PurchaseItem): PurchaseItem {
@@ -274,7 +262,7 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
   );
 
   const addMember = useCallback(
-    (sessionId: string, rawName: string): boolean => {
+    (sessionId: string, rawName: string, include: ItemRef[] = []): boolean => {
       const name = toTitleCase(rawName);
       if (!name) return false;
       const session = sessions.find((s) => s.id === sessionId);
@@ -283,7 +271,13 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
       updateSession(sessionId, (s) =>
         s.members.some((m) => compareNames(m, name) === 0)
           ? s
-          : { ...s, members: [...s.members, name].sort(compareNames) },
+          : {
+              ...s,
+              members: [...s.members, name].sort(compareNames),
+              // The member and their shares travel in the same change, so
+              // they're saved together or not at all.
+              records: include.length > 0 ? includeMember(s.records, name, include) : s.records,
+            },
       );
       return true;
     },
@@ -316,15 +310,24 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
     [updateSession],
   );
 
-  const addRecord = useCallback(
-    (sessionId: string, input: NewPurchaseRecord, onSettled?: (saved: boolean) => void) => {
+  const addRecords = useCallback(
+    (sessionId: string, inputs: NewPurchaseRecord[], onSettled?: (saved: boolean) => void) => {
+      // One change for the whole click, so its records are saved together or not at
+      // all (BR-6). Each gets its own millisecond, in staging order: the server reads
+      // records back ordered by date and created_at, and a tie there has no defined
+      // order (BR-9).
+      const base = Date.now();
       updateSession(
         sessionId,
         (session) => ({
           ...session,
           records: [
             ...session.records,
-            { ...input, id: createId('rec'), createdAt: new Date().toISOString() },
+            ...inputs.map((input, i) => ({
+              ...input,
+              id: createId('rec'),
+              createdAt: new Date(base + i).toISOString(),
+            })),
           ],
         }),
         onSettled,
@@ -431,7 +434,7 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
       addMember,
       removeMember,
       clearMembers,
-      addRecord,
+      addRecords,
       removeRecord,
       removeItem,
       updateItemName,
@@ -465,7 +468,7 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
       addMember,
       removeMember,
       clearMembers,
-      addRecord,
+      addRecords,
       removeRecord,
       removeItem,
       updateItemName,

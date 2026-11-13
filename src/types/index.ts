@@ -105,7 +105,7 @@ export type AppData = {
   sessions: Session[];
 };
 
-/** Input shape accepted by `addRecord` — ids and timestamps are filled in for you. */
+/** Input shape accepted by `addRecords` — ids and timestamps are filled in for you. */
 export type NewPurchaseRecord = {
   date: string;
   payorMode: PayorMode;
