@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from 'react';
 import { Card } from '../shared/Card';
 import { Button } from '../shared/Button';
 import { ModeToggle } from '../shared/ModeToggle';
@@ -8,7 +16,13 @@ import { ItemStagingList } from './ItemStagingList';
 import { useAppData } from '../../context/AppDataContext';
 import { useSessionsStore } from '../../context/SessionsStoreContext';
 import { distributeRemainder, getItemTotal } from '../../lib/calculations';
-import { roundMoney, sumMoney } from '../../lib/money';
+import { parsePositiveAmount as num, roundMoney, sumMoney } from '../../lib/money';
+import {
+  buildRecords,
+  contributionsMatch,
+  readContributions,
+  type StagedItem,
+} from '../../lib/staging';
 import { todayIso } from '../../lib/format';
 import { createId } from '../../lib/id';
 import {
@@ -20,7 +34,7 @@ import {
   type MissingFlags,
   type SaveMessageTone,
 } from '../../lib/saveMessage';
-import type { ItemMode, PayorContribution, PayorMode, PurchaseItem } from '../../types';
+import type { ItemMode, PayorMode, PurchaseItem } from '../../types';
 import styles from './PurchaseItemCard.module.css';
 
 const EMPTY_DRAFT: ItemDraft = {
@@ -39,13 +53,14 @@ const TONE_CLASS: Record<SaveMessageTone, string> = {
   error: styles.error,
 };
 
-const num = (raw: string | undefined): number => {
-  const parsed = Number.parseFloat(raw ?? '');
-  return Number.isFinite(parsed) && parsed > 0 ? roundMoney(parsed) : 0;
+type Props = {
+  /** Held by the Expenses page, so Group Members can see what is staged. */
+  staged: StagedItem[];
+  setStaged: Dispatch<SetStateAction<StagedItem[]>>;
 };
 
-export function PurchaseItemCard() {
-  const { members, addRecord } = useAppData();
+export function PurchaseItemCard({ staged, setStaged }: Props) {
+  const { members, addRecords } = useAppData();
   const { sync } = useSessionsStore();
 
   const [date, setDate] = useState(todayIso);
@@ -53,7 +68,6 @@ export function PurchaseItemCard() {
   const [singlePayor, setSinglePayor] = useState('');
   const [contributions, setContributions] = useState<Record<string, string>>({});
   const [draft, setDraft] = useState<ItemDraft>(EMPTY_DRAFT);
-  const [staged, setStaged] = useState<PurchaseItem[]>([]);
   const [message, dispatch] = useReducer(saveMessageReducer, initialSaveMessage);
   /**
    * Numbers the saves from this form, so only the latest one's timer and
@@ -61,8 +75,6 @@ export function PurchaseItemCard() {
    * "Saved" covers them too.
    */
   const latestSave = useRef(0);
-
-  const stagedTotal = useMemo(() => sumMoney(staged.map(getItemTotal)), [staged]);
 
   const selectedOwners = useMemo(
     () => (draft.allSelected ? members : members.filter((m) => draft.owners[m])),
@@ -116,9 +128,25 @@ export function PurchaseItemCard() {
     },
   };
 
-  const canAddItem =
+  // The price the contributions have to cover. Custom Amounts uses what the
+  // member amounts add up to, never the Total Amount box, which is only a target.
+  const itemTotal = draft.mode === 'equal' ? num(draft.price) : enteredTotal;
+  const typedContributions = useMemo(
+    () => readContributions(contributions, members),
+    [contributions, members],
+  );
+  const contributed = sumMoney(typedContributions.map((p) => p.amount));
+
+  const itemValid =
     draft.name.trim().length > 0 &&
     (draft.mode === 'equal' ? num(draft.price) > 0 && selectedOwners.length > 0 : enteredTotal > 0);
+  // The date and payor are stamped on the item, so they are checked here and
+  // not at Save. A payor name that is no longer a member doesn't count.
+  const payorValid =
+    payorMode === 'single'
+      ? members.includes(singlePayor)
+      : contributionsMatch(typedContributions, itemTotal);
+  const canAddItem = itemValid && date !== '' && payorValid;
 
   const addItem = () => {
     if (!canAddItem) return;
@@ -142,25 +170,25 @@ export function PurchaseItemCard() {
                 .map((m) => [m, num(draft.amounts[m])]),
             ),
           };
-    setStaged((prev) => [...prev, item]);
+    const stamped: StagedItem = {
+      item,
+      date,
+      payorMode,
+      payors:
+        payorMode === 'single'
+          ? [{ member: singlePayor, amount: getItemTotal(item) }]
+          : typedContributions,
+    };
+    setStaged((prev) => [...prev, stamped]);
+    // The date and the payor pick stay for the next item. The mode that isn't
+    // on screen is cleared, so it can't come back later (BR-13).
+    if (payorMode === 'multiple') setSinglePayor('');
+    setContributions({});
     resetItemDraft();
     dispatch({ type: 'itemAdded' });
   };
 
-  const payors: PayorContribution[] =
-    payorMode === 'single'
-      ? singlePayor
-        ? [{ member: singlePayor, amount: stagedTotal }]
-        : []
-      : members
-          .filter((m) => num(contributions[m]) > 0)
-          .map((m) => ({ member: m, amount: num(contributions[m]) }));
-
-  const missing: MissingFlags = {
-    items: staged.length === 0,
-    date: !date,
-    payor: payors.length === 0,
-  };
+  const missing: MissingFlags = { items: staged.length === 0 };
 
   // Timed by an effect, so a newer click, an outcome or leaving the tab
   // cancels it through the cleanup, and a stale timer can't fire at all.
@@ -187,7 +215,7 @@ export function PurchaseItemCard() {
   }, [validationSupplied]);
 
   const save = () => {
-    // The button is never disabled, so a click with something missing says
+    // The button is never disabled, so a click with nothing staged says
     // what, rather than the button just not responding.
     if (firstMissing(missing)) {
       dispatch({ type: 'invalid', missing });
@@ -198,7 +226,9 @@ export function PurchaseItemCard() {
     dispatch({ type: 'start', save: thisSave });
     // After an unmount the dispatch is dropped, and a remount starts empty, so
     // leaving the tab mid-save never brings the message back.
-    addRecord({ date, payorMode, payors, items: staged }, (saved) =>
+    // Every staged item goes in one write, each into the record for its own
+    // date and payor.
+    addRecords(buildRecords(staged), (saved) =>
       dispatch({ type: 'settled', save: thisSave, saved }),
     );
     setStaged([]);
@@ -227,7 +257,8 @@ export function PurchaseItemCard() {
           onContributionChange={(member, raw) =>
             setContributions((prev) => ({ ...prev, [member]: raw }))
           }
-          stagedTotal={stagedTotal}
+          itemTotal={itemTotal}
+          contributed={contributed}
         />
 
         <hr className={styles.divider} />
@@ -271,7 +302,7 @@ export function PurchaseItemCard() {
 
       <ItemStagingList
         items={staged}
-        onRemove={(itemId) => setStaged((prev) => prev.filter((i) => i.id !== itemId))}
+        onRemove={(itemId) => setStaged((prev) => prev.filter((s) => s.item.id !== itemId))}
       />
 
       <div className={styles.saveRow}>

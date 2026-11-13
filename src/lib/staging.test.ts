@@ -63,7 +63,9 @@ const members = ['Ana', 'Ben', 'Cy'];
 
 describe('readContributions', () => {
   it('rounds each value to the centavo', () => {
-    expect(readContributions({ Ana: '100.004' }, ['Ana'])).toEqual([{ member: 'Ana', amount: 100 }]);
+    expect(readContributions({ Ana: '100.004' }, ['Ana'])).toEqual([
+      { member: 'Ana', amount: 100 },
+    ]);
   });
 
   it('drops blank, zero, negative, unparseable and sub-centavo values', () => {
@@ -170,13 +172,33 @@ describe('buildRecords', () => {
     const one = equalItem('One', 300, ['Cy']);
     const two = equalItem('Two', 300, ['Cy']);
     const records = buildRecords([
-      stagedMultiple('2026-11-12', [{ member: 'Ana', amount: 240 }, { member: 'Ben', amount: 60 }], one),
-      stagedMultiple('2026-11-12', [{ member: 'Ana', amount: 60 }, { member: 'Ben', amount: 240 }], two),
+      stagedMultiple(
+        '2026-11-12',
+        [
+          { member: 'Ana', amount: 240 },
+          { member: 'Ben', amount: 60 },
+        ],
+        one,
+      ),
+      stagedMultiple(
+        '2026-11-12',
+        [
+          { member: 'Ana', amount: 60 },
+          { member: 'Ben', amount: 240 },
+        ],
+        two,
+      ),
     ]);
 
     expect(records).toHaveLength(2);
-    expect(records[0].payors).toEqual([{ member: 'Ana', amount: 240 }, { member: 'Ben', amount: 60 }]);
-    expect(records[1].payors).toEqual([{ member: 'Ana', amount: 60 }, { member: 'Ben', amount: 240 }]);
+    expect(records[0].payors).toEqual([
+      { member: 'Ana', amount: 240 },
+      { member: 'Ben', amount: 60 },
+    ]);
+    expect(records[1].payors).toEqual([
+      { member: 'Ana', amount: 60 },
+      { member: 'Ben', amount: 240 },
+    ]);
 
     // Breakdown still shows them as one card, with the contributions summed.
     const groups = groupRecordsForBreakdown(toRecords(records), members);
@@ -192,8 +214,22 @@ describe('buildRecords', () => {
     const item2 = equalItem('Item 2', 300, ['Ana', 'Ben']);
     const records = toRecords(
       buildRecords([
-        stagedMultiple('2026-11-12', [{ member: 'Ana', amount: 240 }, { member: 'Ben', amount: 60 }], item1),
-        stagedMultiple('2026-11-12', [{ member: 'Ana', amount: 60 }, { member: 'Ben', amount: 240 }], item2),
+        stagedMultiple(
+          '2026-11-12',
+          [
+            { member: 'Ana', amount: 240 },
+            { member: 'Ben', amount: 60 },
+          ],
+          item1,
+        ),
+        stagedMultiple(
+          '2026-11-12',
+          [
+            { member: 'Ana', amount: 60 },
+            { member: 'Ben', amount: 240 },
+          ],
+          item2,
+        ),
       ]),
     );
     const matrix = getRawOwedMatrix(records, members);
@@ -204,16 +240,26 @@ describe('buildRecords', () => {
   it('gives the same balances as building each item alone (BR-8)', () => {
     const staged: StagedItem[] = [
       stagedSingle('2026-11-12', 'Ana', equalItem('Taxi', 100, ['Ana', 'Ben', 'Cy'])),
-      stagedMultiple('2026-11-12', [{ member: 'Ben', amount: 300 }], equalItem('Solo', 300, ['Ana', 'Cy'])),
       stagedMultiple(
         '2026-11-12',
-        [{ member: 'Ana', amount: 240 }, { member: 'Ben', amount: 60 }],
+        [{ member: 'Ben', amount: 300 }],
+        equalItem('Solo', 300, ['Ana', 'Cy']),
+      ),
+      stagedMultiple(
+        '2026-11-12',
+        [
+          { member: 'Ana', amount: 240 },
+          { member: 'Ben', amount: 60 },
+        ],
         customItem('Split A', { Cy: 300, Ben: 10.01 }),
       ),
       stagedSingle('2026-11-13', 'Cy', equalItem('Coffee', 10, ['Ana', 'Ben', 'Cy'])),
       stagedMultiple(
         '2026-11-13',
-        [{ member: 'Ana', amount: 60 }, { member: 'Cy', amount: 240 }],
+        [
+          { member: 'Ana', amount: 60 },
+          { member: 'Cy', amount: 240 },
+        ],
         equalItem('Split B', 300, ['Ben', 'Cy', 'Ana']),
       ),
       stagedSingle('2026-11-12', 'Ana', customItem('Snacks', { Ben: 33.33, Cy: 11.11 })),
@@ -247,7 +293,14 @@ describe('buildRecords', () => {
   it('keeps the first-appearance order of the records', () => {
     const records = buildRecords([
       stagedSingle('2026-11-13', 'Ana', equalItem('A', 10, ['Ben'])),
-      stagedMultiple('2026-11-12', [{ member: 'Ana', amount: 5 }, { member: 'Cy', amount: 5 }], equalItem('B', 10, ['Ben'])),
+      stagedMultiple(
+        '2026-11-12',
+        [
+          { member: 'Ana', amount: 5 },
+          { member: 'Cy', amount: 5 },
+        ],
+        equalItem('B', 10, ['Ben']),
+      ),
       stagedSingle('2026-11-12', 'Ben', equalItem('C', 10, ['Ana'])),
       stagedSingle('2026-11-13', 'Ana', equalItem('D', 10, ['Ben'])),
     ]);
@@ -288,7 +341,14 @@ describe('purgeMemberFromStaged', () => {
   it('keeps a Multiple Payors item with the remaining contributor, item unchanged', () => {
     const item = equalItem('Dinner', 300, ['Ana', 'Ben']);
     const staged = [
-      stagedMultiple('2026-11-12', [{ member: 'Ana', amount: 200 }, { member: 'Cy', amount: 100 }], item),
+      stagedMultiple(
+        '2026-11-12',
+        [
+          { member: 'Ana', amount: 200 },
+          { member: 'Cy', amount: 100 },
+        ],
+        item,
+      ),
     ];
     const [kept] = purgeMemberFromStaged(staged, 'Cy');
 
@@ -310,7 +370,14 @@ describe('purgeMemberFromStaged', () => {
   it('empties the list once every member is purged (the Clear All end state)', () => {
     const staged = [
       stagedSingle('2026-11-12', 'Ana', equalItem('Taxi', 90, ['Ana', 'Ben', 'Cy'])),
-      stagedMultiple('2026-11-12', [{ member: 'Ben', amount: 5 }, { member: 'Cy', amount: 5 }], customItem('X', { Ana: 10 })),
+      stagedMultiple(
+        '2026-11-12',
+        [
+          { member: 'Ben', amount: 5 },
+          { member: 'Cy', amount: 5 },
+        ],
+        customItem('X', { Ana: 10 }),
+      ),
     ];
     expect(members.reduce(purgeMemberFromStaged, staged)).toEqual([]);
   });
@@ -324,7 +391,14 @@ describe('stagedNamesMember', () => {
     const amount = [stagedSingle('2026-11-12', 'Ana', customItem('B', { Cy: 10 }))];
     const payor = [stagedSingle('2026-11-12', 'Cy', equalItem('C', 10, ['Ana']))];
     const contributor = [
-      stagedMultiple('2026-11-12', [{ member: 'Ana', amount: 5 }, { member: 'Cy', amount: 5 }], equalItem('D', 10, ['Ana'])),
+      stagedMultiple(
+        '2026-11-12',
+        [
+          { member: 'Ana', amount: 5 },
+          { member: 'Cy', amount: 5 },
+        ],
+        equalItem('D', 10, ['Ana']),
+      ),
     ];
 
     for (const staged of [owner, amount, payor, contributor]) {

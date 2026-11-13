@@ -59,12 +59,13 @@ type SessionsStoreValue = {
   removeMember: (sessionId: string, name: string) => void;
   clearMembers: (sessionId: string) => void;
   /**
-   * `onSettled` hears true once the server accepts a save carrying the new
-   * record, or false once a failure is reported for it.
+   * Adds several records in one change, so they are saved together or not at
+   * all. `onSettled` hears true once the server accepts a save carrying them,
+   * or false once a failure is reported for it.
    */
-  addRecord: (
+  addRecords: (
     sessionId: string,
-    input: NewPurchaseRecord,
+    inputs: NewPurchaseRecord[],
     onSettled?: (saved: boolean) => void,
   ) => void;
   removeRecord: (sessionId: string, recordId: string) => void;
@@ -298,15 +299,24 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
     [updateSession],
   );
 
-  const addRecord = useCallback(
-    (sessionId: string, input: NewPurchaseRecord, onSettled?: (saved: boolean) => void) => {
+  const addRecords = useCallback(
+    (sessionId: string, inputs: NewPurchaseRecord[], onSettled?: (saved: boolean) => void) => {
+      // One change for the whole click, so its records are saved together or not at
+      // all (BR-6). Each gets its own millisecond, in staging order: the server reads
+      // records back ordered by date and created_at, and a tie there has no defined
+      // order (BR-9).
+      const base = Date.now();
       updateSession(
         sessionId,
         (session) => ({
           ...session,
           records: [
             ...session.records,
-            { ...input, id: createId('rec'), createdAt: new Date().toISOString() },
+            ...inputs.map((input, i) => ({
+              ...input,
+              id: createId('rec'),
+              createdAt: new Date(base + i).toISOString(),
+            })),
           ],
         }),
         onSettled,
@@ -413,7 +423,7 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
       addMember,
       removeMember,
       clearMembers,
-      addRecord,
+      addRecords,
       removeRecord,
       removeItem,
       updateItemName,
@@ -447,7 +457,7 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
       addMember,
       removeMember,
       clearMembers,
-      addRecord,
+      addRecords,
       removeRecord,
       removeItem,
       updateItemName,

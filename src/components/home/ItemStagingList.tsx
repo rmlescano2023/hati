@@ -1,17 +1,17 @@
 import { Button } from '../shared/Button';
 import { getItemShares, getItemTotal } from '../../lib/calculations';
-import { compareNames, formatMoney, pluralize } from '../../lib/format';
+import { compareNames, formatLongDate, formatMoney, pluralize } from '../../lib/format';
 import { sumMoney } from '../../lib/money';
-import type { PurchaseItem } from '../../types';
+import type { StagedItem } from '../../lib/staging';
 import styles from './ItemStagingList.module.css';
 
 type Props = {
-  items: PurchaseItem[];
+  items: StagedItem[];
   onRemove: (itemId: string) => void;
 };
 
 export function ItemStagingList({ items, onRemove }: Props) {
-  const total = sumMoney(items.map(getItemTotal));
+  const total = sumMoney(items.map((s) => getItemTotal(s.item)));
 
   return (
     <>
@@ -29,12 +29,20 @@ export function ItemStagingList({ items, onRemove }: Props) {
             <span>Owners / Amounts</span>
             <span />
           </div>
-          {items.map((item) => {
+          {items.map(({ item, date, payorMode, payors }) => {
             const shares = getItemShares(item);
             const owners = Object.keys(shares).sort(compareNames);
             return (
               <div className={styles.row} key={item.id}>
-                <span className={styles.name}>{item.name}</span>
+                <div className={styles.itemCell}>
+                  <span className={styles.name}>{item.name}</span>
+                  <span className={styles.meta}>
+                    {formatLongDate(date)} · Paid by{' '}
+                    {payorMode === 'single'
+                      ? payors[0].member
+                      : payors.map((p) => `${p.member}: ${formatMoney(p.amount)}`).join(', ')}
+                  </span>
+                </div>
                 <span className={styles.num}>{formatMoney(getItemTotal(item))}</span>
                 <div className={styles.pills}>
                   {owners.map((owner) => (
@@ -43,7 +51,7 @@ export function ItemStagingList({ items, onRemove }: Props) {
                     </span>
                   ))}
                 </div>
-                <span className={styles.removeCell}>
+                <span className={styles.actions}>
                   <Button
                     variant="icon"
                     onClick={() => onRemove(item.id)}
