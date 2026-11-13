@@ -47,6 +47,24 @@ export function getItemShares(item: PurchaseItem): Record<string, number> {
   return shares;
 }
 
+/** Drop a member out of an item, keeping the remaining members' shares unchanged. */
+export function purgeMemberFromItem(item: PurchaseItem, member: string): PurchaseItem | null {
+  if (item.mode === 'custom') {
+    if (!(member in item.amounts)) return item;
+    const amounts = { ...item.amounts };
+    delete amounts[member];
+    return Object.keys(amounts).length > 0 ? { ...item, amounts } : null;
+  }
+
+  if (!item.owners.includes(member)) return item;
+  const owners = item.owners.filter((o) => o !== member);
+  if (owners.length === 0) return null;
+  // Shrink the total by the departing member's share so nobody else's share moves.
+  const shares = getItemShares(item);
+  const totalPrice = roundMoney(item.totalPrice - (shares[member] ?? 0));
+  return { ...item, owners, totalPrice };
+}
+
 /* -------------------------------------------------------------------------- */
 /* Record level                                                                */
 /* -------------------------------------------------------------------------- */

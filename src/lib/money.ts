@@ -71,3 +71,13 @@ export function parseAmount(raw: string): number {
   const parsed = Number.parseFloat(cleaned);
   return Number.isFinite(parsed) ? roundMoney(parsed) : 0;
 }
+
+/**
+ * Read an amount typed into a box: rounded to the centavo, and anything that
+ * isn't above zero (blank, negative, unparseable, or under half a centavo)
+ * becomes 0.
+ */
+export function parsePositiveAmount(raw: string | undefined): number {
+  const parsed = Number.parseFloat(raw ?? '');
+  return Number.isFinite(parsed) && parsed > 0 ? roundMoney(parsed) : 0;
+}

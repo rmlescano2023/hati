@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useMemo, type ReactNode } from 
 import { useServerSessions, type PaymentResult, type SyncStatus } from '../hooks/useServerSessions';
 import { compareNames, toTitleCase } from '../lib/format';
 import { roundMoney } from '../lib/money';
-import { getItemShares } from '../lib/calculations';
+import { getItemShares, purgeMemberFromItem } from '../lib/calculations';
 import { createId } from '../lib/id';
 import { applySessionName, normaliseSessionName } from '../lib/sessionName';
 import type {
@@ -102,24 +102,6 @@ type SessionsStoreValue = {
 };
 
 const SessionsStoreContext = createContext<SessionsStoreValue | null>(null);
-
-/** Drop a member out of an item, keeping the remaining members' shares unchanged. */
-function purgeMemberFromItem(item: PurchaseItem, member: string): PurchaseItem | null {
-  if (item.mode === 'custom') {
-    if (!(member in item.amounts)) return item;
-    const amounts = { ...item.amounts };
-    delete amounts[member];
-    return Object.keys(amounts).length > 0 ? { ...item, amounts } : null;
-  }
-
-  if (!item.owners.includes(member)) return item;
-  const owners = item.owners.filter((o) => o !== member);
-  if (owners.length === 0) return null;
-  // Shrink the total by the departing member's share so nobody else's share moves.
-  const shares = getItemShares(item);
-  const totalPrice = roundMoney(item.totalPrice - (shares[member] ?? 0));
-  return { ...item, owners, totalPrice };
-}
 
 /** Convert an equal-split item into the custom-amount item with the same shares. */
 function toCustomItem(item: PurchaseItem): PurchaseItem {
