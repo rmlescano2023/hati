@@ -5,7 +5,7 @@
   margin-bottom: 10px;
 }
 
-.addRow input {
+.nameBox {
   flex: 1;
   min-width: 0;
 }

@@ -54,7 +54,7 @@ export const TOUR_STEPS: TourStep[] = [
     target: 'tab-breakdown',
     title: 'Check the numbers',
     content:
-      'Breakdown lists every purchase, item by item: one row per item, one column per person, and every cell edits in place for as long as the session is open.',
+      'Breakdown lists every purchase, item by item: one row per item and one column per person. While the session is open, Edit takes an item back to the form to change it.',
     screen: { kind: 'session', tab: 'breakdown' },
   },
   {

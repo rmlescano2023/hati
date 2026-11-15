@@ -3,6 +3,7 @@ import { Button } from '../components/shared/Button';
 import { EmptyState } from '../components/shared/EmptyState';
 import { useSessionsStore } from './SessionsStoreContext';
 import type { ItemRef } from '../lib/includeMember';
+import type { StagedItem } from '../lib/staging';
 import type { NewPurchaseRecord, PurchaseRecord } from '../types';
 
 /**
@@ -23,14 +24,8 @@ type AppDataValue = {
   addRecords: (inputs: NewPurchaseRecord[], onSettled?: (saved: boolean) => void) => void;
   removeRecord: (recordId: string) => void;
   removeItem: (recordId: string, itemId: string) => void;
-  updateItemName: (recordId: string, itemId: string, name: string) => void;
-  updateItemTotal: (recordId: string, itemId: string, total: number) => void;
-  updateItemMemberAmount: (
-    recordId: string,
-    itemId: string,
-    member: string,
-    amount: number,
-  ) => void;
+  /** Writes an edited saved item back in one change; see the store's `saveItemEdit`. */
+  saveItemEdit: (ref: ItemRef, next: StagedItem) => void;
   /** Finishes the session; `me` is who the user said they are in it, or null for no pick. */
   closeSession: (me: string | null) => void;
   replaceData: (data: { members: string[]; records: PurchaseRecord[] }) => void;
@@ -69,12 +64,7 @@ export function AppDataProvider({
       addRecords: (inputs, onSettled) => store.addRecords(sessionId, inputs, onSettled),
       removeRecord: (recordId) => store.removeRecord(sessionId, recordId),
       removeItem: (recordId, itemId) => store.removeItem(sessionId, recordId, itemId),
-      updateItemName: (recordId, itemId, name) =>
-        store.updateItemName(sessionId, recordId, itemId, name),
-      updateItemTotal: (recordId, itemId, total) =>
-        store.updateItemTotal(sessionId, recordId, itemId, total),
-      updateItemMemberAmount: (recordId, itemId, member, amount) =>
-        store.updateItemMemberAmount(sessionId, recordId, itemId, member, amount),
+      saveItemEdit: (ref, next) => store.saveItemEdit(sessionId, ref, next),
       closeSession: (me) => store.closeSession(sessionId, me),
       replaceData: (data) => store.replaceSessionData(sessionId, data),
       // Scoped to this session on purpose: the dev Reset button should not be

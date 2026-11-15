@@ -16,9 +16,9 @@ type Props = {
 
 /**
  * The inline rename box in the session header. It mounts
- * only once the pencil is tapped and unmounts when the edit ends, which is why
- * it isn't `EditableCell`: that one is always mounted, drops an empty value
- * rather than saving it, and clearing a name has to save no name.
+ * only once the pencil is tapped and unmounts when the edit ends. An empty
+ * value is saved rather than dropped, because clearing a name has to save no
+ * name.
  */
 export function SessionNameInput({ initialName, className, describedBy, onSave, onClose }: Props) {
   const [draft, setDraft] = useState(initialName ?? '');

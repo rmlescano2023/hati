@@ -1,0 +1,61 @@
+/* The wrapper takes the input's place in its parent's layout; the button sits
+   over the input's right padding, which only grows while the button shows. The
+   inset keeps the icon off the box's right border without shrinking the tap area. */
+.wrap {
+  position: relative;
+  min-width: 0;
+  --clear-slot: 24px;
+  --clear-inset: 5px;
+}
+
+/* Block, so the wrapper is exactly the input's height with no line-box gap. */
+.input {
+  display: block;
+}
+
+[data-filled] > .input {
+  padding-right: calc(var(--clear-slot) + var(--clear-inset));
+}
+
+.clear {
+  position: absolute;
+  top: 50%;
+  right: var(--clear-inset);
+  transform: translateY(-50%);
+  width: var(--clear-slot);
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text3);
+  cursor: pointer;
+}
+
+.clear:hover {
+  color: var(--text2);
+}
+
+.clear svg {
+  width: 13px;
+  height: 13px;
+}
+
+/* Mobile shell: 44px tap areas. A 38px box lets the button overhang it by 3px
+   above and below, which stays inside the gaps around every in-scope box. The
+   order line's name and price boxes are too narrow for 44px across, so they keep 24px. */
+@media (max-width: 640px) {
+  .wrap {
+    --clear-slot: 44px;
+  }
+
+  .compact {
+    --clear-slot: 24px;
+  }
+
+  .clear {
+    min-height: 44px;
+  }
+}

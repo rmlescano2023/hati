@@ -4,8 +4,14 @@ import { EmptyState } from '../components/shared/EmptyState';
 import { useAppData } from '../context/AppDataContext';
 import { groupRecordsForBreakdown } from '../lib/calculations';
 import { sortNames } from '../lib/format';
+import type { SavedItemRef } from '../lib/staging';
 
-export function BreakdownPage() {
+type Props = {
+  /** Asks to edit a saved item; the workspace confirms and opens it on Expenses. */
+  onEditItem: (ref: SavedItemRef) => void;
+};
+
+export function BreakdownPage({ onEditItem }: Props) {
   const { members, records } = useAppData();
 
   const sortedMembers = useMemo(() => sortNames(members), [members]);
@@ -23,7 +29,7 @@ export function BreakdownPage() {
       {groups.map((group) => (
         // Always editable: this page only renders inside an open session, and
         // a session's records stay editable for as long as it is open.
-        <BreakdownGroup key={group.key} group={group} members={sortedMembers} />
+        <BreakdownGroup key={group.key} group={group} members={sortedMembers} onEdit={onEditItem} />
       ))}
     </>
   );
