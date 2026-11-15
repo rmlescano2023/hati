@@ -7,7 +7,7 @@ type Props = {
 /**
  * Line icons for the tab bars, the New Session button, the rename pencils and
  * the account menu's Profile item, the direction arrows on Collection, the
- * remove control in Profile.
+ * remove control in Profile, the clear button inside the Expenses form's boxes.
  * Stroked in currentColor, so each one takes the colour of the text beside it,
  * including a tab's active colour. Decorative: the label next to them, or the
  * button's own aria-label, carries the name.
@@ -132,6 +132,20 @@ export function CloseIcon(props: Props) {
   return (
     <Icon {...props}>
       <path d="M6 6l12 12M18 6 6 18" />
+    </Icon>
+  );
+}
+
+/**
+ * A circled ×, which empties the box it sits in. It is drawn differently from
+ * CloseIcon and the plain × of an order line's Remove button on purpose, so a
+ * clear is never mistaken for a remove.
+ */
+export function ClearIcon(props: Props) {
+  return (
+    <Icon {...props}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="m9 9 6 6M15 9l-6 6" />
     </Icon>
   );
 }
