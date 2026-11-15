@@ -78,6 +78,62 @@
   color: var(--warn-text);
 }
 
+/* The share sits on the name's line and wraps under it when the name is long. */
+.blockHead {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 2px 8px;
+}
+
+.share {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+}
+
+.negative {
+  color: var(--warn-text);
+}
+
+/* Rows don't need the card's whole width on a desktop. */
+.billSection {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 520px;
+}
+
+/* The "Who's in this item" label. */
+.sectionLabel {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text2);
+}
+
+.helper {
+  font-size: 12px;
+  color: var(--text3);
+}
+
+.billRow {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.billRow + .billRow {
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.addRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .footer {
   display: flex;
   align-items: center;
@@ -134,5 +190,19 @@
   .addOrder {
     min-height: 44px;
     min-width: 44px;
+  }
+
+  .billSection {
+    max-width: none;
+  }
+
+  .addRow > button {
+    min-height: 44px;
+  }
+
+  /* The row pickers' pills, 44px like every other control in a row. The element
+     selector gives (0,1,1), which outranks OwnerPill's phone rule (0,1,0). */
+  .rowPicker label {
+    min-height: 44px;
   }
 }
