@@ -28,7 +28,12 @@ import {
   type LinesDraft,
 } from './orderLines';
 import { getItemShares } from './calculations';
-import { exampleA as mendokoro } from './billExamples';
+import {
+  exampleA as mendokoro,
+  exampleB as dinner,
+  exampleD1 as voucherNight,
+  exampleE as lunch,
+} from './billExamples';
 import type { CustomAmountItem } from '../types';
 
 /* ------------------------------- builders -------------------------------- */
@@ -678,5 +683,243 @@ describe('Edit round trip (O-6)', () => {
     };
     expect(billDraftFromItem(itemized, ['Ana'])).toBe(EMPTY_BILL_DRAFT);
     expect(Object.keys(linesFromItem(itemized, ['Ana']))).toEqual(['Ana']);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* Discounts and charges                                                       */
+/* -------------------------------------------------------------------------- */
+
+/** Example B as typed: six diners, a PWD discount for Cy and a service charge. */
+const sixDiners = ['Ana', 'Ben', 'Cy', 'Dan', 'Eve', 'Fay'];
+const dinnerLines: LinesDraft = {
+  Ana: [line('Sisig', '280', 'a1'), line('Rice', '100', 'a2')],
+  Ben: [line('Kare-kare', '450')],
+  Cy: [line('Bulalo', '520')],
+  Dan: [line('Adobo', '295')],
+  Eve: [line('Pancit', '180', 'e1'), line('Halo-halo', '230', 'e2')],
+  Fay: [line('Sinigang', '400.5')],
+};
+const pwd = (amount = '300', over: { members?: string[]; everyone?: boolean } = {}) =>
+  split('PWD', amount, { everyone: false, members: ['Cy'], ...over });
+const service = (amount = '245.55', name = 'Service charge') => ({ key: name, name, amount });
+const dinnerBill = billDraft({ discounts: [pwd()], charges: [service()] });
+
+describe('readBillDraft with discounts and charges (O-3)', () => {
+  it('B: the six shares, Subtotal, Discounts, Charges and Entered (AC-CA2.3, AC-CA3.2, AC-CA4.3)', () => {
+    const view = readBillDraft(sixDiners, dinnerLines, dinnerBill);
+    expect(view.shares).toEqual(dinner().amounts);
+    expect(view.subtotal).toBe(2455.5);
+    expect(view.discounts).toBe(300);
+    expect(view.charges).toBe(245.55);
+    expect(view.entered).toBe(2401.05);
+    expect(view.others).toBe(-54.45);
+    expect([view.discountHint, view.chargeHint, view.floorHint]).toEqual([null, null, null]);
+  });
+
+  it('E: the Senior discount comes off two holders, the odd centavo off the first (AC-CA2.4)', () => {
+    const lines: LinesDraft = { Dan: [line('Ramen', '400')], Eve: [line('Ramen', '400')] };
+    const bill = billDraft({
+      discounts: [split('Senior', '250.01', { everyone: false, members: ['Dan', 'Eve'] })],
+    });
+    expect(readBillDraft(['Dan', 'Eve'], lines, bill).shares).toEqual(lunch().amounts);
+  });
+
+  it('D1: a voucher that takes the whole order leaves Ana at 0 with no hint (AC-CA2.5)', () => {
+    const lines: LinesDraft = { Ana: [line('Pasta', '450')], Ben: [line('Steak', '600')] };
+    const bill = billDraft({
+      discounts: [split('Voucher', '450', { everyone: false, members: ['Ana'] })],
+    });
+    const view = readBillDraft(twoPicked, lines, bill);
+    expect(view.shares).toEqual({ Ana: 0, Ben: 600 });
+    expect(view.floorHint).toBeNull();
+  });
+
+  describe('D2: the voucher against a 105.00 service charge', () => {
+    const lines: LinesDraft = { Ana: [line('Pasta', '450')], Ben: [line('Steak', '600')] };
+    const withVoucher = (amount: string) =>
+      readBillDraft(
+        twoPicked,
+        lines,
+        billDraft({
+          discounts: [split('Voucher', amount, { everyone: false, members: ['Ana'] })],
+          charges: [service('105')],
+        }),
+      );
+
+    it('splits the charge, so Ana owes 52.50 of it (AC-CA3.3)', () => {
+      expect(withVoucher('450').shares).toEqual({ Ana: 52.5, Ben: 652.5 });
+    });
+
+    it('lets the voucher take her charge part, down to 0 (BR-CA11)', () => {
+      const view = withVoucher('502.5');
+      expect(view.shares).toEqual({ Ana: 0, Ben: 652.5 });
+      expect(view.floorHint).toBeNull();
+    });
+
+    it('blocks a share below 0 with the exact message (AC-CA2.6)', () => {
+      const view = withVoucher('510');
+      expect(view.shares.Ana).toBe(-7.5);
+      expect(view.floorHint).toBe(
+        "Ana's share would be −₱7.50. Lower the discount or add Ana's order.",
+      );
+    });
+  });
+
+  it('a discount for someone who ordered nothing blocks Add Item (AC-CA2.9)', () => {
+    const lines: LinesDraft = { Ana: [line('Soup', '100')] };
+    const bill = billDraft({ discounts: [pwd('300')] });
+    const view = readBillDraft(['Ana', 'Cy'], lines, bill);
+    expect(view.shares.Cy).toBe(-300);
+    expect(view.floorHint).toBe(
+      "Cy's share would be −₱300.00. Lower the discount or add Cy's order.",
+    );
+  });
+
+  it('names the first member below 0 alphabetically', () => {
+    const lines: LinesDraft = { Ana: [line('Soup', '10')], Ben: [line('Soup', '10')] };
+    const bill = billDraft({
+      discounts: [split('D', '50', { everyone: false, members: ['Ben', 'Ana'] })],
+    });
+    expect(readBillDraft(twoPicked, lines, bill).floorHint).toMatch(/^Ana's share/);
+  });
+
+  it('asks who gets a priced discount, named or not (AC-CA2.2)', () => {
+    const nobody = { everyone: false, members: [] };
+    expect(
+      readBillDraft(twoPicked, ramen, billDraft({ discounts: [split('PWD', '300', nobody)] }))
+        .discountHint,
+    ).toBe('Choose who gets PWD');
+    expect(
+      readBillDraft(twoPicked, ramen, billDraft({ discounts: [split('', '300', nobody)] }))
+        .discountHint,
+    ).toBe('Choose who gets the unnamed discount');
+  });
+
+  it('asks for the amount of a named discount or charge (AC-CA2.7, AC-CA3.5)', () => {
+    const view = readBillDraft(
+      twoPicked,
+      ramen,
+      billDraft({ discounts: [pwd('')], charges: [service('', 'VAT')] }),
+    );
+    expect(view.discountHint).toBe('Add an amount for PWD or remove it');
+    expect(view.chargeHint).toBe('Add an amount for VAT or remove it');
+  });
+
+  it('reads -300 and 0 as no amount (AC-CA2.8)', () => {
+    for (const amount of ['-300', '0']) {
+      const view = readBillDraft(twoPicked, ramen, billDraft({ discounts: [pwd(amount)] }));
+      expect(view.discountHint).toBe('Add an amount for PWD or remove it');
+      expect(view.discounts).toBe(0);
+    }
+  });
+
+  it('blocks a priced charge when nobody is in the item (AC-CA3.4)', () => {
+    const view = readBillDraft(['Ana'], {}, billDraft({ charges: [service('50')] }));
+    expect(view.chargeHint).toBe(
+      'Charges are split across the people with orders. Add an order first.',
+    );
+  });
+
+  it('gives a picked member with no order no part of a charge, and no share (AC-CA3.6, AC-CA4.2)', () => {
+    const { Fay: _fay, ...withoutFay } = dinnerLines;
+    void _fay;
+    const view = readBillDraft(sixDiners, withoutFay, dinnerBill);
+    expect(Object.hasOwn(view.shares, 'Fay')).toBe(false);
+    expect(view.shares.Ana).toBe(429.11);
+  });
+
+  it('A has no discounts or charges, so the footer lines stay hidden (AC-CA4.4)', () => {
+    const view = readBillDraft(twoPicked, ramen, gyoza);
+    expect(view.discounts).toBe(0);
+    expect(view.charges).toBe(0);
+  });
+
+  it('shows the first problem in a section, in row order', () => {
+    const bill = billDraft({
+      discounts: [split('A', '5', { everyone: false }), pwd('')],
+    });
+    expect(readBillDraft(twoPicked, ramen, bill).discountHint).toBe('Choose who gets A');
+  });
+});
+
+describe('fillRemainder with a discount and a charge (O-4, C2)', () => {
+  it('gives Fay the 400.50 that brings Entered to 2,401.05 (AC-CA5.2)', () => {
+    const { Fay: _fay, ...withoutFay } = dinnerLines;
+    void _fay;
+    const before = readBillDraft(sixDiners, withoutFay, dinnerBill);
+    expect(before.shares).toEqual({
+      Ana: 429.11,
+      Ben: 499.11,
+      Cy: 269.11,
+      Dan: 344.11,
+      Eve: 459.11,
+    });
+    expect(before.subtotal).toBe(2055);
+    expect(before.entered).toBe(2000.55);
+
+    const filled = fillRemainder(2401.05, sixDiners, withoutFay, before.others);
+    expect(filled.Fay[0].price).toBe('400.50');
+    const after = readBillDraft(sixDiners, filled, dinnerBill);
+    expect(after.shares).toEqual(dinner().amounts);
+    expect(after.entered).toBe(2401.05);
+  });
+});
+
+describe('itemFromLines and Edit with discounts and charges (O-5, O-6)', () => {
+  const roundTrip = (item: CustomAmountItem, members: string[]) =>
+    itemFromLines(
+      item.id,
+      item.name,
+      Object.keys(item.amounts),
+      linesFromItem(item, members),
+      billDraftFromItem(item, members),
+    );
+
+  it('stamps Example B to exactly the stored JSON, keys in order', () => {
+    const item = itemFromLines('item_b', 'Dinner', sixDiners, dinnerLines, dinnerBill);
+    expect(JSON.stringify(item)).toBe(JSON.stringify(dinner()));
+  });
+
+  it('stamps D1 with Ana kept at 0 (BR-CA42)', () => {
+    const lines: LinesDraft = { Ana: [line('Pasta', '450')], Ben: [line('Steak', '600')] };
+    const bill = billDraft({
+      discounts: [split('Voucher', '450', { everyone: false, members: ['Ana'] })],
+    });
+    const item = itemFromLines('item_d1', 'Pasta night', twoPicked, lines, bill);
+    expect(item.amounts).toEqual({ Ana: 0, Ben: 600 });
+    expect(JSON.stringify(item)).toBe(JSON.stringify(voucherNight()));
+  });
+
+  it('stamps B, D1 and E back to themselves, twice over, JSON-equal (AC-CA7.2, AC-CA7.5)', () => {
+    const cases: [CustomAmountItem, string[]][] = [
+      [dinner(), [...sixDiners, 'Gus']],
+      [voucherNight(), twoPicked],
+      [lunch(), ['Dan', 'Eve']],
+    ];
+    for (const [item, members] of cases) {
+      const once = roundTrip(item, members);
+      expect(once).toEqual(item);
+      expect(JSON.stringify(roundTrip(once, members))).toBe(JSON.stringify(item));
+    }
+  });
+
+  it('loads D1 with Ana picked and her Pasta in place (AC-CA7.3)', () => {
+    const lines = linesFromItem(voucherNight(), twoPicked);
+    expect(Object.keys(lines)).toEqual(['Ana', 'Ben']);
+    expect(lines.Ana).toEqual([{ key: FIRST_LINE_KEY, name: 'Pasta', price: '450.00' }]);
+  });
+
+  it('loads B with its discount on Cy alone and its charge as one row', () => {
+    const draft = billDraftFromItem(dinner(), sixDiners);
+    expect(draft.discounts).toHaveLength(1);
+    expect(draft.discounts[0]).toMatchObject({
+      name: 'PWD',
+      amount: '300.00',
+      everyone: false,
+      members: { Cy: true },
+    });
+    expect(draft.charges).toMatchObject([{ name: 'Service charge', amount: '245.55' }]);
+    expect(draft.shared).toEqual([]);
   });
 });

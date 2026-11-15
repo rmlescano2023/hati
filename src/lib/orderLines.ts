@@ -1,6 +1,6 @@
 import { distributeRemainder, getItemShares } from './calculations.js';
 import { billAmounts, billMembers } from './bill.js';
-import { compareNames } from './format.js';
+import { compareNames, formatSignedMoney } from './format.js';
 import { createId } from './id.js';
 import { parsePositiveAmount, sumMoney } from './money.js';
 import { SESSION_NAME_MAX, normaliseSessionName } from './sessionName.js';
@@ -378,17 +378,46 @@ export type BillDraftView = {
 const sectionTotal = (rows: { amount: string }[]) =>
   sumMoney(rows.map((r) => parsePositiveAmount(r.amount)));
 
-/** The first shared order whose name has no price, or whose price has nobody to share it. */
-function sharedHintFor(rows: SplitRowDraft[], picked: string[]): string | null {
+/**
+ * The first problem in a shared order or discount section, in row order: a named
+ * row with no amount, or a priced row with nobody ticked (BR-CA28).
+ */
+function splitHint(
+  rows: SplitRowDraft[],
+  picked: string[],
+  unpriced: (name: string) => string,
+  nobody: (name: string) => string,
+): string | null {
   for (const row of rows) {
     const name = normaliseOrderName(row.name);
     const amount = parsePositiveAmount(row.amount);
-    if (name !== '' && amount === 0) return `Add a price for ${name} or remove it`;
-    if (amount > 0 && rowMembers(row, picked).length === 0) {
-      return name ? `Choose who shares ${name}` : 'Choose who shares the unnamed shared order';
+    if (name !== '' && amount === 0) return unpriced(name);
+    if (amount > 0 && rowMembers(row, picked).length === 0) return nobody(name);
+  }
+  return null;
+}
+
+/** The first charge with a name and no amount, or a priced one with nobody in the item to split it over. */
+function chargeHintFor(rows: ChargeRowDraft[], nobodyInItem: boolean): string | null {
+  for (const row of rows) {
+    const name = normaliseOrderName(row.name);
+    const amount = parsePositiveAmount(row.amount);
+    if (name !== '' && amount === 0) return `Add an amount for ${name} or remove it`;
+    if (amount > 0 && nobodyInItem) {
+      return 'Charges are split across the people with orders. Add an order first.';
     }
   }
   return null;
+}
+
+/** The first member, alphabetically, whose share would fall below ₱0.00 (BR-CA6, BR-CA11). */
+function floorHintFor(shares: Record<string, number>): string | null {
+  const below = Object.keys(shares)
+    .filter((m) => Math.round(shares[m] * 100) < 0)
+    .sort(compareNames)[0];
+  return below === undefined
+    ? null
+    : `${below}'s share would be ${formatSignedMoney(shares[below])}. Lower the discount or add ${below}'s order.`;
 }
 
 export function readBillDraft(picked: string[], lines: LinesDraft, bill: BillDraft): BillDraftView {
@@ -398,18 +427,28 @@ export function readBillDraft(picked: string[], lines: LinesDraft, bill: BillDra
   const discounts = sectionTotal(bill.discounts);
   const charges = sectionTotal(bill.charges);
   const others = sumMoney([shared, -discounts, charges]);
+  const shares = billAmounts(receipt, billMembers(receipt));
   return {
-    shares: billAmounts(receipt, billMembers(receipt)),
+    shares,
     subtotal: sumMoney([own, shared]),
     discounts,
     charges,
     entered: sumMoney([own, others]),
     others,
-    sharedHint: sharedHintFor(bill.shared, picked),
-    // Read by the Discounts and Charges sections, which come with them.
-    discountHint: null,
-    chargeHint: null,
-    floorHint: null,
+    sharedHint: splitHint(
+      bill.shared,
+      picked,
+      (name) => `Add a price for ${name} or remove it`,
+      (name) => (name ? `Choose who shares ${name}` : 'Choose who shares the unnamed shared order'),
+    ),
+    discountHint: splitHint(
+      bill.discounts,
+      picked,
+      (name) => `Add an amount for ${name} or remove it`,
+      (name) => (name ? `Choose who gets ${name}` : 'Choose who gets the unnamed discount'),
+    ),
+    chargeHint: chargeHintFor(bill.charges, billMembers(receipt).length === 0),
+    floorHint: floorHintFor(shares),
   };
 }
 
