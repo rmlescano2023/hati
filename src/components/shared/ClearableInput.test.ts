@@ -1,6 +1,8 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+import { ItemModeFields } from '../home/ItemModeFields';
+import { PayorModeFields } from '../home/PayorModeFields';
 import { ClearableInput } from './ClearableInput';
 
 const render = (props: Partial<Parameters<typeof ClearableInput>[0]> = {}) =>
@@ -65,5 +67,95 @@ describe('ClearableInput', () => {
     ]) {
       expect(input).toContain(attr);
     }
+  });
+});
+
+/* The Expenses form's props-only components, which need no context to render. */
+const clearLabels = (html: string) =>
+  [...html.matchAll(/<button[^>]*aria-label="([^"]*)"/g)].map((m) => m[1].replace(/&#x27;/g, "'"));
+
+const handlers = {
+  setName: () => {},
+  setPrice: () => {},
+  toggleAll: () => {},
+  toggleOwner: () => {},
+  setTotalAmount: () => {},
+  setLine: () => {},
+  addLine: () => {},
+  removeLine: () => {},
+  fillRemainder: () => {},
+};
+const derived = { picked: [], enteredTotal: 0, blankCount: 0, remainder: 0, missingPrice: null };
+
+describe('ClearableInput in the Expenses form', () => {
+  it('shows only the filled Item Name box on Equal Split', () => {
+    const html = renderToStaticMarkup(
+      createElement(ItemModeFields, {
+        members: ['Ana'],
+        draft: {
+          mode: 'equal',
+          name: 'Dinner',
+          price: '',
+          owners: {},
+          allSelected: false,
+          totalAmount: '',
+          lines: {},
+        },
+        handlers,
+        derived,
+      }),
+    );
+    const labels = clearLabels(html);
+    expect(labels.filter((l) => l.startsWith('Clear'))).toEqual(['Clear item name']);
+  });
+
+  it("clears Ana's first order only, and leaves the Remove names alone", () => {
+    const html = renderToStaticMarkup(
+      createElement(ItemModeFields, {
+        members: ['Ana'],
+        draft: {
+          mode: 'custom',
+          name: '',
+          price: '',
+          owners: { Ana: true },
+          allSelected: true,
+          totalAmount: '',
+          lines: {
+            Ana: [
+              { key: 'a', name: 'Pasta', price: '300' },
+              { key: 'b', name: '', price: '' },
+            ],
+          },
+        },
+        handlers,
+        derived: { ...derived, picked: ['Ana'] },
+      }),
+    );
+    const labels = clearLabels(html);
+    expect(labels.filter((l) => l.startsWith('Clear'))).toEqual([
+      "Clear Ana's order 1 name",
+      "Clear Ana's order 1 price",
+    ]);
+    expect(labels.filter((l) => l.startsWith('Remove'))).toEqual([
+      "Remove Ana's order Pasta",
+      "Remove Ana's order",
+    ]);
+  });
+
+  it('shows a clear only on the contribution that has an amount', () => {
+    const html = renderToStaticMarkup(
+      createElement(PayorModeFields, {
+        members: ['Ana', 'Ben'],
+        payorMode: 'multiple',
+        onPayorModeChange: () => {},
+        singlePayor: '',
+        onSinglePayorChange: () => {},
+        contributions: { Ana: '600', Ben: '' },
+        onContributionChange: () => {},
+        itemTotal: 1000,
+        contributed: 600,
+      }),
+    );
+    expect(clearLabels(html)).toEqual(["Clear Ana's contribution"]);
   });
 });

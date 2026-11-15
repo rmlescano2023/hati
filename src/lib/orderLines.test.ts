@@ -102,6 +102,18 @@ describe('blankPicked', () => {
   it('does not list a member with a priced line', () => {
     expect(blankPicked(sixPicked, exampleA)).toEqual(['Fay']);
   });
+
+  // A clear sets the same '' that deleting by hand does (AC-CF2.3, AC-CF2.5).
+  it('lists a member whose only priced line was cleared, and Fill Remainder gives it the rest (AC-CF2.3)', () => {
+    const lines: LinesDraft = { Ana: [line('', '200')], Ben: [line('', '')] };
+    expect(blankPicked(['Ana', 'Ben'], lines)).toEqual(['Ben']);
+    expect(fillRemainder(500, ['Ana', 'Ben'], lines).Ben[0].price).toBe('300.00');
+  });
+
+  it('does not list a member who still has another priced line after a clear (AC-CF2.5)', () => {
+    const lines: LinesDraft = { Ben: [line('', '300', 'a'), line('', '', 'b')] };
+    expect(blankPicked(['Ben'], lines)).toEqual([]);
+  });
 });
 
 /* ---------------------------- unpricedNamedLine --------------------------- */
