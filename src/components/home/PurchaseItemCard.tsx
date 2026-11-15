@@ -21,8 +21,12 @@ import { parsePositiveAmount as num, roundMoney, sumMoney } from '../../lib/mone
 import {
   buildRecords,
   contributionsMatch,
+  findSavedItem,
   purgeMemberFromStaged,
   readContributions,
+  sameStaged,
+  stagedFromSaved,
+  type SavedItemRef,
   type StagedItem,
 } from '../../lib/staging';
 import { todayIso } from '../../lib/format';
@@ -79,6 +83,56 @@ function draftFromItem(item: PurchaseItem, members: string[]): ItemDraft {
   };
 }
 
+/** The five fields Purchase Details holds, which a staged or saved item loads into and is stamped from. */
+type Fields = {
+  date: string;
+  payorMode: PayorMode;
+  singlePayor: string;
+  contributions: Record<string, string>;
+  draft: ItemDraft;
+};
+
+/** The fields as they stand to show `row`: what Edit loads. */
+function fieldsFromStaged(row: StagedItem, members: string[]): Fields {
+  return {
+    date: row.date,
+    payorMode: row.payorMode,
+    singlePayor: row.payorMode === 'single' ? row.payors[0].member : '',
+    contributions:
+      row.payorMode === 'multiple'
+        ? Object.fromEntries(row.payors.map((p) => [p.member, p.amount.toFixed(2)]))
+        : {},
+    draft: draftFromItem(row.item, members),
+  };
+}
+
+/** The fields as a staged item with the given id: its item, date and payors (BR-1). */
+function stampFields(fields: Fields, members: string[], id: string): StagedItem {
+  const { date, payorMode, singlePayor, contributions, draft } = fields;
+  const owners = draft.allSelected ? members : members.filter((m) => draft.owners[m]);
+  const name = draft.name.trim();
+  const item: PurchaseItem =
+    draft.mode === 'equal'
+      ? { id, mode: 'equal', name, totalPrice: num(draft.price), owners }
+      : {
+          id,
+          mode: 'custom',
+          name,
+          amounts: Object.fromEntries(
+            members.filter((m) => num(draft.amounts[m]) > 0).map((m) => [m, num(draft.amounts[m])]),
+          ),
+        };
+  return {
+    item,
+    date,
+    payorMode,
+    payors:
+      payorMode === 'single'
+        ? [{ member: singlePayor, amount: getItemTotal(item) }]
+        : readContributions(contributions, members),
+  };
+}
+
 const TONE_CLASS: Record<SaveMessageTone, string> = {
   muted: styles.saving,
   accent: styles.success,
@@ -89,17 +143,36 @@ type Props = {
   /** Held by the Expenses page, so Group Members can see what is staged. */
   staged: StagedItem[];
   setStaged: Dispatch<SetStateAction<StagedItem[]>>;
+  /** A saved item out for editing, or null; set only while this tab is open (BR-CO27). */
+  savedEdit: SavedItemRef | null;
+  /** Ends that edit and goes back to Breakdown; `removed` when the item had gone (BR-CO33, BR-CO35). */
+  onSavedEditEnd: (removed: boolean) => void;
 };
 
-export function PurchaseItemCard({ staged, setStaged }: Props) {
-  const { members, addRecords } = useAppData();
+export function PurchaseItemCard({ staged, setStaged, savedEdit, onSavedEditEnd }: Props) {
+  const { members, records, addRecords, saveItemEdit } = useAppData();
   const { sync } = useSessionsStore();
 
-  const [date, setDate] = useState(todayIso);
-  const [payorMode, setPayorMode] = useState<PayorMode>('single');
-  const [singlePayor, setSinglePayor] = useState('');
-  const [contributions, setContributions] = useState<Record<string, string>>({});
-  const [draft, setDraft] = useState<ItemDraft>(EMPTY_DRAFT);
+  // Loaded once per mount: Expenses always mounts fresh for a saved-item edit,
+  // because Edit is pressed on Breakdown.
+  const [savedBoot] = useState(() => {
+    const found = savedEdit && findSavedItem(records, savedEdit);
+    if (!savedEdit || !found) return null;
+    const fields = fieldsFromStaged(stagedFromSaved(found.record, found.item), members);
+    // What Save Edits compares against: the loaded fields stamped the same way
+    // the edited ones will be, so an untouched old item counts as unchanged (BR-CO32).
+    return { fields, baseline: stampFields(fields, members, savedEdit.itemId) };
+  });
+
+  const [date, setDate] = useState(() => savedBoot?.fields.date ?? todayIso());
+  const [payorMode, setPayorMode] = useState<PayorMode>(
+    () => savedBoot?.fields.payorMode ?? 'single',
+  );
+  const [singlePayor, setSinglePayor] = useState(() => savedBoot?.fields.singlePayor ?? '');
+  const [contributions, setContributions] = useState<Record<string, string>>(
+    () => savedBoot?.fields.contributions ?? {},
+  );
+  const [draft, setDraft] = useState<ItemDraft>(() => savedBoot?.fields.draft ?? EMPTY_DRAFT);
   /** The row being edited, with what to put back when the edit ends; null when none is. */
   const [editing, setEditing] = useState<{ id: string; restore: EditRestore } | null>(null);
   const [message, dispatch] = useReducer(saveMessageReducer, initialSaveMessage);
@@ -186,32 +259,8 @@ export function PurchaseItemCard({ staged, setStaged }: Props) {
       : contributionsMatch(typedContributions, itemTotal);
   const canAddItem = itemValid && date !== '' && payorValid;
 
-  /** The fields as a staged item with the given id: its item, date and payors (BR-1). */
-  const stampItem = (id: string): StagedItem => {
-    const name = draft.name.trim();
-    const item: PurchaseItem =
-      draft.mode === 'equal'
-        ? { id, mode: 'equal', name, totalPrice: num(draft.price), owners: selectedOwners }
-        : {
-            id,
-            mode: 'custom',
-            name,
-            amounts: Object.fromEntries(
-              members
-                .filter((m) => num(draft.amounts[m]) > 0)
-                .map((m) => [m, num(draft.amounts[m])]),
-            ),
-          };
-    return {
-      item,
-      date,
-      payorMode,
-      payors:
-        payorMode === 'single'
-          ? [{ member: singlePayor, amount: getItemTotal(item) }]
-          : typedContributions,
-    };
-  };
+  const stampItem = (id: string): StagedItem =>
+    stampFields({ date, payorMode, singlePayor, contributions, draft }, members, id);
 
   const addItem = () => {
     if (!canAddItem) return;
@@ -229,15 +278,12 @@ export function PurchaseItemCard({ staged, setStaged }: Props) {
     if (!row) return;
     // Whatever was half-typed is replaced without asking (AC-4.3).
     setEditing({ id, restore: { date, payorMode, singlePayor, mode: draft.mode } });
-    setDate(row.date);
-    setPayorMode(row.payorMode);
-    setSinglePayor(row.payorMode === 'single' ? row.payors[0].member : '');
-    setContributions(
-      row.payorMode === 'multiple'
-        ? Object.fromEntries(row.payors.map((p) => [p.member, p.amount.toFixed(2)]))
-        : {},
-    );
-    setDraft(draftFromItem(row.item, members));
+    const fields = fieldsFromStaged(row, members);
+    setDate(fields.date);
+    setPayorMode(fields.payorMode);
+    setSinglePayor(fields.singlePayor);
+    setContributions(fields.contributions);
+    setDraft(fields.draft);
     // So a phone user sees the fields fill. Date takes focus only with a fine
     // pointer: on touch it would open the keyboard or the date picker unasked.
     sectionRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
@@ -257,6 +303,14 @@ export function PurchaseItemCard({ staged, setStaged }: Props) {
     restoreFocusTo.current = current.id;
     setEditing(null);
   }, []);
+
+  const saveSavedEdit = () => {
+    if (!savedEdit || !savedBoot || !canAddItem) return;
+    const next = stampItem(savedEdit.itemId);
+    // Nothing changed writes nothing, so an old item is never rewritten (BR-CO32, AC-CO9.2).
+    if (!sameStaged(next, savedBoot.baseline)) saveItemEdit(savedEdit, next);
+    onSavedEditEnd(false);
+  };
 
   const saveEdits = () => {
     if (!editing || !canAddItem) return;
@@ -306,6 +360,25 @@ export function PurchaseItemCard({ staged, setStaged }: Props) {
     }
   }, [members, staged, editing, setStaged, endEdit]);
 
+  // The item can go while it is open: a member removal that takes its record
+  // with its payor, Clear All, another device, or a "Try again" reload. The
+  // edit then ends as Cancel does, with a note on Breakdown (BR-CO35). Clear All
+  // also remounts the card, which finds no item and ends the edit straight away.
+  useEffect(() => {
+    if (savedEdit && !findSavedItem(records, savedEdit)) onSavedEditEnd(true);
+  }, [records, savedEdit, onSavedEditEnd]);
+
+  // So a phone user sees the fields fill, as Edit on a staged item does. Date
+  // takes focus only with a fine pointer: on touch it would open the keyboard
+  // or the date picker unasked.
+  useEffect(() => {
+    if (!savedBoot) return;
+    sectionRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    if (!window.matchMedia('(pointer: coarse)').matches) {
+      document.getElementById('purchase-date')?.focus({ preventScroll: true });
+    }
+  }, [savedBoot]);
+
   useEffect(() => {
     if (editing !== null || restoreFocusTo.current === null) return;
     const id = restoreFocusTo.current;
@@ -340,8 +413,9 @@ export function PurchaseItemCard({ staged, setStaged }: Props) {
   }, [validationSupplied]);
 
   const save = () => {
-    // The button is disabled only during an edit, so a click with nothing
-    // staged says what, rather than the button just not responding.
+    // The button is disabled only during an edit, of a staged or a saved item,
+    // so a click with nothing staged says what, rather than the button just not
+    // responding.
     if (firstMissing(missing)) {
       dispatch({ type: 'invalid', missing });
       return;
@@ -388,6 +462,8 @@ export function PurchaseItemCard({ staged, setStaged }: Props) {
 
         <hr className={styles.divider} />
 
+        {savedEdit && <p className={styles.savedEditNote}>Editing saved item: {savedEdit.name}</p>}
+
         <div className={styles.subhead}>
           <span className={styles.subLabel}>Add Item</span>
           <ModeToggle
@@ -419,7 +495,16 @@ export function PurchaseItemCard({ staged, setStaged }: Props) {
         />
 
         <div className={styles.actions}>
-          {editing ? (
+          {savedEdit ? (
+            <>
+              <Button variant="ghost" onClick={() => onSavedEditEnd(false)}>
+                Cancel
+              </Button>
+              <Button onClick={saveSavedEdit} disabled={!canAddItem}>
+                Save Edits
+              </Button>
+            </>
+          ) : editing ? (
             <>
               <Button variant="ghost" onClick={() => endEdit(editing)}>
                 Cancel
@@ -451,7 +536,7 @@ export function PurchaseItemCard({ staged, setStaged }: Props) {
         <span className={`${styles.message} ${TONE_CLASS[shown.tone]}`} role="status">
           {shown.text}
         </span>
-        <Button variant="primary" onClick={save} disabled={editing !== null}>
+        <Button variant="primary" onClick={save} disabled={editing !== null || savedEdit !== null}>
           Save to Breakdown →
         </Button>
       </div>

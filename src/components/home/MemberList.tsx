@@ -6,17 +6,19 @@ import { useAppData } from '../../context/AppDataContext';
 import { IncludeMemberDialog } from './IncludeMemberDialog';
 import { compareNames, toTitleCase } from '../../lib/format';
 import { includableGroups, type ItemRef } from '../../lib/includeMember';
-import { stagedNamesMember, type StagedItem } from '../../lib/staging';
+import { stagedNamesMember, type SavedItemRef, type StagedItem } from '../../lib/staging';
 import styles from './MemberList.module.css';
 
 type Props = {
   /** What is staged on the Expenses tab, which removing members also affects. */
   staged: StagedItem[];
+  /** The saved item open for editing, which the include dialog leaves out (BR-CO36). */
+  savedEdit: SavedItemRef | null;
   /** Called after Clear All goes through, so the page can reset what it holds. */
   onClearAll: () => void;
 };
 
-export function MemberList({ staged, onClearAll }: Props) {
+export function MemberList({ staged, savedEdit, onClearAll }: Props) {
   const { members, records, addMember, removeMember, clearMembers } = useAppData();
   const [draft, setDraft] = useState('');
   const [error, setError] = useState('');
@@ -41,7 +43,7 @@ export function MemberList({ staged, onClearAll }: Props) {
       return;
     }
     // Nothing to offer means nothing to ask, so the member goes straight in.
-    if (includableGroups(records, members, name).length > 0) {
+    if (includableGroups(records, members, name, savedEdit ?? undefined).length > 0) {
       setIncluding(name);
       return;
     }
@@ -162,7 +164,7 @@ export function MemberList({ staged, onClearAll }: Props) {
       {including !== null && (
         <IncludeMemberDialog
           name={including}
-          groups={includableGroups(records, members, including)}
+          groups={includableGroups(records, members, including, savedEdit ?? undefined)}
           onInclude={(include) => finishAdd(including, include)}
           onSkip={() => finishAdd(including, [])}
           onCancel={() => setIncluding(null)}

@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { MemberList } from '../components/home/MemberList';
 import { PurchaseItemCard } from '../components/home/PurchaseItemCard';
-import type { StagedItem } from '../lib/staging';
+import type { SavedItemRef, StagedItem } from '../lib/staging';
 
 // Dev-only: `import.meta.env.DEV` is statically false in a production build, so
 // this branch and everything it pulls in are dropped at build time.
@@ -12,6 +12,10 @@ const DevDataBar = import.meta.env.DEV
 type Props = {
   /** Told how many items are staged, so the workspace can warn before leaving them. */
   onStagedCountChange: (count: number) => void;
+  /** A saved item out for editing, which the workspace holds; null when none is. */
+  savedEdit: SavedItemRef | null;
+  /** Ends that edit and returns to Breakdown; `removed` when the item had gone. */
+  onSavedEditEnd: (removed: boolean) => void;
 };
 
 /**
@@ -24,7 +28,7 @@ function warnAboutStaged(event: BeforeUnloadEvent) {
   event.returnValue = '';
 }
 
-export function ExpensesPage({ onStagedCountChange }: Props) {
+export function ExpensesPage({ onStagedCountChange, savedEdit, onSavedEditEnd }: Props) {
   // Held here rather than in the card so Group Members can see what is staged.
   // Unmounting this page still drops it, which is what leaving the tab means.
   const [staged, setStaged] = useState<StagedItem[]>([]);
@@ -32,8 +36,10 @@ export function ExpensesPage({ onStagedCountChange }: Props) {
   // One Payor with no pick, Equal Split, empty fields and no edit open.
   const [formKey, setFormKey] = useState(0);
 
-  // An open edit always has a staged item, so the count alone says whether
-  // there is work to lose. Back to 0 on unmount, because leaving drops it.
+  // An open edit of a staged item always has a staged item, so the count alone
+  // says whether there is work to lose. An edit of a saved item is reported
+  // separately, through the workspace's own state. Back to 0 on unmount, because
+  // leaving drops it.
   useEffect(() => {
     onStagedCountChange(staged.length);
     return () => onStagedCountChange(0);
@@ -41,12 +47,12 @@ export function ExpensesPage({ onStagedCountChange }: Props) {
 
   // Reloading, closing the tab and the browser's Back button leave the app
   // without going through its own tabs, so the browser asks instead.
-  const hasStaged = staged.length > 0;
+  const hasUnsaved = staged.length > 0 || savedEdit !== null;
   useEffect(() => {
-    if (!hasStaged) return;
+    if (!hasUnsaved) return;
     window.addEventListener('beforeunload', warnAboutStaged);
     return () => window.removeEventListener('beforeunload', warnAboutStaged);
-  }, [hasStaged]);
+  }, [hasUnsaved]);
 
   return (
     <>
@@ -57,12 +63,19 @@ export function ExpensesPage({ onStagedCountChange }: Props) {
       )}
       <MemberList
         staged={staged}
+        savedEdit={savedEdit}
         onClearAll={() => {
           setStaged([]);
           setFormKey((k) => k + 1);
         }}
       />
-      <PurchaseItemCard key={formKey} staged={staged} setStaged={setStaged} />
+      <PurchaseItemCard
+        key={formKey}
+        staged={staged}
+        setStaged={setStaged}
+        savedEdit={savedEdit}
+        onSavedEditEnd={onSavedEditEnd}
+      />
     </>
   );
 }
