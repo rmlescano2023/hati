@@ -22,8 +22,8 @@ to BR-CF11). Section 8 of that file records the owner's answers:
 - **CQ2:** Tab skips the buttons (`tabIndex={-1}`). Screen readers still reach them by
   `aria-label`.
 - **CQ3:** Escape does nothing new.
-- **CQ4:** on phones the order line's price box gets a 44px-tall, 24px-wide tap area. Every other
-  box gets 44 × 44.
+- **CQ4:** on phones the order line's name and price boxes get a 44px-tall, 24px-wide tap area.
+  Every other box gets 44 × 44. (The owner extended this to the name box after D1.)
 
 The system-architect was skipped: nothing outside the UI changes.
 
@@ -146,7 +146,7 @@ Markup:
 | 1 | Item Name | `ItemModeFields.tsx` | `"Clear item name"` | none | no |
 | 2 | Total Price | `ItemModeFields.tsx` | `"Clear total price"` | none | no |
 | 3 | Total Amount | `CustomAmountFields.tsx` | `"Clear total amount"` | none | no |
-| 4 | Order line name | `CustomAmountFields.tsx` | `` `Clear ${m}'s order ${i + 1} name` `` | none | no |
+| 4 | Order line name | `CustomAmountFields.tsx` | `` `Clear ${m}'s order ${i + 1} name` `` | none | **yes** |
 | 5 | Order line price | `CustomAmountFields.tsx` | `` `Clear ${m}'s order ${i + 1} price` `` | none | **yes** |
 | 6 | Contribution | `PayorModeFields.tsx` | `` `Clear ${m}'s contribution` `` | `styles.contribAmount` | no |
 | 7 | New member name | `MemberList.tsx` | `"Clear new member name"` | `styles.nameBox` | no |
@@ -208,7 +208,7 @@ No other input changes (BR-CF1).
 
 /* Mobile shell: 44px tap areas. A 38px box lets the button overhang it by 3px
    above and below, which stays inside the gaps around every in-scope box. The
-   order line's price box is too narrow for 44px across, so it keeps 24px (CQ4). */
+   order line's name and price boxes are too narrow for 44px across, so they keep 24px (CQ4). */
 @media (max-width: 640px) {
   .wrap {
     --clear-slot: 44px;
@@ -244,7 +244,7 @@ Sizes:
 | Width | Box | Tap area (w × h) | Padding while filled |
 |---|---|---|---|
 | Desktop | every in-scope box | 24 × box height (38px; 36px inside the contribution row) | 24px |
-| Phone | order line price | 24 × 44 | 24px |
+| Phone | order line name and price | 24 × 44 | 24px |
 | Phone | every other in-scope box | 44 × 44 | 44px |
 
 ### 6.2 Call-site CSS
@@ -365,8 +365,8 @@ On `npm run dev:full`, at 1280px and at 375px and 320px:
 7. Tab from Item Name goes to the next box, never to a ×; a screen reader (VoiceOver) reads "Clear
    Ana's order 1 price, button" and the Remove as "Remove Ana's order" (CQ2, AC-CF3.2). Escape in a
    box does nothing (CQ3).
-8. Phone: the price box's × is about 24 × 44 and "1250.00" stays fully visible beside it; every
-   other × is 44 × 44; tapping the price × never removes the line (CQ4, AC-CF3.3, AC-CF4.1). No box
+8. Phone: the name and price boxes' × is about 24 × 44 and "1250.00" stays fully visible beside
+   it; every other × is 44 × 44; tapping the price × never removes the line (CQ4, AC-CF3.3, AC-CF4.1). No box
    is taller than on `main`.
 9. 320px: nothing scrolls sideways; no text sits under a ×; a long member name in a contribution row
    truncates while the amount and × stay whole (AC-CF4.3, BR-CF7).
@@ -403,7 +403,7 @@ For the documentation-engineer:
 |---|---|
 | The setter technique depends on React's value tracking. It's stable across React 16 to 19 and is what Testing Library relies on, but it's not a public React API. | It's confined to one handler with a comment; tester checks 2 to 6 exercise every field. If it ever broke, the fallback is an `onClear` prop per call site. |
 | CSS specificity between the component and the call sites (the contribution padding, the old `.line button` rule). | Spelled out in 6.1 and 6.2; tester checks 8 to 10. |
-| The 44px slot leaves the order line's **name** box little visible text at 320px. That's about 81px wide, so roughly 24px of text shows while it's filled (about 57px today). At 375px about 80px shows. | Owner's CQ4 answer applied as given; see D1. |
+| A 44px slot would leave the order line's **name** box almost no visible text at 320px (measured: a 57px box, about 2px of text while filled). | Resolved: the name box uses `compactClear` too, so about 22px of text shows at 320px; see D1. |
 | `renderToStaticMarkup` under the `node` environment imports CSS Modules. Vitest stubs them by default, and no existing test imports a component yet. | If a stub causes trouble, the developer reports it rather than changing the Vitest config. |
 | Tab order or the tour shifts. | `tabIndex={-1}`; no `data-tour` nearby; both tour tests run. |
 
@@ -414,13 +414,11 @@ touch-ups and one test file. Risk: low.
 
 Neither blocks the build; each has a default the developer follows.
 
-- **D1. The order name box at 320px.** CQ4 gives every box other than the order price 44 × 44. On
-  a 320px phone, that leaves an order name box with about three characters of visible text while
-  it's filled. Long names still scroll, and the full name is kept.
-  - **Default and recommendation:** build as you decided. 320px phones are rare, and at 360 to
-    430px about 65 to 110px of text shows.
-  - **Alternative:** if the tester or you find it too tight, pass `compactClear` to the order name
-    box too. That's a one-word change, giving it a 24 × 44 tap area like the price.
+- **D1. The order name box at 320px.** CQ4 gave every box other than the order price 44 × 44. On
+  a 320px phone, that left an order name box with about 2px of visible text while it's filled
+  (measured in the running app).
+  - **Resolved by the owner:** pass `compactClear` to the order name box too, giving both
+    order-line boxes a 24 × 44 tap area. Long names still scroll, and the full name is kept.
 - **D2. Interaction tests under Vitest.** Running clicks, focus and `validity.badInput` in
   `npm test` would need `jsdom` (and ideally `@testing-library/react`) as new dev dependencies.
   - **Recommendation:** no. The render tests, the `src/lib` tests and the tester's checks cover

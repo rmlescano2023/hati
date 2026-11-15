@@ -43,7 +43,7 @@
 
 /* Mobile shell: 44px tap areas. A 38px box lets the button overhang it by 3px
    above and below, which stays inside the gaps around every in-scope box. The
-   order line's price box is too narrow for 44px across, so it keeps 24px. */
+   order line's name and price boxes are too narrow for 44px across, so they keep 24px. */
 @media (max-width: 640px) {
   .wrap {
     --clear-slot: 44px;

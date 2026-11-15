@@ -122,6 +122,7 @@ export function CustomAmountFields({
                     <ClearableInput
                       type="text"
                       clearLabel={`Clear ${m}'s order ${i + 1} name`}
+                      compactClear
                       maxLength={ORDER_NAME_MAX}
                       placeholder="Order (optional)"
                       aria-label={`${m}'s order ${i + 1} name`}

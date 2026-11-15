@@ -175,7 +175,7 @@ All four were resolved by the owner on 2026-11-15. The "pending CQn" notes above
    - **Recommended:** no. It would be easy to lose an amount by accident, and Escape already means "close" for the page's dialogs.
    - **Resolved:** no. Escape does nothing new.
 4. **CQ4. On a phone, the order line's price box is only 92px wide. A 44px-wide tap area inside it leaves room for about four digits.**
-   - **Option A (recommended):** in that box only, the tap area is the full 44px tall but narrower (about 24px), so amounts of up to seven characters, such as "1250.00", stay fully visible. Every other box gets 44 × 44.
+   - **Option A (recommended):** in that box only, the tap area is the full 44px tall but narrower (about 24px), so amounts of up to seven characters, such as "1250.00", stay fully visible. Every other box gets 44 × 44. (Extended to the order name box too; see the resolution.)
    - **Option B:** widen the price box on phones, which narrows the order name box (to about 60px on a 320px phone).
    - **Option C:** keep 44 × 44 and let the button cover the end of longer amounts.
-   - **Resolved:** Option A. In the order line's price box on phones, the tap area is 44px tall and about 24px wide, so amounts like "1250.00" stay visible. Every other box gets 44 × 44.
+   - **Resolved:** Option A. In the order line's price box on phones, the tap area is 44px tall and about 24px wide, so amounts like "1250.00" stay visible. The order line's name box gets the same 44px-tall, 24px-wide tap area, because a 44px slot left it almost no visible text at 320px. Every other box gets 44 × 44.
