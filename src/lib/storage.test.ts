@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { parseAppData, serializeAppData, EMPTY_DATA, SCHEMA_VERSION } from './storage';
-import type { AppData, PurchaseRecord } from '../types';
+import {
+  parseAppData,
+  parseSession,
+  serializeAppData,
+  EMPTY_DATA,
+  SCHEMA_VERSION,
+} from './storage';
+import { exampleA, exampleB, exampleD1 } from './billExamples';
+import type { AppData, BillLine, CustomAmountItem, PurchaseItem, PurchaseRecord } from '../types';
 
 const record: PurchaseRecord = {
   id: 'rec_1',
@@ -135,5 +142,241 @@ describe('parseAppData', () => {
       ],
     });
     expect(parseAppData(raw).sessions[0].closedAt).toBe('2026-09-01T08:00:00.000Z');
+  });
+});
+
+describe('parseSession and the bill of a Custom item', () => {
+  /** A session whose one record holds `item`, so each case names only the item. */
+  const withItem = (item: unknown) => ({
+    id: 'session_1',
+    members: ['Ana', 'Ben', 'Cy', 'Dan', 'Eve', 'Fay'],
+    records: [{ ...record, items: [item] }],
+  });
+  const parsedItem = (item: unknown): PurchaseItem | undefined =>
+    parseSession(withItem(item))?.records[0].items[0];
+
+  /** An item that keeps its amounts and drops the bill (BR-CA44). */
+  const dropsBill = (item: unknown) => {
+    const parsed = parsedItem(item);
+    expect(parsed?.mode).toBe('custom');
+    expect(parsed && 'bill' in parsed).toBe(false);
+    return parsed as CustomAmountItem;
+  };
+
+  const a = exampleA();
+  const aBill = a.bill as BillLine[];
+  const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value));
+
+  it('S-1 keeps a valid bill in the order sent, names tidied and cut to 60, known keys only', () => {
+    const long = 'x'.repeat(80);
+    const item = parsedItem({
+      ...a,
+      bill: [
+        { ...aBill[0], name: `  Pork \t ramen ${long}`, extra: 'dropped' },
+        aBill[1],
+        { ...aBill[2], members: ['Ben', 'Ana'], amount: 290.004 },
+      ],
+    }) as CustomAmountItem;
+    expect(item.bill).toHaveLength(3);
+    const [first, , third] = item.bill as BillLine[];
+    expect(Array.from(first.name)).toHaveLength(60);
+    expect(first.name.startsWith('Pork ramen x')).toBe(true);
+    expect(Object.keys(first)).toEqual(['kind', 'member', 'name', 'amount']);
+    // The members are kept in the order sent.
+    expect(third).toEqual({ kind: 'shared', members: ['Ben', 'Ana'], name: 'Gyoza', amount: 290 });
+    expect(item.amounts).toEqual({ Ana: 865, Ben: 895 });
+  });
+
+  it('S-2 drops the bill, keeps the amounts and never drops the session', () => {
+    const bad: unknown[] = [
+      'nope',
+      [],
+      [...aBill, null],
+      [...aBill, 'x'],
+      [...aBill, { kind: 'bonus', name: 'x', amount: 1 }],
+      [{ ...aBill[0], name: 7 }, aBill[1], aBill[2]],
+      ...[0, -5, NaN, Infinity, '120'].map((amount) => [
+        aBill[0],
+        aBill[1],
+        { ...aBill[2], amount },
+      ]),
+      [{ ...aBill[0], member: 7 }, aBill[1], aBill[2]],
+      ...[undefined, [], ['Ana', 7], ['Ana', 'Ana'], 'Ana'].map((members) => [
+        aBill[0],
+        aBill[1],
+        { ...aBill[2], members },
+      ]),
+    ];
+    for (const bill of bad) {
+      const parsed = dropsBill({ ...a, bill });
+      expect(parsed.amounts).toEqual({ Ana: 865, Ben: 895 });
+    }
+  });
+
+  it('S-3 drops the bill when a shared or discount member is not in amounts', () => {
+    dropsBill({ ...a, bill: [aBill[0], aBill[1], { ...aBill[2], members: ['Ana', 'Zed'] }] });
+    const d = exampleD1();
+    dropsBill({
+      ...d,
+      bill: [
+        (d.bill as BillLine[])[0],
+        (d.bill as BillLine[])[1],
+        { kind: 'discount', members: ['Zed'], name: 'V', amount: 450 },
+      ],
+    });
+  });
+
+  it('S-4 skips an order line for a member not in amounts and keeps the rest when they agree', () => {
+    const item = parsedItem({
+      ...a,
+      bill: [
+        aBill[0],
+        { kind: 'order', member: 'Gone', name: 'Ghost', amount: 40 },
+        aBill[1],
+        aBill[2],
+      ],
+    }) as CustomAmountItem;
+    expect(item.bill).toEqual(aBill);
+  });
+
+  it('S-4 leaves out an order for an inherited object key rather than failing', () => {
+    for (const member of ['constructor', 'toString', 'hasOwnProperty']) {
+      const item = parsedItem({
+        ...a,
+        bill: [...aBill, { kind: 'order', member, name: 'Ghost', amount: 5 }],
+      }) as CustomAmountItem;
+      expect(item.bill).toEqual(aBill);
+    }
+  });
+
+  it('S-5 drops the bill when an amounts key is on no order or shared line (BR-CA13)', () => {
+    dropsBill({ ...a, amounts: { Ana: 865, Ben: 895, Cy: 0 } });
+    const d = exampleD1();
+    // Cy has only a discount, which doesn't put a member in the item.
+    dropsBill({
+      ...d,
+      amounts: { Ana: 0, Ben: 600, Cy: 0 },
+      bill: [
+        ...(d.bill as BillLine[]),
+        { kind: 'discount', members: ['Cy'], name: 'X', amount: 1 },
+      ],
+    });
+  });
+
+  it('S-6 drops the bill when any member is a centavo off', () => {
+    dropsBill({ ...a, amounts: { Ana: 865.01, Ben: 895 } });
+    dropsBill({ ...a, amounts: { Ana: 865, Ben: 894.99 } });
+    const b = exampleB();
+    dropsBill({ ...b, amounts: { ...b.amounts, Fay: 441.41 } });
+  });
+
+  it('S-7 drops the bill when a share is below 0, even when amounts agree (BR-CA6)', () => {
+    const bill: BillLine[] = [
+      { kind: 'order', member: 'Ana', name: 'Pasta', amount: 100 },
+      { kind: 'order', member: 'Ben', name: 'Steak', amount: 100 },
+      { kind: 'discount', members: ['Ana'], name: 'Big', amount: 150 },
+    ];
+    dropsBill({ id: 'i', mode: 'custom', name: 'x', amounts: { Ana: -50, Ben: 100 }, bill });
+  });
+
+  it('S-8 drops a bill of own orders only, and still parses the lines beside it (BR-CA43)', () => {
+    const item = parsedItem({
+      id: 'i',
+      mode: 'custom',
+      name: 'x',
+      amounts: { Ana: 30 },
+      bill: [{ kind: 'order', member: 'Ana', name: 'Sisig', amount: 30 }],
+      lines: [{ member: 'Ana', name: 'Sisig', amount: 30 }],
+    }) as CustomAmountItem;
+    expect('bill' in item).toBe(false);
+    expect(item.lines).toEqual([{ member: 'Ana', name: 'Sisig', amount: 30 }]);
+  });
+
+  it('S-9 keeps only a valid bill beside lines, and the lines beside an invalid bill', () => {
+    const lines = [
+      { member: 'Ana', name: 'Ramen', amount: 865 },
+      { member: 'Ben', name: 'Ramen', amount: 895 },
+    ];
+    const both = parsedItem({ ...a, lines }) as CustomAmountItem;
+    expect(both.bill).toEqual(aBill);
+    expect('lines' in both).toBe(false);
+
+    const invalid = parsedItem({ ...a, lines, bill: 'nope' }) as CustomAmountItem;
+    expect('bill' in invalid).toBe(false);
+    expect(invalid.lines).toEqual(lines);
+  });
+
+  it('S-10 treats a member called __proto__ as a key, never as the prototype', () => {
+    const bill: BillLine[] = [
+      { kind: 'order', member: '__proto__', name: 'Ghost', amount: 5 },
+      { kind: 'order', member: 'Ana', name: 'Real', amount: 5 },
+      { kind: 'charge', name: 'Fee', amount: 2 },
+    ];
+    const raw = JSON.parse(
+      JSON.stringify({ id: 'i', mode: 'custom', name: 'x', amounts: { Ana: 7 }, bill }),
+    );
+    // `amounts` holds only Ana, so the order for `__proto__` is skipped, as an
+    // order for a removed member is, and the rest (Ana 5 + the whole fee) agrees.
+    const item = parsedItem(raw) as CustomAmountItem;
+    expect(item.bill).toEqual([bill[1], bill[2]]);
+    expect(Object.getPrototypeOf(item.amounts)).toBe(Object.prototype);
+    expect(({} as Record<string, unknown>).Ana).toBeUndefined();
+  });
+
+  it('S-11 returns an Equal item without a stray bill', () => {
+    const item = parsedItem({
+      id: 'e',
+      mode: 'equal',
+      name: 'Coffee',
+      totalPrice: 100,
+      owners: ['Ana'],
+      bill: aBill,
+    });
+    expect(item).toEqual({
+      id: 'e',
+      mode: 'equal',
+      name: 'Coffee',
+      totalPrice: 100,
+      owners: ['Ana'],
+    });
+  });
+
+  it('S-12 parses 100,000 charges over 5,000 members inside the default timeout', () => {
+    const members = Array.from({ length: 5000 }, (_, i) => `M${String(i).padStart(4, '0')}`);
+    // 100,000 charges of 50.00 give each of 5,000 members one centavo each, so
+    // every share is 10.00 + 1,000.00.
+    const bill: BillLine[] = [
+      ...members.map((member) => ({ kind: 'order' as const, member, name: 'Rice', amount: 10 })),
+      ...Array.from({ length: 100_000 }, () => ({
+        kind: 'charge' as const,
+        name: 'Fee',
+        amount: 50,
+      })),
+    ];
+    const amounts = Object.fromEntries(members.map((m) => [m, 1010]));
+    const item = parsedItem({
+      id: 'big',
+      mode: 'custom',
+      name: 'Big',
+      amounts,
+      bill,
+    }) as CustomAmountItem;
+    expect(item.bill).toHaveLength(105_000);
+  });
+
+  it('S-13 keeps a member at 0, the 0 included', () => {
+    const d = exampleD1();
+    const item = parsedItem(clone(d)) as CustomAmountItem;
+    expect(item).toEqual(d);
+    expect(item.amounts).toEqual({ Ana: 0, Ben: 600 });
+  });
+
+  it('OT-2 keeps the bill when a tab that never touched it saves, whatever order jsonb gives', () => {
+    const b = exampleB();
+    // jsonb doesn't keep object key order, so amounts comes back reordered.
+    const reordered = { ...b, amounts: Object.fromEntries(Object.entries(b.amounts).reverse()) };
+    const item = parsedItem(clone(reordered)) as CustomAmountItem;
+    expect(item.bill).toEqual(b.bill);
+    expect(item.amounts).toEqual(b.amounts);
   });
 });
