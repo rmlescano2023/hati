@@ -136,6 +136,12 @@
   white-space: nowrap;
 }
 
+/* An order's name can be long, so its pill wraps rather than widening the row. */
+.linePill {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 @media (max-width: 620px) {
   .head {
     display: none;
