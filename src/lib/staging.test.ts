@@ -690,7 +690,7 @@ describe('applyItemEdit, moved', () => {
     const records = [old];
     const result = applyItemEdit(
       records,
-      { recordId: old.id, itemId: 'gone', name: 'Gone' },
+      { recordId: old.id, itemId: 'gone' },
       stagedSingle('2026-11-12', 'Ana', a),
       FRESH,
     );
