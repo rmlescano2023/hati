@@ -95,6 +95,18 @@
   margin-top: 11px;
 }
 
+/* Shown on Breakdown when an edit closed because its item had gone. */
+.notice {
+  margin: 0 0 0.85rem;
+  padding: 10px 14px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
 /* Centred on the title's first line rather than on the whole block, so it sits
    beside the name, and beside the first line of one that wraps. The margins
    give back whatever it is taller than that line, so the line never grows. */

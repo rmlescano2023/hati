@@ -86,8 +86,8 @@
   border-radius: var(--radius-pill);
 }
 
-/* Mobile shell: momentum scrolling on iOS. Cells are plain text, not
-   EditableCell, so their padding is already comfortable. */
+/* Mobile shell: momentum scrolling on iOS. Cells are plain text, so their
+   padding is already comfortable. */
 @media (max-width: 640px) {
   .scroll {
     -webkit-overflow-scrolling: touch;

@@ -303,3 +303,36 @@ describe('includableGroups', () => {
     ]);
   });
 });
+
+describe('includableGroups with an item to skip', () => {
+  const members = ['Ana', 'Ben', 'Cy'];
+
+  it('leaves out exactly that item', () => {
+    const edited = equalItem('Edited', 10, ['Ana']);
+    const other = equalItem('Other', 20, ['Ana']);
+    const records = [record('2026-11-12', [{ member: 'Ana', amount: 30 }], [edited, other])];
+    const skip = { recordId: records[0].id, itemId: edited.id };
+
+    expect(includableGroups(records, members, 'Cy', skip)[0].items.map((i) => i.name)).toEqual([
+      'Other',
+    ]);
+  });
+
+  it('drops a group left with nothing to offer', () => {
+    const edited = equalItem('Edited', 10, ['Ana']);
+    const records = [record('2026-11-12', [{ member: 'Ana', amount: 10 }], [edited])];
+    const skip = { recordId: records[0].id, itemId: edited.id };
+
+    expect(includableGroups(records, members, 'Cy', skip)).toEqual([]);
+  });
+
+  it('is unchanged with no item to skip', () => {
+    const edited = equalItem('Edited', 10, ['Ana']);
+    const records = [record('2026-11-12', [{ member: 'Ana', amount: 10 }], [edited])];
+
+    expect(includableGroups(records, members, 'Cy')).toEqual(
+      includableGroups(records, members, 'Cy', undefined),
+    );
+    expect(includableGroups(records, members, 'Cy')[0].items).toHaveLength(1);
+  });
+});

@@ -28,6 +28,18 @@
   color: var(--text3);
 }
 
+.savedEditNote {
+  font-size: 12px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-bg);
+  color: var(--accent-text);
+  border: 1px solid var(--accent);
+  overflow-wrap: anywhere;
+  /* Where a phone's scroll to this line leaves it: a little below the top edge. */
+  scroll-margin-top: 12px;
+}
+
 .divider {
   border: none;
   border-top: 1px solid var(--border);

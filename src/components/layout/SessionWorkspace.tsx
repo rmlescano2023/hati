@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppDataProvider } from '../../context/AppDataContext';
 import { useSessionsStore } from '../../context/SessionsStoreContext';
 import { Button } from '../shared/Button';
@@ -11,6 +11,7 @@ import { BreakdownPage } from '../../pages/BreakdownPage';
 import { SummaryPage } from '../../pages/SummaryPage';
 import { pluralize } from '../../lib/format';
 import { sessionTitle } from '../../lib/sessionLabel';
+import type { SavedItemRef } from '../../lib/staging';
 import styles from './SessionWorkspace.module.css';
 
 type Props = {
@@ -39,6 +40,32 @@ export function SessionWorkspace({ sessionId, tab, onTabChange, onBack, onClosed
   // the place waiting on the answer.
   const [stagedCount, setStagedCount] = useState(0);
   const [leaveTo, setLeaveTo] = useState<SessionTabId | 'home' | null>(null);
+  /** The saved item the user chose to edit; meaningful only on the Expenses tab (BR-CO27). */
+  const [savedEdit, setSavedEdit] = useState<SavedItemRef | null>(null);
+  /** The item whose Edit prompt is open. */
+  const [editPrompt, setEditPrompt] = useState<SavedItemRef | null>(null);
+  /** Shown on Breakdown after an edit closed because its item had gone (BR-CO35). */
+  const [notice, setNotice] = useState<string | null>(null);
+
+  // Any way off the tab ends the edit, the tour's setScreen included, so a
+  // stale one can never come back on the next visit to Expenses. The notice
+  // belongs to the Breakdown visit it was shown on.
+  useEffect(() => {
+    if (tab !== 'expenses') setSavedEdit(null);
+    if (tab !== 'breakdown') setNotice(null);
+  }, [tab]);
+
+  // An edit of a saved item is unsaved work just as a staged item is.
+  const hasUnsaved = stagedCount > 0 || savedEdit !== null;
+
+  const endSavedEdit = useCallback(
+    (removed: boolean) => {
+      if (removed && savedEdit) setNotice(`${savedEdit.name} was removed, so the edit was closed.`);
+      setSavedEdit(null);
+      onTabChange('breakdown');
+    },
+    [savedEdit, onTabChange],
+  );
 
   useEffect(() => {
     if (!renaming && restoreFocus.current) {
@@ -62,7 +89,7 @@ export function SessionWorkspace({ sessionId, tab, onTabChange, onBack, onClosed
           variant="ghost"
           size="sm"
           data-tour="workspace-back"
-          onClick={() => (stagedCount > 0 ? setLeaveTo('home') : onBack())}
+          onClick={() => (hasUnsaved ? setLeaveTo('home') : onBack())}
         >
           ← Back to Home
         </Button>
@@ -118,19 +145,35 @@ export function SessionWorkspace({ sessionId, tab, onTabChange, onBack, onClosed
           // the browser doesn't blur it on the tap.
           setRenaming(false);
           // The current tab is not a way out, so it never asks.
-          if (stagedCount > 0 && t !== tab) setLeaveTo(t);
+          if (hasUnsaved && t !== tab) setLeaveTo(t);
           else onTabChange(t);
         }}
       />
 
-      {tab === 'expenses' && <ExpensesPage onStagedCountChange={setStagedCount} />}
-      {tab === 'breakdown' && <BreakdownPage />}
+      {tab === 'breakdown' && notice && (
+        <p className={styles.notice} role="status">
+          {notice}
+        </p>
+      )}
+
+      {tab === 'expenses' && (
+        <ExpensesPage
+          onStagedCountChange={setStagedCount}
+          savedEdit={savedEdit}
+          onSavedEditEnd={endSavedEdit}
+        />
+      )}
+      {tab === 'breakdown' && <BreakdownPage onEditItem={setEditPrompt} />}
       {tab === 'summary' && <SummaryPage onClosed={onClosed} />}
 
       <ConfirmDialog
         open={leaveTo !== null}
         title="Leave without saving?"
-        message={`You have ${pluralize(stagedCount, 'staged item')} that ${stagedCount === 1 ? "isn't" : "aren't"} saved.`}
+        message={
+          savedEdit
+            ? `Your changes to ${savedEdit.name} aren't saved.`
+            : `You have ${pluralize(stagedCount, 'staged item')} that ${stagedCount === 1 ? "isn't" : "aren't"} saved.`
+        }
         confirmLabel="Discard and leave"
         cancelLabel="Stay"
         destructive
@@ -139,9 +182,25 @@ export function SessionWorkspace({ sessionId, tab, onTabChange, onBack, onClosed
           const to = leaveTo;
           setLeaveTo(null);
           // Leaving unmounts the Expenses page, which is what drops the staged
-          // items. Nothing is saved.
+          // items, and the tab effect above ends a saved-item edit. Nothing is saved.
           if (to === 'home') onBack();
           else if (to) onTabChange(to);
+        }}
+      />
+
+      {/* Breakdown is on screen only after Expenses has unmounted, which drops
+          its staged items and typed fields, so there is never anything half-done
+          to warn about when Edit is pressed (BR-CO26). */}
+      <ConfirmDialog
+        open={editPrompt !== null}
+        title={`Edit ${editPrompt?.name ?? ''}?`}
+        message="It opens on the Expenses tab with its date and Paid By. Breakdown keeps it as it is until you press Save Edits."
+        confirmLabel="Edit item"
+        onCancel={() => setEditPrompt(null)}
+        onConfirm={() => {
+          setSavedEdit(editPrompt);
+          setEditPrompt(null);
+          onTabChange('expenses');
         }}
       />
     </AppDataProvider>

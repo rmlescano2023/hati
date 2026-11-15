@@ -1,10 +1,10 @@
 import { createContext, useCallback, useContext, useMemo, type ReactNode } from 'react';
 import { useServerSessions, type PaymentResult, type SyncStatus } from '../hooks/useServerSessions';
 import { compareNames, toTitleCase } from '../lib/format';
-import { roundMoney } from '../lib/money';
-import { getItemShares, purgeMemberFromItem } from '../lib/calculations';
+import { purgeMemberFromItem } from '../lib/calculations';
 import { includeMember, type ItemRef } from '../lib/includeMember';
 import { createId } from '../lib/id';
+import { applyItemEdit, type StagedItem } from '../lib/staging';
 import { applySessionName, normaliseSessionName } from '../lib/sessionName';
 import type {
   NewPayment,
@@ -75,15 +75,11 @@ type SessionsStoreValue = {
   ) => void;
   removeRecord: (sessionId: string, recordId: string) => void;
   removeItem: (sessionId: string, recordId: string, itemId: string) => void;
-  updateItemName: (sessionId: string, recordId: string, itemId: string, name: string) => void;
-  updateItemTotal: (sessionId: string, recordId: string, itemId: string, total: number) => void;
-  updateItemMemberAmount: (
-    sessionId: string,
-    recordId: string,
-    itemId: string,
-    member: string,
-    amount: number,
-  ) => void;
+  /**
+   * Writes an edited saved item back in one change: in place, or moved to the
+   * record its new Date and Paid By belong to. Does nothing if the item has gone.
+   */
+  saveItemEdit: (sessionId: string, ref: ItemRef, next: StagedItem) => void;
   replaceSessionData: (
     sessionId: string,
     data: { members: string[]; records: PurchaseRecord[] },
@@ -108,12 +104,6 @@ type SessionsStoreValue = {
 };
 
 const SessionsStoreContext = createContext<SessionsStoreValue | null>(null);
-
-/** Convert an equal-split item into the custom-amount item with the same shares. */
-function toCustomItem(item: PurchaseItem): PurchaseItem {
-  if (item.mode === 'custom') return item;
-  return { id: item.id, mode: 'custom', name: item.name, amounts: getItemShares(item) };
-}
 
 function mapRecordItem(
   records: PurchaseRecord[],
@@ -352,55 +342,17 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
     [updateRecords],
   );
 
-  const updateItemName = useCallback(
-    (sessionId: string, recordId: string, itemId: string, name: string) => {
-      const trimmed = name.trim();
-      if (!trimmed) return;
-      updateRecords(sessionId, recordId, (records) =>
-        mapRecordItem(records, recordId, itemId, (item) => ({ ...item, name: trimmed })),
-      );
+  const saveItemEdit = useCallback(
+    (sessionId: string, ref: ItemRef, next: StagedItem) => {
+      // One change, so the item leaves its old place and lands in its new one in
+      // a single write, or not at all (AC-CO8.1).
+      const fresh = { id: createId('rec'), createdAt: new Date().toISOString() };
+      updateSession(sessionId, (session) => {
+        const records = applyItemEdit(session.records, ref, next, fresh);
+        return records === session.records ? session : { ...session, records };
+      });
     },
-    [updateRecords],
-  );
-
-  const updateItemTotal = useCallback(
-    (sessionId: string, recordId: string, itemId: string, total: number) => {
-      const next = roundMoney(Math.max(0, total));
-      updateRecords(sessionId, recordId, (records) =>
-        mapRecordItem(records, recordId, itemId, (item) => {
-          if (item.mode === 'equal') return { ...item, totalPrice: next };
-          // Custom amounts: scale every member's share to hit the new total.
-          const current = Object.values(item.amounts).reduce((a, b) => a + b, 0);
-          if (current <= 0) return item;
-          const factor = next / current;
-          const amounts: Record<string, number> = {};
-          for (const [member, amount] of Object.entries(item.amounts)) {
-            amounts[member] = roundMoney(amount * factor);
-          }
-          return { ...item, amounts };
-        }),
-      );
-    },
-    [updateRecords],
-  );
-
-  const updateItemMemberAmount = useCallback(
-    (sessionId: string, recordId: string, itemId: string, member: string, amount: number) => {
-      const next = roundMoney(Math.max(0, amount));
-      updateRecords(sessionId, recordId, (records) =>
-        mapRecordItem(records, recordId, itemId, (item) => {
-          // Editing one member's cell means the split is no longer equal, so the
-          // item becomes a custom-amount item carrying the shares it already had.
-          const custom = toCustomItem(item);
-          if (custom.mode !== 'custom') return custom;
-          const amounts = { ...custom.amounts };
-          if (next <= 0) delete amounts[member];
-          else amounts[member] = next;
-          return Object.keys(amounts).length > 0 ? { ...custom, amounts } : null;
-        }),
-      );
-    },
-    [updateRecords],
+    [updateSession],
   );
 
   const replaceSessionData = useCallback(
@@ -437,9 +389,7 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
       addRecords,
       removeRecord,
       removeItem,
-      updateItemName,
-      updateItemTotal,
-      updateItemMemberAmount,
+      saveItemEdit,
       replaceSessionData,
       replaceAllSessions,
       appendSessions,
@@ -471,9 +421,7 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
       addRecords,
       removeRecord,
       removeItem,
-      updateItemName,
-      updateItemTotal,
-      updateItemMemberAmount,
+      saveItemEdit,
       replaceSessionData,
       replaceAllSessions,
       appendSessions,
