@@ -1,9 +1,11 @@
 /* The wrapper takes the input's place in its parent's layout; the button sits
-   over the input's right padding, which only grows while the button shows. */
+   over the input's right padding, which only grows while the button shows. The
+   inset keeps the icon off the box's right border without shrinking the tap area. */
 .wrap {
   position: relative;
   min-width: 0;
   --clear-slot: 24px;
+  --clear-inset: 5px;
 }
 
 /* Block, so the wrapper is exactly the input's height with no line-box gap. */
@@ -12,13 +14,13 @@
 }
 
 [data-filled] > .input {
-  padding-right: var(--clear-slot);
+  padding-right: calc(var(--clear-slot) + var(--clear-inset));
 }
 
 .clear {
   position: absolute;
   top: 50%;
-  right: 0;
+  right: var(--clear-inset);
   transform: translateY(-50%);
   width: var(--clear-slot);
   height: 100%;

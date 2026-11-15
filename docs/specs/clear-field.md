@@ -169,6 +169,7 @@ No other input changes (BR-CF1).
   position: relative;
   min-width: 0;
   --clear-slot: 24px;
+  --clear-inset: 5px; /* space between the icon's slot and the box's right border */
 }
 
 /* Block, so the wrapper is exactly the input's height with no line-box gap. */
@@ -177,13 +178,13 @@ No other input changes (BR-CF1).
 }
 
 [data-filled] > .input {
-  padding-right: var(--clear-slot);
+  padding-right: calc(var(--clear-slot) + var(--clear-inset));
 }
 
 .clear {
   position: absolute;
   top: 50%;
-  right: 0;
+  right: var(--clear-inset);
   transform: translateY(-50%);
   width: var(--clear-slot);
   height: 100%;
@@ -241,11 +242,11 @@ Notes for the developer:
 
 Sizes:
 
-| Width | Box | Tap area (w × h) | Padding while filled |
+| Width | Box | Tap area (w × h) | Padding while filled (slot + 5px inset) |
 |---|---|---|---|
-| Desktop | every in-scope box | 24 × box height (38px; 36px inside the contribution row) | 24px |
-| Phone | order line name and price | 24 × 44 | 24px |
-| Phone | every other in-scope box | 44 × 44 | 44px |
+| Desktop | every in-scope box | 24 × box height (38px; 36px inside the contribution row) | 29px |
+| Phone | order line name and price | 24 × 44 | 29px |
+| Phone | every other in-scope box | 44 × 44 | 49px |
 
 ### 6.2 Call-site CSS
 
@@ -267,7 +268,7 @@ Sizes:
   }
 
   .contribAmount[data-filled] {
-    padding-right: var(--clear-slot);
+    padding-right: calc(var(--clear-slot) + var(--clear-inset));
   }
   ```
 

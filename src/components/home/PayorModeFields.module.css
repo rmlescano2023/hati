@@ -80,7 +80,7 @@
 }
 
 .contribAmount[data-filled] {
-  padding-right: var(--clear-slot);
+  padding-right: calc(var(--clear-slot) + var(--clear-inset));
 }
 
 .footer {
