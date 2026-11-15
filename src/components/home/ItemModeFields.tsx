@@ -1,5 +1,6 @@
 import { EqualSplitFields } from './EqualSplitFields';
 import { CustomAmountFields } from './CustomAmountFields';
+import { ClearableInput } from '../shared/ClearableInput';
 import type { LineDraft, LinesDraft } from '../../lib/orderLines';
 import type { ItemMode } from '../../types';
 import styles from './ItemModeFields.module.css';
@@ -59,8 +60,9 @@ export function ItemModeFields({ members, draft, handlers, derived }: Props) {
       <div className={styles.nameRow}>
         <div className={`${styles.field} ${styles.nameField}`}>
           <label htmlFor="item-name">Item Name</label>
-          <input
+          <ClearableInput
             id="item-name"
+            clearLabel="Clear item name"
             type="text"
             placeholder="e.g. Dinner, Groceries, Taxi"
             value={draft.name}
@@ -70,8 +72,9 @@ export function ItemModeFields({ members, draft, handlers, derived }: Props) {
         {draft.mode === 'equal' && (
           <div className={`${styles.field} ${styles.priceField}`}>
             <label htmlFor="item-price">Total Price (₱)</label>
-            <input
+            <ClearableInput
               id="item-price"
+              clearLabel="Clear total price"
               type="number"
               min="0"
               step="0.01"

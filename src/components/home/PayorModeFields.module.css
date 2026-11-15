@@ -72,6 +72,17 @@
   text-align: right;
 }
 
+/* The amount keeps its 96px; while it has text, its clear button takes a slot
+   after it at the row's right edge, and the name gives up the room. */
+.contribAmount {
+  flex-shrink: 0;
+  height: 100%;
+}
+
+.contribAmount[data-filled] {
+  padding-right: var(--clear-slot);
+}
+
 .footer {
   display: flex;
   align-items: center;

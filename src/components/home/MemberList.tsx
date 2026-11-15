@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Card } from '../shared/Card';
 import { Button } from '../shared/Button';
+import { ClearableInput } from '../shared/ClearableInput';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { useAppData } from '../../context/AppDataContext';
 import { IncludeMemberDialog } from './IncludeMemberDialog';
@@ -115,8 +116,10 @@ export function MemberList({ staged, savedEdit, onClearAll }: Props) {
       }
     >
       <div className={styles.addRow}>
-        <input
+        <ClearableInput
           type="text"
+          className={styles.nameBox}
+          clearLabel="Clear new member name"
           placeholder="Enter member name…"
           aria-label="New member name"
           value={draft}

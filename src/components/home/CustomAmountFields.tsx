@@ -1,4 +1,5 @@
 import { Button } from '../shared/Button';
+import { ClearableInput } from '../shared/ClearableInput';
 import { OwnerGrid } from '../shared/OwnerGrid';
 import { formatMoney } from '../../lib/format';
 import {
@@ -71,8 +72,9 @@ export function CustomAmountFields({
       <div className={styles.topRow}>
         <div className={`${styles.field} ${styles.totalField}`}>
           <label htmlFor="custom-total">Total Amount (₱)</label>
-          <input
+          <ClearableInput
             id="custom-total"
+            clearLabel="Clear total amount"
             type="number"
             min="0"
             step="0.01"
@@ -117,16 +119,19 @@ export function CustomAmountFields({
                 const orderName = normaliseOrderName(line.name);
                 return (
                   <div className={styles.line} key={line.key}>
-                    <input
+                    <ClearableInput
                       type="text"
+                      clearLabel={`Clear ${m}'s order ${i + 1} name`}
                       maxLength={ORDER_NAME_MAX}
                       placeholder="Order (optional)"
                       aria-label={`${m}'s order ${i + 1} name`}
                       value={line.name}
                       onChange={(e) => onLineChange(m, i, { name: e.target.value })}
                     />
-                    <input
+                    <ClearableInput
                       type="number"
+                      clearLabel={`Clear ${m}'s order ${i + 1} price`}
+                      compactClear
                       min="0"
                       step="0.01"
                       placeholder="0.00"
