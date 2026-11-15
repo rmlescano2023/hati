@@ -124,7 +124,7 @@ export function CustomAmountFields({
                       clearLabel={`Clear ${m}'s order ${i + 1} name`}
                       compactClear
                       maxLength={ORDER_NAME_MAX}
-                      placeholder="Order (optional)"
+                      placeholder="Order name"
                       aria-label={`${m}'s order ${i + 1} name`}
                       value={line.name}
                       onChange={(e) => onLineChange(m, i, { name: e.target.value })}

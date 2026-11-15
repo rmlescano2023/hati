@@ -54,7 +54,7 @@ Emptying a box means selecting and deleting its text, which is fiddly on a phone
 | 1 | Item Name (`ItemModeFields`) | Item Name | e.g. Dinner, Groceries, Taxi | Clear item name |
 | 2 | Total Price, Equal Split (`ItemModeFields`) | Total Price (₱) | 0.00 | Clear total price |
 | 3 | Total Amount, Custom Amounts (`CustomAmountFields`) | Total Amount (₱) | 0.00 | Clear total amount |
-| 4 | Order line name (`CustomAmountFields`) | none; `aria-label` "Ana's order 1 name" | Order (optional) | Clear Ana's order 1 name |
+| 4 | Order line name (`CustomAmountFields`) | none; `aria-label` "Ana's order 1 name" | Order name | Clear Ana's order 1 name |
 | 5 | Order line price (`CustomAmountFields`) | none; `aria-label` "Ana's order 1 price" | 0.00 | Clear Ana's order 1 price |
 | 6 | Paid By contribution, Multiple Payors (`PayorModeFields`) | the member's name, "Ana" | 0.00 | Clear Ana's contribution |
 | 7 | New member name (`MemberList`) | none; `aria-label` "New member name" | Enter member name… | Clear new member name |

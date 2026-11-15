@@ -734,7 +734,7 @@ From top to bottom:
    blocks. Each is a `.block` holding:
    - `.blockName`: the member's name, wrapping (`overflow-wrap: anywhere`).
    - One `.line` per `linesOf(lines, m)` entry, keyed by `line.key`, holding:
-     - **Name:** `<input type="text" maxLength={ORDER_NAME_MAX} placeholder="Order (optional)" aria-label={`${m}'s order ${i + 1} name`}>` (AC-CO2.9).
+     - **Name:** `<input type="text" maxLength={ORDER_NAME_MAX} placeholder="Order name" aria-label={`${m}'s order ${i + 1} name`}>` (AC-CO2.9).
      - **Price:** `<input type="number" min="0" step="0.01" placeholder="0.00" aria-label={`${m}'s order ${i + 1} price`}>`.
      - **×:** only when the block has two or more lines. It's `<Button variant="icon" title="Remove order">×</Button>` with
        `` aria-label={normaliseOrderName(line.name) ? `Remove ${m}'s order ${normaliseOrderName(line.name)}` : `Remove ${m}'s order`} `` (AC-CO2.4).
