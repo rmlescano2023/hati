@@ -1,3 +1,4 @@
+import { ClearableInput } from '../shared/ClearableInput';
 import { ModeToggle } from '../shared/ModeToggle';
 import { formatMoney } from '../../lib/format';
 import type { PayorMode } from '../../types';
@@ -66,8 +67,10 @@ export function PayorModeFields({
             {members.map((m) => (
               <div className={styles.contribRow} key={m}>
                 <label htmlFor={`contrib-${m}`}>{m}</label>
-                <input
+                <ClearableInput
                   id={`contrib-${m}`}
+                  className={styles.contribAmount}
+                  clearLabel={`Clear ${m}'s contribution`}
                   type="number"
                   min="0"
                   step="0.01"

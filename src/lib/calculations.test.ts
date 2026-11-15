@@ -12,6 +12,7 @@ import {
   getRawOwedMatrix,
   getRecordBreakdown,
   groupRecordsForBreakdown,
+  purgeMemberFromItem,
 } from './calculations';
 import { allocateProportionally, roundMoney, splitEvenly, sumMoney } from './money';
 import { compareNames, sortNames, toTitleCase } from './format';
@@ -376,5 +377,93 @@ describe('member ordering', () => {
   it('title-cases hyphenated and apostrophised names', () => {
     expect(toTitleCase('mary-jane o’brien')).toBe('Mary-Jane O’Brien');
     expect(toTitleCase('  jOhn   doe ')).toBe('John Doe');
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* order lines                                                                 */
+/* -------------------------------------------------------------------------- */
+
+describe('purgeMemberFromItem with order lines', () => {
+  const itemized = (): CustomAmountItem => ({
+    id: 'item_l',
+    mode: 'custom',
+    name: 'Dinner',
+    amounts: { Ana: 280, Ben: 450, Eve: 300 },
+    lines: [
+      { member: 'Ana', name: 'Sisig', amount: 280 },
+      { member: 'Ben', name: '', amount: 450 },
+      { member: 'Eve', name: 'Pancit', amount: 180 },
+      { member: 'Eve', name: 'Halo-halo', amount: 120 },
+    ],
+  });
+
+  it("drops the member's amount and lines and leaves everyone else alone", () => {
+    const out = purgeMemberFromItem(itemized(), 'Eve');
+    expect(out).toEqual({
+      id: 'item_l',
+      mode: 'custom',
+      name: 'Dinner',
+      amounts: { Ana: 280, Ben: 450 },
+      lines: [
+        { member: 'Ana', name: 'Sisig', amount: 280 },
+        { member: 'Ben', name: '', amount: 450 },
+      ],
+    });
+    expect(getItemTotal(out as CustomAmountItem)).toBe(730);
+  });
+
+  it('goes back to the amounts-only shape when no named line is left', () => {
+    const out = purgeMemberFromItem(itemized(), 'Ana');
+    const kept = purgeMemberFromItem(out as CustomAmountItem, 'Eve');
+    expect(kept).toEqual({ id: 'item_l', mode: 'custom', name: 'Dinner', amounts: { Ben: 450 } });
+    expect(kept && 'lines' in kept).toBe(false);
+  });
+
+  it('returns null when the last member goes, and the same item for a stranger', () => {
+    const solo: CustomAmountItem = {
+      id: 'i',
+      mode: 'custom',
+      name: 'S',
+      amounts: { Ana: 5 },
+      lines: [{ member: 'Ana', name: 'x', amount: 5 }],
+    };
+    expect(purgeMemberFromItem(solo, 'Ana')).toBeNull();
+    expect(purgeMemberFromItem(solo, 'Zed')).toBe(solo);
+  });
+});
+
+describe('an itemized item changes no money (AC-CO5.5)', () => {
+  const members = ['Ana', 'Ben', 'Cy', 'Dan', 'Eve', 'Fay'];
+  const amounts = { Ana: 280, Ben: 450, Cy: 220, Dan: 380, Eve: 300, Fay: 200 };
+  const plain: CustomAmountItem = { id: 'd', mode: 'custom', name: 'Dinner', amounts };
+  const itemized: CustomAmountItem = {
+    ...plain,
+    lines: [
+      { member: 'Ana', name: 'Sisig', amount: 280 },
+      { member: 'Ben', name: 'Kare-kare', amount: 450 },
+      { member: 'Cy', name: 'Adobo', amount: 220 },
+      { member: 'Dan', name: 'Sinigang', amount: 380 },
+      { member: 'Eve', name: 'Pancit', amount: 180 },
+      { member: 'Eve', name: 'Halo-halo', amount: 120 },
+      { member: 'Fay', name: '', amount: 200 },
+    ],
+  };
+  const recordOf = (item: CustomAmountItem) => [
+    record('2026-11-12', [{ member: 'Ana', amount: 0 }], [item]),
+  ];
+
+  it('gives the same totals, shares, matrices, balances and settlement', () => {
+    expect(getItemTotal(itemized)).toBe(getItemTotal(plain));
+    expect(getItemShares(itemized)).toEqual(getItemShares(plain));
+    const a = getRawOwedMatrix(recordOf(itemized), members);
+    const b = getRawOwedMatrix(recordOf(plain), members);
+    expect(a).toEqual(b);
+    expect(getNetBalances(getNettedOwedMatrix(a), members)).toEqual(
+      getNetBalances(getNettedOwedMatrix(b), members),
+    );
+    expect(getFinalSettlement(getNettedOwedMatrix(a), members)).toEqual(
+      getFinalSettlement(getNettedOwedMatrix(b), members),
+    );
   });
 });

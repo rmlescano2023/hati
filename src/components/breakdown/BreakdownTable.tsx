@@ -1,7 +1,9 @@
-import { EditableCell } from '../shared/EditableCell';
+import { Fragment } from 'react';
 import { Button } from '../shared/Button';
+import { PencilIcon } from '../shared/icons';
 import { useAppDataOptional } from '../../context/AppDataContext';
 import { formatMoney } from '../../lib/format';
+import type { SavedItemRef } from '../../lib/staging';
 import type { BreakdownGroup } from '../../types';
 import styles from './BreakdownTable.module.css';
 
@@ -9,11 +11,13 @@ type Props = {
   group: BreakdownGroup;
   /** Alphabetical member columns. */
   members: string[];
-  /** Frozen groups render read-only cells and drop the remove-item column. */
+  /** Frozen groups drop the Edit and remove-item controls. */
   editable?: boolean;
+  /** Asks to edit a saved item; History passes none, and shows no Edit. */
+  onEdit?: (ref: SavedItemRef) => void;
 };
 
-export function BreakdownTable({ group, members, editable = true }: Props) {
+export function BreakdownTable({ group, members, editable = true, onEdit }: Props) {
   // Null on the History page, which renders these cards read-only and outside
   // any session; every call below is gated on `editable` regardless.
   const data = useAppDataOptional();
@@ -34,57 +38,85 @@ export function BreakdownTable({ group, members, editable = true }: Props) {
           </tr>
         </thead>
         <tbody>
-          {group.rows.map((row) => (
-            <tr key={row.item.id}>
-              <td>
-                <EditableCell
-                  kind="text"
-                  value={row.item.name}
-                  ariaLabel={`Item name for ${row.item.name}`}
-                  disabled={!editable}
-                  onCommit={(name) => data?.updateItemName(row.recordId, row.item.id, name)}
-                />
-              </td>
-              <td>
-                <EditableCell
-                  kind="money"
-                  value={row.total}
-                  format={formatMoney}
-                  className={styles.priceInput}
-                  ariaLabel={`Item total for ${row.item.name}`}
-                  disabled={!editable}
-                  onCommit={(total) => data?.updateItemTotal(row.recordId, row.item.id, total)}
-                />
-              </td>
-              {members.map((m) => (
-                <td key={m}>
-                  <EditableCell
-                    kind="money"
-                    value={row.shares[m] ?? 0}
-                    format={formatMoney}
-                    emptyDisplay="—"
-                    ariaLabel={`${m}'s share of ${row.item.name}`}
-                    disabled={!editable}
-                    onCommit={(amount) =>
-                      data?.updateItemMemberAmount(row.recordId, row.item.id, m, amount)
-                    }
-                  />
-                </td>
-              ))}
-              {editable && (
-                <td className={styles.action}>
-                  <Button
-                    variant="icon"
-                    title="Remove item"
-                    aria-label={`Remove ${row.item.name}`}
-                    onClick={() => data?.removeItem(row.recordId, row.item.id)}
+          {group.rows.map((row) => {
+            // Two copies of the same button, one by the name for a phone and one
+            // beside × for a desktop. CSS displays exactly one at any width, and
+            // `display: none` takes the other out of the tab order and the
+            // accessibility tree.
+            const editButton = (position: string) =>
+              editable &&
+              onEdit && (
+                <Button
+                  variant="icon"
+                  className={`${styles.edit} ${position}`}
+                  title="Edit item"
+                  aria-label={`Edit ${row.item.name}`}
+                  onClick={() =>
+                    onEdit({ recordId: row.recordId, itemId: row.item.id, name: row.item.name })
+                  }
+                >
+                  <PencilIcon className={styles.editIcon} />
+                </Button>
+              );
+
+            // What each person ordered, under the item, for an itemized item
+            // only (BR-CO14); the item's own row stays the one that is summed.
+            const lines = row.item.mode === 'custom' ? row.item.lines : undefined;
+
+            return (
+              <Fragment key={row.item.id}>
+                <tr className={lines ? styles.hasLines : undefined}>
+                  <td className={styles.itemCell}>
+                    <div className={styles.itemWrap}>
+                      <span className={styles.itemName}>{row.item.name}</span>
+                      {editButton(styles.editInline)}
+                    </div>
+                  </td>
+                  <td className={`${styles.num} ${styles.price}`}>{formatMoney(row.total)}</td>
+                  {members.map((m) => {
+                    const share = row.shares[m] ?? 0;
+                    return (
+                      <td key={m} className={`${styles.num} ${share > 0 ? '' : styles.muted}`}>
+                        {share > 0 ? formatMoney(share) : '—'}
+                      </td>
+                    );
+                  })}
+                  {editable && (
+                    <td className={styles.action}>
+                      <span className={styles.actions}>
+                        {editButton(styles.editAction)}
+                        <Button
+                          variant="icon"
+                          title="Remove item"
+                          aria-label={`Remove ${row.item.name}`}
+                          onClick={() => data?.removeItem(row.recordId, row.item.id)}
+                        >
+                          ×
+                        </Button>
+                      </span>
+                    </td>
+                  )}
+                </tr>
+                {lines?.map((line, i) => (
+                  <tr
+                    key={`${row.item.id}:${i}`}
+                    className={`${styles.lineRow} ${i === lines.length - 1 ? styles.lastLine : ''}`}
                   >
-                    ×
-                  </Button>
-                </td>
-              )}
-            </tr>
-          ))}
+                    <td className={styles.lineName}>
+                      {line.name || <span className={styles.noName}>No name</span>}
+                    </td>
+                    <td />
+                    {members.map((m) => (
+                      <td key={m} className={styles.num}>
+                        {line.member === m ? formatMoney(line.amount) : ''}
+                      </td>
+                    ))}
+                    {editable && <td />}
+                  </tr>
+                ))}
+              </Fragment>
+            );
+          })}
           <tr className={styles.totalRow}>
             <td>
               <span className={styles.totalLabel}>Total</span>

@@ -11,13 +11,33 @@ export type EqualSplitItem = {
   owners: string[];
 };
 
+/** One thing a member ordered, inside a Custom Amounts item (BR-CO5). */
+export type OrderLine = {
+  member: string;
+  /** Tidied (`normaliseOrderName`); '' means the line has no name. */
+  name: string;
+  /** Above 0, rounded to the centavo. */
+  amount: number;
+};
+
 /** An explicit per-member amount; the item total is the sum of the amounts. */
 export type CustomAmountItem = {
   id: string;
   mode: 'custom';
   name: string;
-  /** member name -> amount owed for this item. Members with no share are absent. */
+  /**
+   * member -> amount owed for this item. Members with no share are absent.
+   * With `lines`, each amount is the sum of that member's lines, kept here so
+   * every calculation, and a tab still running an older release, reads the
+   * money from one place (BR-CO10, BR-CO23).
+   */
   amounts: Record<string, number>;
+  /**
+   * What each member ordered, by member alphabetically and then in the order
+   * added (BR-CO13). Present only when at least one line has a name: an item
+   * whose lines are all unnamed is stored as `amounts` alone (BR-CO12, BR-CO17).
+   */
+  lines?: OrderLine[];
 };
 
 export type PurchaseItem = EqualSplitItem | CustomAmountItem;

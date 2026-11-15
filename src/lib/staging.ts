@@ -1,6 +1,14 @@
 import { getItemShares, getItemTotal, purgeMemberFromItem } from './calculations.js';
-import { parsePositiveAmount, sumMoney } from './money.js';
-import type { NewPurchaseRecord, PayorContribution, PayorMode, PurchaseItem } from '../types';
+import { compareNames } from './format.js';
+import type { ItemRef } from './includeMember.js';
+import { allocateProportionally, parsePositiveAmount, roundMoney, sumMoney } from './money.js';
+import type {
+  NewPurchaseRecord,
+  PayorContribution,
+  PayorMode,
+  PurchaseItem,
+  PurchaseRecord,
+} from '../types';
 
 /** One row of the staging list: the item plus the Date and Paid By stamped on it at Add Item (BR-1). */
 export type StagedItem = {
@@ -122,4 +130,169 @@ export function stagedNamesMember(staged: StagedItem[], member: string): boolean
   return staged.some(
     (s) => member in getItemShares(s.item) || s.payors.some((p) => p.member === member),
   );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Editing a saved item                                                        */
+/* -------------------------------------------------------------------------- */
+
+/** A saved item addressed as Breakdown addresses it, with its name as it was when Edit was pressed. */
+export type SavedItemRef = ItemRef & { name: string };
+
+/** The saved item a ref points at, with the record that holds it, or null once either has gone. */
+export function findSavedItem(
+  records: PurchaseRecord[],
+  ref: ItemRef,
+): { record: PurchaseRecord; item: PurchaseItem } | null {
+  const record = records.find((r) => r.id === ref.recordId);
+  const item = record?.items.find((i) => i.id === ref.itemId);
+  return record && item ? { record, item } : null;
+}
+
+/**
+ * What Edit loads for a saved item: the item with the Date and Paid By it has
+ * today (BR-CO28). A One Payor record's payor covers the item whole. A
+ * Multiple Payors record with one item carries its contributions as they are,
+ * even if they no longer add up, so the form shows the mismatch. A record from
+ * before flexible Paid By can hold several items under one set of
+ * contributions, so the item gets its proportional share of them, in whole
+ * centavos.
+ */
+export function stagedFromSaved(record: PurchaseRecord, item: PurchaseItem): StagedItem {
+  const base = { item, date: record.date };
+  if (record.payorMode === 'single') {
+    return {
+      ...base,
+      payorMode: 'single',
+      payors: [{ member: record.payors[0].member, amount: getItemTotal(item) }],
+    };
+  }
+  if (record.items.length === 1) {
+    return { ...base, payorMode: 'multiple', payors: record.payors.map((p) => ({ ...p })) };
+  }
+  const shares = allocateProportionally(
+    getItemTotal(item),
+    record.payors.map((p) => p.amount),
+  );
+  return {
+    ...base,
+    payorMode: 'multiple',
+    payors: record.payors
+      .map((p, i) => ({ member: p.member, amount: shares[i] }))
+      .filter((p) => p.amount > 0),
+  };
+}
+
+/**
+ * Whether two staged items are the same. It is only meant for two values built
+ * by the card's `stampFields`, which always builds its keys in the same order.
+ * Never compare against saved JSON directly: `jsonb` reorders object keys, so
+ * a loaded item's key order differs from a stamped one's.
+ */
+export function sameStaged(a: StagedItem, b: StagedItem): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+/** Whether `next` keeps the date and Paid By that `loaded` was loaded with. */
+function samePaidBy(next: StagedItem, loaded: StagedItem): boolean {
+  if (next.date !== loaded.date || next.payorMode !== loaded.payorMode) return false;
+  if (next.payorMode === 'single') return next.payors[0].member === loaded.payors[0].member;
+
+  // Compared in whole centavos, after sorting, so the order the fields built
+  // them in doesn't matter.
+  const key = (payors: PayorContribution[]) =>
+    [...payors]
+      .sort((a, b) => compareNames(a.member, b.member))
+      .map((p) => `${p.member}:${Math.round(p.amount * 100)}`)
+      .join('|');
+  return key(next.payors) === key(loaded.payors);
+}
+
+/**
+ * The records after a saved item is edited (BR-CO30, BR-CO31), built in one go
+ * so the item leaves its old place and lands in its new one together.
+ *
+ * With the Date and Paid By it was loaded with, the item is replaced in place:
+ * same record, same position. Otherwise it moves to the record its new Date and
+ * Paid By belong to, and lands last in that Breakdown card, which orders by
+ * creation. Either way the item keeps its id.
+ *
+ * A record that has gone, or an item that has, returns `records` itself and
+ * writes nothing (BR-CO35). The input is never mutated.
+ */
+export function applyItemEdit(
+  records: PurchaseRecord[],
+  ref: ItemRef,
+  next: StagedItem,
+  fresh: { id: string; createdAt: string },
+): PurchaseRecord[] {
+  const found = findSavedItem(records, ref);
+  if (!found) return records;
+  const { record, item: oldItem } = found;
+
+  // Compared with the record as it is now, not as it was when Edit was
+  // pressed, so a change from another device is judged against what is saved.
+  const loaded = stagedFromSaved(record, oldItem);
+
+  if (samePaidBy(next, loaded)) {
+    return records.map((r) => {
+      if (r !== record) return r;
+      const items = r.items.map((i) => (i.id === oldItem.id ? next.item : i));
+      return r.payorMode === 'single'
+        ? {
+            ...r,
+            items,
+            payors: [{ member: r.payors[0].member, amount: sumMoney(items.map(getItemTotal)) }],
+          }
+        : { ...r, items };
+    });
+  }
+
+  const rest = record.items.filter((i) => i.id !== oldItem.id);
+  const kept: PurchaseRecord[] = [];
+  if (rest.length > 0) {
+    kept.push({
+      ...record,
+      items: rest,
+      payors:
+        record.payorMode === 'single'
+          ? [{ member: record.payors[0].member, amount: sumMoney(rest.map(getItemTotal)) }]
+          : remainingContributions(record, oldItem, rest),
+    });
+  }
+
+  const [built] = buildRecords([next]);
+  const moved: PurchaseRecord = { ...built, id: fresh.id, createdAt: fresh.createdAt };
+  return [...records.flatMap((r) => (r === record ? kept : [r])), moved];
+}
+
+/**
+ * What a Multiple Payors record's contributors keep once `oldItem` has left
+ * it: each contribution less its proportional share of the item. Every payor
+ * stays, even at ₱0.00, because a record with no payor would be dropped
+ * whole, items and all.
+ *
+ * If the contributions already add up to less than the item (only after a
+ * contributor was removed), subtracting could go below zero. They then keep
+ * the remaining items' total in the same proportions instead. Both ways keep
+ * the payors' weights, so the other items' balances don't move.
+ */
+function remainingContributions(
+  record: PurchaseRecord,
+  oldItem: PurchaseItem,
+  rest: PurchaseItem[],
+): PayorContribution[] {
+  const weights = record.payors.map((p) => p.amount);
+  const contributed = Math.round(sumMoney(weights) * 100);
+  const itemCents = Math.round(getItemTotal(oldItem) * 100);
+
+  if (contributed < itemCents) {
+    const parts = allocateProportionally(sumMoney(rest.map(getItemTotal)), weights);
+    return record.payors.map((p, i) => ({ member: p.member, amount: parts[i] }));
+  }
+  const shares = allocateProportionally(getItemTotal(oldItem), weights);
+  return record.payors.map((p, i) => ({
+    member: p.member,
+    amount: roundMoney(p.amount - shares[i]),
+  }));
 }

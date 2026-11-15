@@ -180,6 +180,16 @@ export const styles = StyleSheet.create({
   },
   cell: { fontSize: 8, paddingHorizontal: 3 },
   cellNum: { fontFamily: 'DM Mono', fontSize: 7.5, paddingHorizontal: 3, textAlign: 'right' },
+  // An order under its item: smaller and greyer, and indented past the item name.
+  lineRow: { flexDirection: 'row', paddingVertical: 2 },
+  lineCell: { fontSize: 7, paddingLeft: 11, paddingRight: 3, color: palette.text3 },
+  lineCellNum: {
+    fontFamily: 'DM Mono',
+    fontSize: 7,
+    paddingHorizontal: 3,
+    textAlign: 'right',
+    color: palette.text3,
+  },
   totalRow: {
     flexDirection: 'row',
     backgroundColor: palette.surface,

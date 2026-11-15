@@ -48,32 +48,88 @@
   min-width: 96px;
 }
 
+/* Edit and × sit side by side. */
 .actionCol {
-  width: 36px;
+  width: 76px;
+}
+
+/* Lines up with the Item header's padding. */
+.table td.itemCell {
+  padding-left: 13px;
+}
+
+.itemWrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.itemName {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 /* The price is the item's full cost; the member columns are shares of it.
    All of them are right-aligned mono numerals, so without emphasis the price
    reads as just another share. Every header is full-brightness, so this one
    stays a step ahead on weight (700 against 600 — both are real faces in the
-   loaded DM Sans range, not synthesised), and its values are semibold.
-
-   A background tint is deliberately not used: input.cell:hover already claims
-   --surface2 as its "this cell is editable" affordance, and tinting the
-   column would swallow it. */
+   loaded DM Sans range, not synthesised), and its values are semibold. */
 .table th.priceCol {
   font-weight: 700;
 }
 
-/* Sits on the EditableCell's <input>, which never inherits font-weight. */
-.priceInput {
+.table td.price {
   font-weight: 600;
 }
 
-.table th.r,
-.table td.r {
+.table th.r {
   text-align: right;
   padding-right: 13px;
+}
+
+/* `.table td` sets the padding shorthand, so these need matching specificity. */
+.table td.num {
+  text-align: right;
+  font-family: var(--mono);
+  font-size: 12px;
+  padding-right: 13px;
+}
+
+.table td.muted {
+  color: var(--text3);
+}
+
+/* An itemized item and its lines read as one block: the rule goes under the
+   last line, not under the item row. */
+.table tr.hasLines td {
+  border-bottom: none;
+}
+
+/* `.table tr.lineRow td` outranks the phone block's `.table td`, so these stay
+   compact on a phone too. */
+.table tr.lineRow td {
+  border-bottom: none;
+  padding-top: 2px;
+  padding-bottom: 2px;
+  font-size: 12px;
+  color: var(--text2);
+}
+
+.table tr.lineRow.lastLine td {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 6px;
+}
+
+/* Indented 16px past the item name above it. */
+.table td.lineName {
+  padding-left: 29px;
+  overflow-wrap: anywhere;
+}
+
+.noName {
+  color: var(--text3);
+  font-style: italic;
 }
 
 .totalRow td {
@@ -112,6 +168,28 @@
   text-align: center;
 }
 
+.actions {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.editIcon {
+  display: block;
+  width: 15px;
+  height: 15px;
+}
+
+/* Edit isn't a delete, so it doesn't take the icon button's red hover. */
+.table .edit:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--surface2);
+}
+
+/* The one beside the name is for a phone; the desktop's sits beside ×. */
+.editInline {
+  display: none;
+}
+
 /* Always-visible thin scrollbar so the horizontal scroll is discoverable. */
 .scroll {
   scrollbar-width: thin;
@@ -131,13 +209,27 @@
   border-radius: var(--radius-pill);
 }
 
-/* Mobile shell: room for the taller EditableCell inputs, and momentum scrolling
-   on iOS. Vertical longhands only, so the .r / .totalValue horizontal padding
-   is left alone. */
+/* Mobile shell: room for the 44px Edit button, and momentum scrolling on iOS.
+   Vertical longhands only, so the .num / .totalValue horizontal padding is
+   left alone. */
 @media (max-width: 640px) {
   .table td {
     padding-top: 8px;
     padding-bottom: 8px;
+  }
+
+  .actionCol {
+    width: 36px;
+  }
+
+  .editInline {
+    display: inline-flex;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .editAction {
+    display: none;
   }
 
   .scroll {

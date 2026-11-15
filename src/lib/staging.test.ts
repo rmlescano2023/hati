@@ -1,13 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import {
+  applyItemEdit,
   buildRecords,
   contributionsMatch,
+  findSavedItem,
   purgeMemberFromStaged,
   readContributions,
+  sameStaged,
+  stagedFromSaved,
   stagedNamesMember,
   type StagedItem,
 } from './staging';
-import { getItemShares, getRawOwedMatrix, groupRecordsForBreakdown } from './calculations';
+import {
+  getItemShares,
+  getItemTotal,
+  getRawOwedMatrix,
+  groupRecordsForBreakdown,
+} from './calculations';
 import type {
   CustomAmountItem,
   EqualSplitItem,
@@ -410,5 +419,429 @@ describe('stagedNamesMember', () => {
     const staged = [stagedSingle('2026-11-12', 'Ana', equalItem('A', 10, ['Ana', 'Ben']))];
     expect(stagedNamesMember(staged, 'Cy')).toBe(false);
     expect(stagedNamesMember([], 'Cy')).toBe(false);
+  });
+});
+
+/* ----------------------------- saved-item edits ---------------------------- */
+
+const savedRecord = (
+  date: string,
+  payors: PayorContribution[],
+  items: (EqualSplitItem | CustomAmountItem)[],
+  createdSecond: number,
+): PurchaseRecord => ({
+  id: nextId('rec'),
+  date,
+  payorMode: payors.length > 1 ? 'multiple' : 'single',
+  payors,
+  items,
+  createdAt: new Date(2026, 0, 1, 0, 0, createdSecond).toISOString(),
+});
+
+/** A single record, whose payor amount is the sum of its items, as buildRecords makes it. */
+const singleRecord = (
+  date: string,
+  payor: string,
+  items: (EqualSplitItem | CustomAmountItem)[],
+  createdSecond = 0,
+) =>
+  savedRecord(
+    date,
+    [{ member: payor, amount: items.reduce((sum, i) => sum + getItemTotal(i), 0) }],
+    items,
+    createdSecond,
+  );
+
+const FRESH = { id: 'rec_fresh', createdAt: new Date(2026, 5, 1).toISOString() };
+
+const refOf = (record: PurchaseRecord, item: { id: string; name: string }) => ({
+  recordId: record.id,
+  itemId: item.id,
+  name: item.name,
+});
+
+describe('findSavedItem', () => {
+  it('finds an item by record and item id, and nothing else', () => {
+    const a = equalItem('A', 10, ['Ana']);
+    const b = equalItem('B', 20, ['Ana']);
+    const r1 = singleRecord('2026-11-12', 'Ana', [a]);
+    const r2 = singleRecord('2026-11-13', 'Ana', [b]);
+    const records = [r1, r2];
+
+    expect(findSavedItem(records, { recordId: r1.id, itemId: a.id })).toEqual({
+      record: r1,
+      item: a,
+    });
+    expect(findSavedItem(records, { recordId: 'nope', itemId: a.id })).toBeNull();
+    expect(findSavedItem(records, { recordId: r1.id, itemId: 'nope' })).toBeNull();
+    // An item that sits in another record is not found through this one.
+    expect(findSavedItem(records, { recordId: r1.id, itemId: b.id })).toBeNull();
+  });
+});
+
+describe('stagedFromSaved', () => {
+  it('loads a One Payor record as One Payor, with the item total as the amount', () => {
+    const x = equalItem('X', 90, ['Ana', 'Ben']);
+    const y = customItem('Y', { Cy: 40 });
+    const record = singleRecord('2026-11-12', 'Ana', [x, y]);
+    expect(stagedFromSaved(record, y)).toEqual({
+      item: y,
+      date: '2026-11-12',
+      payorMode: 'single',
+      payors: [{ member: 'Ana', amount: 40 }],
+    });
+  });
+
+  it('loads a Multiple Payors record with one item as it is, even if it no longer adds up', () => {
+    const x = equalItem('X', 100, ['Cy']);
+    const record = savedRecord(
+      '2026-11-12',
+      [
+        { member: 'Ana', amount: 60 },
+        { member: 'Ben', amount: 30 },
+      ],
+      [x],
+      0,
+    );
+    const staged = stagedFromSaved(record, x);
+    expect(staged.payorMode).toBe('multiple');
+    expect(staged.payors).toEqual(record.payors);
+    expect(staged.payors).not.toBe(record.payors);
+  });
+
+  it("splits a pre-flexible-Paid-By record's contributions across its items in proportion", () => {
+    const x = customItem('X', { Cy: 700 });
+    const y = equalItem('Y', 300, ['Cy']);
+    const record = savedRecord(
+      '2026-11-12',
+      [
+        { member: 'Ana', amount: 600 },
+        { member: 'Ben', amount: 400 },
+      ],
+      [x, y],
+      0,
+    );
+    expect(stagedFromSaved(record, y).payors).toEqual([
+      { member: 'Ana', amount: 180 },
+      { member: 'Ben', amount: 120 },
+    ]);
+  });
+
+  it('leaves out a payor whose share rounds to nothing', () => {
+    const x = customItem('X', { Cy: 999.99 });
+    const y = equalItem('Y', 0.01, ['Cy']);
+    const record = savedRecord(
+      '2026-11-12',
+      [
+        { member: 'Ana', amount: 0.01 },
+        { member: 'Ben', amount: 999.99 },
+      ],
+      [x, y],
+      0,
+    );
+    const { payors } = stagedFromSaved(record, y);
+    expect(payors.map((p) => p.member)).toEqual(['Ben']);
+    expect(payors[0].amount).toBe(0.01);
+  });
+});
+
+describe('sameStaged', () => {
+  const build = (price: number, date = '2026-11-12', payor = 'Ana') =>
+    stagedSingle(date, payor, {
+      id: 'item_s',
+      mode: 'equal',
+      name: 'S',
+      totalPrice: price,
+      owners: ['Ben'],
+    });
+
+  it('is true for two stamps of the same fields', () => {
+    expect(sameStaged(build(10), build(10))).toBe(true);
+  });
+
+  it('is false when a centavo or the date differs', () => {
+    expect(sameStaged(build(10), build(10.01))).toBe(false);
+    expect(sameStaged(build(10), build(10, '2026-11-13'))).toBe(false);
+  });
+});
+
+describe('applyItemEdit, in place', () => {
+  it('replaces the item at its index with the same id, and the single payor amount follows', () => {
+    const a = equalItem('A', 100, ['Ben']);
+    const b = equalItem('B', 50, ['Ben']);
+    const c = equalItem('C', 25, ['Ben']);
+    const other = singleRecord('2026-11-14', 'Ben', [equalItem('Z', 5, ['Ana'])]);
+    const record = singleRecord('2026-11-12', 'Ana', [a, b, c]);
+    const records = [record, other];
+
+    const next = stagedSingle('2026-11-12', 'Ana', { ...b, totalPrice: 80 });
+    const result = applyItemEdit(records, refOf(record, b), next, FRESH);
+
+    expect(result).toHaveLength(2);
+    expect(result[0].id).toBe(record.id);
+    expect(result[0].items.map((i) => i.id)).toEqual([a.id, b.id, c.id]);
+    expect(getItemTotal(result[0].items[1])).toBe(80);
+    expect(result[0].payors).toEqual([{ member: 'Ana', amount: 205 }]);
+    expect(result[1]).toBe(other);
+  });
+
+  it('keeps the payors of a Multiple Payors record', () => {
+    const x = equalItem('X', 100, ['Cy']);
+    const record = savedRecord(
+      '2026-11-12',
+      [
+        { member: 'Ana', amount: 60 },
+        { member: 'Ben', amount: 40 },
+      ],
+      [x],
+      0,
+    );
+    const next = stagedMultiple(
+      '2026-11-12',
+      [
+        { member: 'Ana', amount: 60 },
+        { member: 'Ben', amount: 40 },
+      ],
+      { ...x, name: 'Renamed' },
+    );
+    const [result] = applyItemEdit([record], refOf(record, x), next, FRESH);
+    expect(result.payors).toEqual(record.payors);
+    expect(result.items[0].name).toBe('Renamed');
+  });
+});
+
+describe('applyItemEdit, moved', () => {
+  it('moves the item to the end of the card for its new date, and the old record keeps the rest', () => {
+    const a = equalItem('A', 100, ['Ben']);
+    const b = equalItem('B', 50, ['Ben']);
+    const c = equalItem('C', 25, ['Ben']);
+    const old = singleRecord('2026-11-12', 'Ana', [a, b, c], 1);
+    const target = singleRecord('2026-11-13', 'Ana', [equalItem('T', 10, ['Ben'])], 2);
+
+    const next = stagedSingle('2026-11-13', 'Ana', b);
+    const result = applyItemEdit([old, target], refOf(old, b), next, FRESH);
+
+    expect(result).toHaveLength(3);
+    expect(result[0].items.map((i) => i.id)).toEqual([a.id, c.id]);
+    expect(result[0].payors).toEqual([{ member: 'Ana', amount: 125 }]);
+    expect(result[2]).toEqual({
+      id: FRESH.id,
+      createdAt: FRESH.createdAt,
+      date: '2026-11-13',
+      payorMode: 'single',
+      payors: [{ member: 'Ana', amount: 50 }],
+      items: [b],
+    });
+    // The item exists exactly once.
+    expect(result.flatMap((r) => r.items).filter((i) => i.id === b.id)).toHaveLength(1);
+
+    const card = groupRecordsForBreakdown(result, members).find((g) => g.date === '2026-11-13');
+    expect(card?.rows.map((r) => r.item.id)).toEqual([target.items[0].id, b.id]);
+  });
+
+  it('removes the old record when it held only that item, and its card goes', () => {
+    const only = equalItem('Only', 40, ['Ben']);
+    const old = singleRecord('2026-11-12', 'Ana', [only]);
+    const result = applyItemEdit(
+      [old],
+      refOf(old, only),
+      stagedSingle('2026-11-15', 'Ana', only),
+      FRESH,
+    );
+    expect(result.map((r) => r.id)).toEqual([FRESH.id]);
+    expect(groupRecordsForBreakdown(result, members).map((g) => g.date)).toEqual(['2026-11-15']);
+  });
+
+  it('files a move to Multiple Payors as a record of its own, and balances follow its weights', () => {
+    const a = equalItem('A', 100, ['Cy']);
+    const b = equalItem('B', 1830, ['Cy']);
+    const old = singleRecord('2026-11-12', 'Ana', [a, b]);
+    const next = stagedMultiple(
+      '2026-11-12',
+      [
+        { member: 'Ana', amount: 1000 },
+        { member: 'Ben', amount: 830 },
+      ],
+      b,
+    );
+    const result = applyItemEdit([old], refOf(old, b), next, FRESH);
+
+    expect(result[1].payorMode).toBe('multiple');
+    expect(result[1].items).toEqual([b]);
+    const matrix = getRawOwedMatrix(result, members);
+    // Cy owes Ana 100 for A plus her share of B, and Ben his share of B.
+    expect(matrix.Ben.Cy).toBe(830);
+    expect(matrix.Ana.Cy).toBe(1100);
+  });
+
+  it('files a Multiple Payors item with one contributor as a One Payor record', () => {
+    const a = equalItem('A', 100, ['Cy']);
+    const b = equalItem('B', 50, ['Cy']);
+    const old = singleRecord('2026-11-12', 'Ana', [a, b]);
+    const next = stagedMultiple('2026-11-12', [{ member: 'Ben', amount: 50 }], b);
+    const result = applyItemEdit([old], refOf(old, b), next, FRESH);
+    expect(result[1].payorMode).toBe('single');
+    expect(result[1].payors).toEqual([{ member: 'Ben', amount: 50 }]);
+  });
+
+  it('returns the very same array when the item has gone, and writes nothing', () => {
+    const a = equalItem('A', 100, ['Cy']);
+    const old = singleRecord('2026-11-12', 'Ana', [a]);
+    const records = [old];
+    const result = applyItemEdit(
+      records,
+      { recordId: old.id, itemId: 'gone' },
+      stagedSingle('2026-11-12', 'Ana', a),
+      FRESH,
+    );
+    expect(result).toBe(records);
+  });
+
+  it('does not mutate its input', () => {
+    const a = equalItem('A', 100, ['Cy']);
+    const b = equalItem('B', 50, ['Cy']);
+    const old = singleRecord('2026-11-12', 'Ana', [a, b]);
+    const records = [old];
+    const before = JSON.parse(JSON.stringify(records));
+    applyItemEdit(records, refOf(old, b), stagedSingle('2026-11-20', 'Ben', b), FRESH);
+    applyItemEdit(
+      records,
+      refOf(old, b),
+      stagedSingle('2026-11-12', 'Ana', { ...b, totalPrice: 9 }),
+      FRESH,
+    );
+    expect(records).toEqual(before);
+  });
+});
+
+describe('applyItemEdit, records from before flexible Paid By', () => {
+  const trio = ['Ana', 'Ben', 'Cy', 'Dee'];
+
+  it('splits the contributions when only the date changes, and no balance moves', () => {
+    const x = customItem('X', { Cy: 700 });
+    const y = equalItem('Y', 300, ['Cy']);
+    const old = savedRecord(
+      '2026-11-12',
+      [
+        { member: 'Ana', amount: 600 },
+        { member: 'Ben', amount: 400 },
+      ],
+      [x, y],
+      0,
+    );
+    const before = getRawOwedMatrix([old], trio);
+    const loaded = stagedFromSaved(old, y);
+    const result = applyItemEdit([old], refOf(old, y), { ...loaded, date: '2026-11-20' }, FRESH);
+
+    expect(result[0].payors).toEqual([
+      { member: 'Ana', amount: 420 },
+      { member: 'Ben', amount: 280 },
+    ]);
+    expect(result[1].payors).toEqual([
+      { member: 'Ana', amount: 180 },
+      { member: 'Ben', amount: 120 },
+    ]);
+    const after = getRawOwedMatrix(result, trio);
+    expect(after).toEqual(before);
+    expect(after.Ana.Cy).toBe(600);
+    expect(after.Ben.Cy).toBe(400);
+  });
+
+  it('splits to the centavo: three payors of 1.00 and items of 1.00 and 2.00', () => {
+    const x = equalItem('X', 1, ['Dee']);
+    const y = equalItem('Y', 2, ['Dee']);
+    const old = savedRecord(
+      '2026-11-12',
+      [
+        { member: 'Ana', amount: 1 },
+        { member: 'Ben', amount: 1 },
+        { member: 'Cy', amount: 1 },
+      ],
+      [x, y],
+      0,
+    );
+    const before = getRawOwedMatrix([old], trio);
+    const loaded = stagedFromSaved(old, x);
+    const result = applyItemEdit([old], refOf(old, x), { ...loaded, date: '2026-11-20' }, FRESH);
+
+    expect(result[1].payors.map((p) => p.amount)).toEqual([0.34, 0.33, 0.33]);
+    expect(result[0].payors.map((p) => p.amount)).toEqual([0.66, 0.67, 0.67]);
+    const after = getRawOwedMatrix(result, trio);
+    expect(after).toEqual(before);
+    expect(after.Ana.Dee).toBe(1);
+    expect(after.Ben.Dee).toBe(1);
+    expect(after.Cy.Dee).toBe(1);
+  });
+
+  it('never leaves a negative contribution when the contributions fall short of the item', () => {
+    // Ben was removed, so what is left (Ana 100) is under the moved item's 200 of a 300 record.
+    const x = equalItem('X', 100, ['Cy']);
+    const y = equalItem('Y', 200, ['Cy']);
+    const old = savedRecord('2026-11-12', [{ member: 'Ana', amount: 100 }], [x, y], 0);
+    old.payorMode = 'multiple';
+    const loaded = stagedFromSaved(old, y);
+    const result = applyItemEdit([old], refOf(old, y), { ...loaded, date: '2026-11-20' }, FRESH);
+
+    expect(result[0].payors).toEqual([{ member: 'Ana', amount: 100 }]);
+    for (const r of result) for (const p of r.payors) expect(p.amount).toBeGreaterThanOrEqual(0);
+  });
+
+  it('files a real Paid By change as a One Payor record and keeps the old record at its share', () => {
+    const x = customItem('X', { Cy: 700 });
+    const y = equalItem('Y', 300, ['Cy']);
+    const old = savedRecord(
+      '2026-11-12',
+      [
+        { member: 'Ana', amount: 600 },
+        { member: 'Ben', amount: 400 },
+      ],
+      [x, y],
+      0,
+    );
+    const result = applyItemEdit([old], refOf(old, y), stagedSingle('2026-11-12', 'Ana', y), FRESH);
+    expect(result[0].payors).toEqual([
+      { member: 'Ana', amount: 420 },
+      { member: 'Ben', amount: 280 },
+    ]);
+    expect(result[1].payorMode).toBe('single');
+    expect(result[1].payors).toEqual([{ member: 'Ana', amount: 300 }]);
+  });
+});
+
+describe('order lines in staging', () => {
+  const itemized = (): CustomAmountItem => ({
+    id: nextId('item'),
+    mode: 'custom',
+    name: 'Dinner',
+    amounts: { Ana: 280, Ben: 450 },
+    lines: [
+      { member: 'Ana', name: 'Sisig', amount: 280 },
+      { member: 'Ben', name: 'Kare-kare', amount: 450 },
+    ],
+  });
+
+  it("purgeMemberFromStaged drops a member's lines from an itemized item", () => {
+    const staged = [stagedSingle('2026-11-12', 'Cy', itemized())];
+    const [out] = purgeMemberFromStaged(staged, 'Ben');
+    expect(out.item).toMatchObject({ amounts: { Ana: 280 } });
+    expect(out.item.mode === 'custom' && out.item.lines).toEqual([
+      { member: 'Ana', name: 'Sisig', amount: 280 },
+    ]);
+  });
+
+  it('applyItemEdit in place keeps the lines of an itemized next', () => {
+    const old = itemized();
+    const record = singleRecord('2026-11-12', 'Cy', [old]);
+    const next = stagedSingle('2026-11-12', 'Cy', {
+      ...old,
+      amounts: { Ana: 300, Ben: 450 },
+      lines: [
+        { member: 'Ana', name: 'Sisig', amount: 300 },
+        { member: 'Ben', name: 'Kare-kare', amount: 450 },
+      ],
+    });
+    const [result] = applyItemEdit([record], refOf(record, old), next, FRESH);
+    expect(result.items[0]).toBe(next.item);
+    expect(result.payors).toEqual([{ member: 'Cy', amount: 750 }]);
   });
 });
