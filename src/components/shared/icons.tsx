@@ -137,15 +137,15 @@ export function CloseIcon(props: Props) {
 }
 
 /**
- * A circled ×, which empties the box it sits in. It is drawn differently from
- * CloseIcon and the plain × of an order line's Remove button on purpose, so a
- * clear is never mistaken for a remove.
+ * A counter-clockwise arrow, the usual reset symbol, which empties the box it
+ * sits in. Its shape is nothing like CloseIcon or the plain × of an order
+ * line's Remove button on purpose, so a clear is never mistaken for a remove.
  */
 export function ClearIcon(props: Props) {
   return (
     <Icon {...props}>
-      <circle cx="12" cy="12" r="9" />
-      <path d="m9 9 6 6M15 9l-6 6" />
+      <path d="M4 12a8 8 0 1 0 2.4-5.7L4 8.5" />
+      <path d="M4 4v4.5h4.5" />
     </Icon>
   );
 }

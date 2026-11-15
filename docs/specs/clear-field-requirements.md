@@ -43,7 +43,7 @@ Emptying a box means selecting and deleting its text, which is fiddly on a phone
 
 ## 2. Outcome (checkable)
 
-- Every in-scope box that has text shows a grey circled × at its right edge.
+- Every in-scope box that has text shows a grey counter-clockwise arrow (↺) at its right edge.
 - One tap on it empties the box, shows its placeholder, and puts the cursor in it.
 - Everything derived from the box updates exactly as if the text had been deleted by hand.
 
@@ -69,7 +69,7 @@ As the person logging, I want to empty a box with one tap, so that I can retype 
 phone.
 
 - **AC-CF1.1** Given any in-scope box that's empty, then no clear button shows in it.
-- **AC-CF1.2** Given I type one character in it, then a grey circled × appears inside the box at its right edge. When I delete the last character by hand, it disappears.
+- **AC-CF1.2** Given I type one character in it, then a grey ↺ appears inside the box at its right edge. When I delete the last character by hand, it disappears.
 - **AC-CF1.3** Given Item Name holds "Dinner", when I tap its clear button, then the box is empty, shows "e.g. Dinner, Groceries, Taxi" in grey, the clear button is gone, and the cursor is in Item Name.
 - **AC-CF1.4** Given Total Price holds "1500", when I tap its clear button, then the box is empty and shows the grey "0.00" placeholder, not a typed "0.00".
 - **AC-CF1.5** The same holds for every field in section 3: after a clear, the box is empty, shows its placeholder, and has focus.
@@ -94,7 +94,7 @@ hand, so that I can trust what the form shows.
 As the person logging, I want clearing an order and removing an order to look and sound different,
 so that I don't delete a line when I meant to retype it.
 
-- **AC-CF3.1** Given Ana has two order lines, then each box that has text shows its grey circled × inside the box, and the line's Remove × stays the plain × outside the boxes.
+- **AC-CF3.1** Given Ana has two order lines, then each box that has text shows its grey ↺ inside the box, and the line's Remove × stays the plain × outside the boxes.
 - **AC-CF3.2** A screen reader announces the price box's clear as "Clear Ana's order 1 price" and the line's Remove as "Remove Ana's order" (or "Remove Ana's order Pasta" when the line is named Pasta).
 - **AC-CF3.3** Given a phone, when I tap the clear button in a price box, then the line is never removed. The two buttons' tap areas don't overlap.
 
@@ -112,7 +112,7 @@ so that I don't delete a line when I meant to retype it.
 - **BR-CF5** After a clear, focus moves to the cleared box. On a phone this opens the keyboard, which is the point: the next step is retyping.
 - **BR-CF6** A number box showing text the browser can't read (its `value` is `""`, for example after typing `-`) shows the clear button. The clear empties the visible text too, even though the form's state already reads empty. The derived values don't change, because that text already counted as ₱0.
 - **BR-CF7** The Paid By contribution's "box" is the whole bordered row (name and amount). Its clear button sits at that row's right edge, after the amount. The amount keeps its width, and the member's name gives up the room, truncating with an ellipsis as it does today.
-- **BR-CF8** The button is a grey circled ×, visibly different from the order line's plain Remove ×. It has the `aria-label` in section 3 and no other text.
+- **BR-CF8** The button is a grey counter-clockwise arrow (↺), visibly different from the order line's plain Remove ×. It has the `aria-label` in section 3 and no other text.
 - **BR-CF9** If an in-scope box is ever disabled or read-only, it shows no clear button. None is today (section 0, item 7).
 - **BR-CF10** Escape doesn't clear a box (pending CQ3). Pressing it in a box does what it does today, which is nothing.
 - **BR-CF11** No `data-tour` target moves. Run `steps.test.ts` and `targets.test.ts`.

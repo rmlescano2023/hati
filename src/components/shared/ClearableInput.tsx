@@ -14,7 +14,7 @@ type Props = Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'className' |
 };
 
 /**
- * An input with a circled × at its right edge while it shows any text. The
+ * An input with a counter-clockwise arrow at its right edge while it shows any text. The
  * × empties the box through the box's own onChange, so everything derived from
  * it updates exactly as if the text had been deleted by hand.
  */

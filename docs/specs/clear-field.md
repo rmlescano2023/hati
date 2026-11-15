@@ -5,7 +5,7 @@ ships with custom orders (`docs/specs/custom-orders.md`), which is built but not
 
 ## 1. Summary
 
-Each of the seven boxes in the requirements' section 3 shows a grey circled × at its right edge
+Each of the seven boxes in the requirements' section 3 shows a grey counter-clockwise arrow (↺) at its right edge
 whenever it shows any text. One tap empties the box, brings its placeholder back and puts the cursor
 in it. Everything derived from the box updates exactly as if the text had been deleted by hand,
 because the clear runs the box's own `onChange`.
@@ -235,8 +235,8 @@ Notes for the developer:
   Don't raise it. `.compact` sits after `.wrap` in the same block, so the order decides between
   them.
 - **Icon.** `ClearIcon` in `icons.tsx`, drawn with the existing `Icon` wrapper so it's stroked in
-  `currentColor` and `aria-hidden`: `<circle cx="12" cy="12" r="9" />` and
-  `<path d="m9 9 6 6M15 9l-6 6" />`. Its doc comment says it clears a box's text, unlike the plain ×
+  `currentColor` and `aria-hidden`: `<path d="M4 12a8 8 0 1 0 2.4-5.7L4 8.5" />` and
+  `<path d="M4 4v4.5h4.5" />`. Its doc comment says it clears a box's text, unlike the plain ×
   that removes a row (BR-CF8).
 
 Sizes:
@@ -284,8 +284,8 @@ Sizes:
 
 ### 6.3 What it looks like
 
-- **Desktop:** the boxes look exactly as today until they have text; then the 16px grey circled ×
-  shows inside the right edge (AC-CF4.2). In a contribution row with text, the × sits after the
+- **Desktop:** the boxes look exactly as today until they have text; then the 16px grey counter-clockwise arrow (↺)
+  shows inside the right edge (AC-CF4.2). In a contribution row with text, the ↺ sits after the
   amount at the row's right edge, and the amount sits 24px further left than its placeholder did.
   That's the room BR-CF7 gives it.
 - **Phone:** the same, with the tap areas in 6.1. No box gets taller (AC-CF4.1). At 320px nothing
@@ -350,27 +350,27 @@ All of `npm test`, including `steps.test.ts` and `targets.test.ts` (BR-CF11).
 ### ui-ux-tester checks
 
 On `npm run dev:full`, at 1280px and at 375px and 320px:
-1. Each of the seven boxes: empty, no ×; type one character, × shows; delete it by hand, × goes
-   (AC-CF1.1, AC-CF1.2). Several filled boxes each show their own × at once (CQ1).
-2. Tap each ×: the box empties, the grey placeholder shows ("0.00" stays a placeholder), the × goes,
+1. Each of the seven boxes: empty, no ↺; type one character, ↺ shows; delete it by hand, ↺ goes
+   (AC-CF1.1, AC-CF1.2). Several filled boxes each show their own ↺ at once (CQ1).
+2. Tap each ↺: the box empties, the grey placeholder shows ("0.00" stays a placeholder), the ↺ goes,
    and the cursor is in the box; on a phone the keyboard stays or comes up (AC-CF1.3 to AC-CF1.5,
    BR-CF5).
 3. No clear adds a member, adds an item, saves edits or removes a line (AC-CF1.6, AC-CF2.8).
 4. AC-CF2.1, AC-CF2.2, AC-CF2.3 (then press Fill Remainder), AC-CF2.4, AC-CF2.6 and AC-CF2.7, each
    as written.
-5. BR-CF6: type `-` in Total Price and in an order price; the × shows; tap it; the text is gone and
+5. BR-CF6: type `-` in Total Price and in an order price; the ↺ shows; tap it; the text is gone and
    no total moves.
 6. New-member box: add an existing name, so "… is already in the group." shows; clear; the message
    goes and nothing is added. Clear, then press Enter: nothing happens.
-7. Tab from Item Name goes to the next box, never to a ×; a screen reader (VoiceOver) reads "Clear
+7. Tab from Item Name goes to the next box, never to a ↺; a screen reader (VoiceOver) reads "Clear
    Ana's order 1 price, button" and the Remove as "Remove Ana's order" (CQ2, AC-CF3.2). Escape in a
    box does nothing (CQ3).
-8. Phone: the name and price boxes' × is about 24 × 44 and "1250.00" stays fully visible beside
-   it; every other × is 44 × 44; tapping the price × never removes the line (CQ4, AC-CF3.3, AC-CF4.1). No box
+8. Phone: the name and price boxes' ↺ is about 24 × 44 and "1250.00" stays fully visible beside
+   it; every other ↺ is 44 × 44; tapping the price ↺ never removes the line (CQ4, AC-CF3.3, AC-CF4.1). No box
    is taller than on `main`.
-9. 320px: nothing scrolls sideways; no text sits under a ×; a long member name in a contribution row
-   truncates while the amount and × stay whole (AC-CF4.3, BR-CF7).
-10. Desktop: compared with `main`, the only difference is the × in boxes with text (AC-CF4.2).
+9. 320px: nothing scrolls sideways; no text sits under a ↺; a long member name in a contribution row
+   truncates while the amount and ↺ stay whole (AC-CF4.3, BR-CF7).
+10. Desktop: compared with `main`, the only difference is the ↺ in boxes with text (AC-CF4.2).
 11. Edit a staged row and a saved item, clear a field, then Cancel: nothing changed (edge cases).
 12. The onboarding tour still runs end to end.
 
@@ -379,7 +379,7 @@ On `npm run dev:full`, at 1280px and at 375px and 320px:
 For the documentation-engineer:
 - `docs/mobile-breakpoints.md`, 640px list: `shared/ClearableInput` gives 44px tap areas, 24px wide
   in the order line's price box.
-- `Documentation/Hati System Documentation.md`, where it describes the Expenses form: the circled ×
+- `Documentation/Hati System Documentation.md`, where it describes the Expenses form: the ↺
   empties a box, and differs from an order line's Remove ×. Only when the owner asks for a
   documentation update.
 
