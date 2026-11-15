@@ -1,5 +1,6 @@
-import type { AppData, PurchaseItem, PurchaseRecord, Session } from '../types';
-import { roundMoney } from './money.js';
+import type { AppData, OrderLine, PurchaseItem, PurchaseRecord, Session } from '../types';
+import { roundMoney, sumMoney } from './money.js';
+import { normaliseOrderName } from './orderLines.js';
 import { createId } from './id.js';
 import { normaliseSessionName } from './sessionName.js';
 import { parseActivityAt } from './activity.js';
@@ -17,6 +18,47 @@ function isRecordObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/**
+ * The order lines of a Custom item worth keeping, or null for "store no lines".
+ * Like the rest of `parseSession` it never rejects over them: a bad `lines` is
+ * dropped whole and the item is stored from `amounts` alone, so a tab still on
+ * an older release, which changes amounts without touching lines, keeps saving
+ * rather than failing. The one rule underneath is that money is never two
+ * things at once, so lines that disagree with `amounts` don't survive.
+ */
+function parseOrderLines(raw: unknown, amounts: Record<string, number>): OrderLine[] | null {
+  if (!Array.isArray(raw) || raw.length === 0) return null;
+
+  const lines: OrderLine[] = [];
+  for (const entry of raw) {
+    if (
+      !isRecordObject(entry) ||
+      typeof entry.member !== 'string' ||
+      typeof entry.name !== 'string' ||
+      typeof entry.amount !== 'number' ||
+      !Number.isFinite(entry.amount)
+    ) {
+      return null;
+    }
+    const amount = roundMoney(entry.amount);
+    if (amount <= 0) return null;
+    // A line for a member who is no longer in `amounts` was left behind by a
+    // member removal made on a tab that doesn't know about lines.
+    if (!(entry.member in amounts)) continue;
+    lines.push({ member: entry.member, name: normaliseOrderName(entry.name), amount });
+  }
+
+  for (const [member, amount] of Object.entries(amounts)) {
+    const mine = lines.filter((l) => l.member === member);
+    if (mine.length === 0) return null;
+    const sum = sumMoney(mine.map((l) => l.amount));
+    if (Math.round(sum * 100) !== Math.round(amount * 100)) return null;
+  }
+
+  // With no name anywhere it isn't itemized, and is stored as it always was.
+  return lines.some((l) => l.name !== '') ? lines : null;
+}
+
 function parseItem(raw: unknown): PurchaseItem | null {
   if (!isRecordObject(raw)) return null;
   const id = typeof raw.id === 'string' ? raw.id : null;
@@ -32,7 +74,10 @@ function parseItem(raw: unknown): PurchaseItem | null {
         }
       }
     }
-    return { id, mode: 'custom', name, amounts };
+    const lines = parseOrderLines(raw.lines, amounts);
+    return lines
+      ? { id, mode: 'custom', name, amounts, lines }
+      : { id, mode: 'custom', name, amounts };
   }
 
   const owners = Array.isArray(raw.owners) ? raw.owners.filter((o) => typeof o === 'string') : [];

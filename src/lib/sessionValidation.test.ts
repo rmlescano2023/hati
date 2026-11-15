@@ -168,3 +168,142 @@ describe('parseSession and finishedWithCollection', () => {
     }
   });
 });
+
+describe('parseSession and order lines', () => {
+  /** A session whose one record holds `item`, so each case names only the item. */
+  const withItem = (item: unknown) => ({
+    ...valid,
+    records: [{ ...valid.records[0], items: [item] }],
+  });
+  const parsedItem = (item: unknown) => parseSession(withItem(item))?.records[0].items[0];
+
+  const itemized = {
+    id: 'itm_c',
+    mode: 'custom',
+    name: 'Dinner',
+    amounts: { Ana: 280, Bea: 300 },
+    lines: [
+      { member: 'Ana', name: 'Sisig', amount: 280 },
+      { member: 'Bea', name: 'Pancit', amount: 180 },
+      { member: 'Bea', name: '', amount: 120 },
+    ],
+  };
+
+  it('keeps an amounts-only Custom item exactly as it was, with no lines key', () => {
+    const item = parsedItem({ id: 'itm_c', mode: 'custom', name: 'Dinner', amounts: { Ana: 10 } });
+    expect(item).toEqual({ id: 'itm_c', mode: 'custom', name: 'Dinner', amounts: { Ana: 10 } });
+    expect(item && 'lines' in item).toBe(false);
+  });
+
+  it('keeps valid lines in the order sent, with names tidied and cut to 60', () => {
+    const long = 'x'.repeat(80);
+    const item = parsedItem({
+      ...itemized,
+      amounts: { Ana: 280, Bea: 300 },
+      lines: [
+        { member: 'Ana', name: `  Pork \t sisig ${long}`, amount: 280 },
+        { member: 'Bea', name: 'Pancit', amount: 180.004 },
+        { member: 'Bea', name: '', amount: 119.996 },
+      ],
+    });
+    expect(item?.mode === 'custom' && item.lines).toBeTruthy();
+    if (item?.mode !== 'custom' || !item.lines) return;
+    expect(item.lines.map((l) => l.member)).toEqual(['Ana', 'Bea', 'Bea']);
+    expect(Array.from(item.lines[0].name)).toHaveLength(60);
+    expect(item.lines[0].name.startsWith('Pork sisig x')).toBe(true);
+    expect(item.lines[1].amount).toBe(180);
+    expect(item.lines[2].amount).toBe(120);
+  });
+
+  const dropsLines = (item: unknown) => {
+    const parsed = parsedItem(item);
+    expect(parsed?.mode).toBe('custom');
+    expect(parsed && 'lines' in parsed).toBe(false);
+    return parsed;
+  };
+
+  it("drops the lines and keeps the amounts when a member's lines do not add up", () => {
+    const parsed = dropsLines({ ...itemized, amounts: { Ana: 280, Bea: 999 } });
+    expect(parsed?.mode === 'custom' && parsed.amounts).toEqual({ Ana: 280, Bea: 999 });
+  });
+
+  it('drops the lines when a member in amounts has none', () => {
+    dropsLines({ ...itemized, amounts: { Ana: 280, Bea: 300, Cy: 5 } });
+  });
+
+  it('drops the lines when no line is named', () => {
+    dropsLines({
+      ...itemized,
+      lines: itemized.lines.map((l) => ({ ...l, name: '' })),
+    });
+  });
+
+  it('drops the lines when a line has an amount of 0, negative, NaN or a string', () => {
+    for (const amount of [0, -5, NaN, '120']) {
+      dropsLines({
+        ...itemized,
+        lines: [itemized.lines[0], itemized.lines[1], { member: 'Bea', name: '', amount }],
+      });
+    }
+  });
+
+  it('drops the lines when an entry is not an object or has a bad member or name', () => {
+    dropsLines({ ...itemized, lines: [...itemized.lines, null] });
+    dropsLines({ ...itemized, lines: [...itemized.lines, 'x'] });
+    dropsLines({ ...itemized, lines: [...itemized.lines, { member: 7, name: 'a', amount: 1 }] });
+    dropsLines({ ...itemized, lines: [...itemized.lines, { member: 'Ana', name: 7, amount: 1 }] });
+  });
+
+  it('drops the lines when they are not an array or are empty', () => {
+    dropsLines({ ...itemized, lines: 'nope' });
+    dropsLines({ ...itemized, lines: [] });
+  });
+
+  it('drops a line for a member not in amounts and keeps the rest when they still agree', () => {
+    const item = parsedItem({
+      ...itemized,
+      lines: [...itemized.lines, { member: 'Gone', name: 'Ghost', amount: 40 }],
+    });
+    expect(item?.mode === 'custom' && item.lines?.map((l) => l.member)).toEqual([
+      'Ana',
+      'Bea',
+      'Bea',
+    ]);
+  });
+
+  it('rebuilds an Equal item from its own fields, dropping a stray lines field', () => {
+    const item = parsedItem({
+      id: 'itm_e',
+      mode: 'equal',
+      name: 'Taxi',
+      totalPrice: 90,
+      owners: ['Ana'],
+      lines: itemized.lines,
+    });
+    expect(item).toEqual({
+      id: 'itm_e',
+      mode: 'equal',
+      name: 'Taxi',
+      totalPrice: 90,
+      owners: ['Ana'],
+    });
+  });
+
+  it('still parses a whole session that carries every bad shape above', () => {
+    const s = parseSession({
+      ...valid,
+      records: [
+        {
+          ...valid.records[0],
+          items: [
+            itemized,
+            { ...itemized, id: 'a', amounts: { Ana: 1 } },
+            { ...itemized, id: 'b', lines: 'nope' },
+            { ...itemized, id: 'c', lines: [null] },
+          ],
+        },
+      ],
+    });
+    expect(s?.records[0].items).toHaveLength(4);
+  });
+});
