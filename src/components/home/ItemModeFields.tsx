@@ -1,5 +1,6 @@
 import { EqualSplitFields } from './EqualSplitFields';
 import { CustomAmountFields } from './CustomAmountFields';
+import type { LineDraft, LinesDraft } from '../../lib/orderLines';
 import type { ItemMode } from '../../types';
 import styles from './ItemModeFields.module.css';
 
@@ -8,11 +9,13 @@ export type ItemDraft = {
   name: string;
   /** Equal Split: the item's total price. */
   price: string;
+  /** Who is in the item: Equal Split's owners, and Custom Amounts' picked members. */
   owners: Record<string, boolean>;
   allSelected: boolean;
-  /** Custom Amounts: the target total the per-member amounts should hit. */
+  /** Custom Amounts: the target total the picked members' lines should hit. */
   totalAmount: string;
-  amounts: Record<string, string>;
+  /** Custom Amounts: each picked member's order lines. */
+  lines: LinesDraft;
 };
 
 export type ItemDraftHandlers = {
@@ -21,15 +24,24 @@ export type ItemDraftHandlers = {
   toggleAll: () => void;
   toggleOwner: (member: string) => void;
   setTotalAmount: (value: string) => void;
-  setAmount: (member: string, value: string) => void;
+  setLine: (
+    member: string,
+    index: number,
+    patch: Partial<Pick<LineDraft, 'name' | 'price'>>,
+  ) => void;
+  addLine: (member: string) => void;
+  removeLine: (member: string, index: number) => void;
   fillRemainder: () => void;
 };
 
 export type ItemDraftDerived = {
-  selectedCount: number;
+  /** The picked members, which both modes read as who is in the item. */
+  picked: string[];
   enteredTotal: number;
   blankCount: number;
   remainder: number;
+  /** The first order that has a name but no price, which stops the item being added. */
+  missingPrice: string | null;
 };
 
 type Props = {
@@ -79,19 +91,27 @@ export function ItemModeFields({ members, draft, handlers, derived }: Props) {
           allSelected={draft.allSelected}
           onToggleAll={handlers.toggleAll}
           onToggleOwner={handlers.toggleOwner}
-          selectedCount={derived.selectedCount}
+          selectedCount={derived.picked.length}
         />
       ) : (
         <CustomAmountFields
           members={members}
           totalAmount={draft.totalAmount}
           onTotalAmountChange={handlers.setTotalAmount}
-          amounts={draft.amounts}
-          onAmountChange={handlers.setAmount}
           onFillRemainder={handlers.fillRemainder}
+          owners={draft.owners}
+          allSelected={draft.allSelected}
+          onToggleAll={handlers.toggleAll}
+          onToggleOwner={handlers.toggleOwner}
+          picked={derived.picked}
+          lines={draft.lines}
+          onLineChange={handlers.setLine}
+          onAddLine={handlers.addLine}
+          onRemoveLine={handlers.removeLine}
           enteredTotal={derived.enteredTotal}
           blankCount={derived.blankCount}
           remainder={derived.remainder}
+          missingPrice={derived.missingPrice}
         />
       )}
     </div>

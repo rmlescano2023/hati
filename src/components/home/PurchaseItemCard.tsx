@@ -16,8 +16,19 @@ import { ItemModeFields, type ItemDraft, type ItemDraftHandlers } from './ItemMo
 import { ItemStagingList } from './ItemStagingList';
 import { useAppData } from '../../context/AppDataContext';
 import { useSessionsStore } from '../../context/SessionsStoreContext';
-import { distributeRemainder, getItemTotal } from '../../lib/calculations';
+import { getItemTotal } from '../../lib/calculations';
 import { parsePositiveAmount as num, roundMoney, sumMoney } from '../../lib/money';
+import {
+  blankPicked,
+  fillRemainder,
+  itemFromLines,
+  linesFromEqualSplit,
+  linesFromItem,
+  linesOf,
+  linesTotal,
+  unpricedNamedLine,
+  type LineDraft,
+} from '../../lib/orderLines';
 import {
   buildRecords,
   contributionsMatch,
@@ -50,7 +61,7 @@ const EMPTY_DRAFT: ItemDraft = {
   owners: {},
   allSelected: false,
   totalAmount: '',
-  amounts: {},
+  lines: {},
 };
 
 /**
@@ -74,12 +85,19 @@ function draftFromItem(item: PurchaseItem, members: string[]): ItemDraft {
       owners: everyone ? {} : Object.fromEntries(item.owners.map((o) => [o, true])),
     };
   }
+  // Everyone with an amount is picked, and "All Members" is ticked only when
+  // that is every current member, as it is for Equal Split.
+  const lines = linesFromItem(item, members);
+  const picked = Object.keys(lines);
+  const everyone = members.length > 0 && members.every((m) => picked.includes(m));
   return {
     ...EMPTY_DRAFT,
     mode: 'custom',
     name: item.name,
     totalAmount: getItemTotal(item).toFixed(2),
-    amounts: Object.fromEntries(Object.entries(item.amounts).map(([m, a]) => [m, a.toFixed(2)])),
+    allSelected: everyone,
+    owners: everyone ? {} : Object.fromEntries(picked.map((m) => [m, true])),
+    lines,
   };
 }
 
@@ -114,14 +132,7 @@ function stampFields(fields: Fields, members: string[], id: string): StagedItem 
   const item: PurchaseItem =
     draft.mode === 'equal'
       ? { id, mode: 'equal', name, totalPrice: num(draft.price), owners }
-      : {
-          id,
-          mode: 'custom',
-          name,
-          amounts: Object.fromEntries(
-            members.filter((m) => num(draft.amounts[m]) > 0).map((m) => [m, num(draft.amounts[m])]),
-          ),
-        };
+      : itemFromLines(id, name, owners, draft.lines);
   return {
     item,
     date,
@@ -132,6 +143,9 @@ function stampFields(fields: Fields, members: string[], id: string): StagedItem 
         : readContributions(contributions, members),
   };
 }
+
+/** A line with nothing typed yet, for "+ Add order". */
+const emptyLine = (): LineDraft => ({ key: createId('line'), name: '', price: '' });
 
 const TONE_CLASS: Record<SaveMessageTone, string> = {
   muted: styles.saving,
@@ -193,12 +207,16 @@ export function PurchaseItemCard({ staged, setStaged, savedEdit, onSavedEditEnd 
   );
 
   const enteredTotal = useMemo(
-    () => sumMoney(members.map((m) => num(draft.amounts[m]))),
-    [draft.amounts, members],
+    () => linesTotal(selectedOwners, draft.lines),
+    [draft.lines, selectedOwners],
   );
   const blankMembers = useMemo(
-    () => members.filter((m) => num(draft.amounts[m]) === 0),
-    [draft.amounts, members],
+    () => blankPicked(selectedOwners, draft.lines),
+    [draft.lines, selectedOwners],
+  );
+  const missingPrice = useMemo(
+    () => unpricedNamedLine(selectedOwners, draft.lines),
+    [draft.lines, selectedOwners],
   );
   const remainder = roundMoney(num(draft.totalAmount) - enteredTotal);
 
@@ -207,10 +225,12 @@ export function PurchaseItemCard({ staged, setStaged, savedEdit, onSavedEditEnd 
   const handlers: ItemDraftHandlers = {
     setName: (name) => setDraft((d) => ({ ...d, name })),
     setPrice: (price) => setDraft((d) => ({ ...d, price })),
+    // Un-ticking "All Members" clears everyone, so their order lines go with
+    // them (AC-CO1.3).
     toggleAll: () =>
       setDraft((d) =>
         d.allSelected
-          ? { ...d, allSelected: false, owners: {} }
+          ? { ...d, allSelected: false, owners: {}, lines: {} }
           : { ...d, allSelected: true, owners: {} },
       ),
     toggleOwner: (member) =>
@@ -218,25 +238,38 @@ export function PurchaseItemCard({ staged, setStaged, savedEdit, onSavedEditEnd 
         const owners = { ...d.owners, [member]: !d.owners[member] };
         // Ticking every member individually is the same as "All Members".
         const allSelected = members.length > 0 && members.every((m) => owners[m]);
-        return { ...d, owners, allSelected };
+        // Un-ticking a member takes their lines with them (AC-CO1.7).
+        const lines = { ...d.lines };
+        if (!owners[member]) delete lines[member];
+        return { ...d, owners, allSelected, lines };
       }),
     setTotalAmount: (totalAmount) => setDraft((d) => ({ ...d, totalAmount })),
-    setAmount: (member, value) =>
-      setDraft((d) => ({ ...d, amounts: { ...d.amounts, [member]: value } })),
-    fillRemainder: () => {
-      const target = num(draft.totalAmount);
-      const filled = members
-        .filter((m) => num(draft.amounts[m]) > 0)
-        .map((m) => num(draft.amounts[m]));
-      const fills = distributeRemainder(target, filled, blankMembers.length);
-      setDraft((d) => {
-        const amounts = { ...d.amounts };
-        blankMembers.forEach((m, i) => {
-          if (fills[i] > 0) amounts[m] = fills[i].toFixed(2);
-        });
-        return { ...d, amounts };
-      });
-    },
+    setLine: (member, index, patch) =>
+      setDraft((d) => ({
+        ...d,
+        lines: {
+          ...d.lines,
+          [member]: linesOf(d.lines, member).map((l, i) => (i === index ? { ...l, ...patch } : l)),
+        },
+      })),
+    addLine: (member) =>
+      setDraft((d) => ({
+        ...d,
+        lines: {
+          ...d.lines,
+          [member]: [...linesOf(d.lines, member), emptyLine()],
+        },
+      })),
+    removeLine: (member, index) =>
+      setDraft((d) => ({
+        ...d,
+        lines: { ...d.lines, [member]: linesOf(d.lines, member).filter((_, i) => i !== index) },
+      })),
+    fillRemainder: () =>
+      setDraft((d) => ({
+        ...d,
+        lines: fillRemainder(num(d.totalAmount), selectedOwners, d.lines),
+      })),
   };
 
   // The price the contributions have to cover. Custom Amounts uses what the
@@ -250,7 +283,9 @@ export function PurchaseItemCard({ staged, setStaged, savedEdit, onSavedEditEnd 
 
   const itemValid =
     draft.name.trim().length > 0 &&
-    (draft.mode === 'equal' ? num(draft.price) > 0 && selectedOwners.length > 0 : enteredTotal > 0);
+    (draft.mode === 'equal'
+      ? num(draft.price) > 0 && selectedOwners.length > 0
+      : enteredTotal > 0 && missingPrice === null);
   // The date and payor are stamped on the item, so they are checked here and
   // not at Save. A payor name that is no longer a member doesn't count.
   const payorValid =
@@ -336,12 +371,12 @@ export function PurchaseItemCard({ staged, setStaged, savedEdit, onSavedEditEnd 
     setDraft((d) => {
       // `allSelected` is left alone: it means "every current member".
       const owners = { ...d.owners };
-      const amounts = { ...d.amounts };
+      const lines = { ...d.lines };
       for (const m of removed) {
         delete owners[m];
-        delete amounts[m];
+        delete lines[m];
       }
-      return { ...d, owners, amounts };
+      return { ...d, owners, lines };
     });
     setContributions((c) => {
       const kept = { ...c };
@@ -470,9 +505,28 @@ export function PurchaseItemCard({ staged, setStaged, savedEdit, onSavedEditEnd 
             ariaLabel="Item split mode"
             value={draft.mode}
             onChange={(mode) => {
-              // The name stays, whether or not an edit is open; the rest is
-              // specific to the mode being left.
-              setDraft((d) => ({ ...EMPTY_DRAFT, mode, name: d.name }));
+              // The name and who is in the item stay, whether or not an edit is
+              // open; the rest is specific to the mode being left (BR-CO4).
+              setDraft((d) => {
+                const keep = {
+                  ...EMPTY_DRAFT,
+                  mode,
+                  name: d.name,
+                  owners: d.owners,
+                  allSelected: d.allSelected,
+                };
+                if (mode !== 'custom') return keep;
+                // Equal Split's price becomes Custom Amounts' total, shared out
+                // as each picked member's first line.
+                const price = num(d.price);
+                if (price <= 0) return keep;
+                const picked = d.allSelected ? members : members.filter((m) => d.owners[m]);
+                return {
+                  ...keep,
+                  totalAmount: price.toFixed(2),
+                  lines: linesFromEqualSplit(price, picked),
+                };
+              });
               dispatch({ type: 'clearValidation' });
             }}
             options={[
@@ -487,10 +541,11 @@ export function PurchaseItemCard({ staged, setStaged, savedEdit, onSavedEditEnd 
           draft={draft}
           handlers={handlers}
           derived={{
-            selectedCount: selectedOwners.length,
+            picked: selectedOwners,
             enteredTotal,
             blankCount: blankMembers.length,
             remainder,
+            missingPrice,
           }}
         />
 
