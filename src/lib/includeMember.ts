@@ -22,11 +22,16 @@ export type IncludeGroup = {
  * Breakdown shows them. Custom Amounts items have no owners to join, and
  * staged items aren't saved, so neither is ever passed in or offered. An empty
  * result means there is nothing to ask, and the member can be added at once.
+ *
+ * `skip` is a saved item that is open for editing, which isn't offered: it is
+ * being rewritten from the form, so ticking it here would be lost or would
+ * race the edit (BR-CO36).
  */
 export function includableGroups(
   records: PurchaseRecord[],
   members: string[],
   name: string,
+  skip?: ItemRef,
 ): IncludeGroup[] {
   return groupRecordsForBreakdown(records, members)
     .map((group) => ({
@@ -37,6 +42,7 @@ export function includableGroups(
       items: group.rows
         .filter(
           (row) =>
+            !(row.recordId === skip?.recordId && row.item.id === skip?.itemId) &&
             row.item.mode === 'equal' &&
             !row.item.owners.some((owner) => compareNames(owner, name) === 0),
         )

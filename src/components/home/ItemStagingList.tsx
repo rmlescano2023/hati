@@ -54,11 +54,26 @@ export function ItemStagingList({ items, editingId, onEdit, onRemove }: Props) {
                 </div>
                 <span className={styles.num}>{formatMoney(getItemTotal(item))}</span>
                 <div className={styles.pills}>
-                  {owners.map((owner) => (
-                    <span className={styles.pill} key={owner}>
-                      {item.mode === 'custom' ? `${owner}: ${formatMoney(shares[owner])}` : owner}
-                    </span>
-                  ))}
+                  {/* An itemized item shows what each person ordered, one pill per
+                      line, and any other item shows one pill per member. */}
+                  {item.mode === 'custom' && item.lines
+                    ? item.lines.map((line, i) => (
+                        <span
+                          className={`${styles.pill} ${styles.linePill}`}
+                          key={`${item.id}:${i}`}
+                        >
+                          {line.name
+                            ? `${line.member} · ${line.name} ${formatMoney(line.amount)}`
+                            : `${line.member}: ${formatMoney(line.amount)}`}
+                        </span>
+                      ))
+                    : owners.map((owner) => (
+                        <span className={styles.pill} key={owner}>
+                          {item.mode === 'custom'
+                            ? `${owner}: ${formatMoney(shares[owner])}`
+                            : owner}
+                        </span>
+                      ))}
                 </div>
                 <span className={styles.actions}>
                   <Button

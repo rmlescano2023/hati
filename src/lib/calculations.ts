@@ -53,7 +53,14 @@ export function purgeMemberFromItem(item: PurchaseItem, member: string): Purchas
     if (!(member in item.amounts)) return item;
     const amounts = { ...item.amounts };
     delete amounts[member];
-    return Object.keys(amounts).length > 0 ? { ...item, amounts } : null;
+    if (Object.keys(amounts).length === 0) return null;
+    if (!item.lines) return { ...item, amounts };
+    const lines = item.lines.filter((l) => l.member !== member);
+    // With no named line left it isn't itemized any more, so it goes back to
+    // today's shape (BR-CO12).
+    return lines.some((l) => l.name !== '')
+      ? { ...item, amounts, lines }
+      : { id: item.id, mode: 'custom', name: item.name, amounts };
   }
 
   if (!item.owners.includes(member)) return item;
