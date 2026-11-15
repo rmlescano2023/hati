@@ -203,8 +203,8 @@ No other input changes (BR-CF1).
 }
 
 .clear svg {
-  width: 16px;
-  height: 16px;
+  width: 13px;
+  height: 13px;
 }
 
 /* Mobile shell: 44px tap areas. A 38px box lets the button overhang it by 3px
@@ -291,7 +291,7 @@ Sizes:
 
 ### 6.3 What it looks like
 
-- **Desktop:** the boxes look exactly as today until they have text; then the 16px grey counter-clockwise arrow (↺)
+- **Desktop:** the boxes look exactly as today until they have text; then the 13px grey counter-clockwise arrow (↺)
   shows inside the right edge (AC-CF4.2). In a contribution row with text, the ↺ sits after the
   amount at the row's right edge, and the amount sits 24px further left than its placeholder did.
   That's the room BR-CF7 gives it.
