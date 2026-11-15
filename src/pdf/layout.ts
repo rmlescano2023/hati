@@ -1,3 +1,19 @@
+/** DM Mono draws every character 0.6 em wide (DMMono-Regular.ttf: digits, separators and U+2212 alike). */
+const MONO_ADVANCE = 0.6;
+/** `cellNum` and `lineCellNum` pad 3pt on each side. */
+const NUM_CELL_PADDING = 6;
+
+/**
+ * The largest font size, up to `size`, at which `text` fits a number cell of
+ * `columnWidth`, rounded down to 0.1pt, so an amount is never clipped or runs
+ * into the next column (BR-CA35).
+ */
+export function fitMonoFontSize(text: string, columnWidth: number, size: number): number {
+  const room = columnWidth - NUM_CELL_PADDING;
+  const per = text.length * MONO_ADVANCE;
+  return per * size <= room ? size : Math.floor((room / per) * 10) / 10;
+}
+
 export type ColumnWidths = {
   item: number;
   price: number;
