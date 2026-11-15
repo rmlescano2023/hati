@@ -197,6 +197,7 @@ export function PurchaseItemCard({ staged, setStaged, savedEdit, onSavedEditEnd 
    */
   const latestSave = useRef(0);
   const sectionRef = useRef<HTMLDivElement>(null);
+  const savedNoteRef = useRef<HTMLParagraphElement>(null);
   // Set when an edit ends, so focus goes back to that row's Edit button rather
   // than being dropped on the page when its own button was the one disabled.
   const restoreFocusTo = useRef<string | null>(null);
@@ -405,13 +406,21 @@ export function PurchaseItemCard({ staged, setStaged, savedEdit, onSavedEditEnd 
 
   // So a phone user sees the fields fill, as Edit on a staged item does. Date
   // takes focus only with a fine pointer: on touch it would open the keyboard
-  // or the date picker unasked.
+  // or the date picker unasked. The focus comes first because focusing an
+  // element, even with preventScroll, cancels a smooth scroll already under way.
+  // On a phone the scroll lands on the "Editing saved item" line rather than the
+  // top of the section: with Paid By open on a long group the section's top
+  // leaves that line below the screen, and it is what says which item is open.
   useEffect(() => {
     if (!savedBoot) return;
-    sectionRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
     if (!window.matchMedia('(pointer: coarse)').matches) {
       document.getElementById('purchase-date')?.focus({ preventScroll: true });
     }
+    const phone = window.matchMedia('(max-width: 640px)').matches;
+    (phone ? savedNoteRef.current : sectionRef.current)?.scrollIntoView({
+      block: 'start',
+      behavior: 'smooth',
+    });
   }, [savedBoot]);
 
   useEffect(() => {
@@ -497,7 +506,11 @@ export function PurchaseItemCard({ staged, setStaged, savedEdit, onSavedEditEnd 
 
         <hr className={styles.divider} />
 
-        {savedEdit && <p className={styles.savedEditNote}>Editing saved item: {savedEdit.name}</p>}
+        {savedEdit && (
+          <p className={styles.savedEditNote} ref={savedNoteRef}>
+            Editing saved item: {savedEdit.name}
+          </p>
+        )}
 
         <div className={styles.subhead}>
           <span className={styles.subLabel}>Add Item</span>
