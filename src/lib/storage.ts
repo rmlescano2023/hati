@@ -30,6 +30,10 @@ function parseOrderLines(raw: unknown, amounts: Record<string, number>): OrderLi
   if (!Array.isArray(raw) || raw.length === 0) return null;
 
   const lines: OrderLine[] = [];
+  // Grouped as the lines are read, so checking each member's sum below is one
+  // pass over the lines rather than one per member; this runs on every session
+  // write, over input with no size limit.
+  const byMember = new Map<string, OrderLine[]>();
   for (const entry of raw) {
     if (
       !isRecordObject(entry) ||
@@ -43,14 +47,19 @@ function parseOrderLines(raw: unknown, amounts: Record<string, number>): OrderLi
     const amount = roundMoney(entry.amount);
     if (amount <= 0) return null;
     // A line for a member who is no longer in `amounts` was left behind by a
-    // member removal made on a tab that doesn't know about lines.
-    if (!(entry.member in amounts)) continue;
-    lines.push({ member: entry.member, name: normaliseOrderName(entry.name), amount });
+    // member removal made on a tab that doesn't know about lines. Own keys
+    // only, so a member named `constructor` or `__proto__` isn't taken for one.
+    if (!Object.hasOwn(amounts, entry.member)) continue;
+    const line = { member: entry.member, name: normaliseOrderName(entry.name), amount };
+    lines.push(line);
+    const mine = byMember.get(entry.member);
+    if (mine) mine.push(line);
+    else byMember.set(entry.member, [line]);
   }
 
   for (const [member, amount] of Object.entries(amounts)) {
-    const mine = lines.filter((l) => l.member === member);
-    if (mine.length === 0) return null;
+    const mine = byMember.get(member);
+    if (!mine) return null;
     const sum = sumMoney(mine.map((l) => l.amount));
     if (Math.round(sum * 100) !== Math.round(amount * 100)) return null;
   }

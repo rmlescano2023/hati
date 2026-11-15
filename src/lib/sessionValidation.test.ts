@@ -259,6 +259,41 @@ describe('parseSession and order lines', () => {
     dropsLines({ ...itemized, lines: [] });
   });
 
+  it('leaves out a line whose member is an inherited object key, and keeps the rest', () => {
+    for (const member of ['constructor', '__proto__', 'toString', 'hasOwnProperty']) {
+      const item = parsedItem({
+        ...itemized,
+        lines: [...itemized.lines, { member, name: 'Ghost', amount: 5 }],
+      });
+      expect(item?.mode === 'custom' && item.lines).toEqual(itemized.lines.map((l) => ({ ...l })));
+    }
+  });
+
+  it('checks a large number of members and lines correctly', () => {
+    const count = 1500;
+    const amounts: Record<string, number> = {};
+    const lines: { member: string; name: string; amount: number }[] = [];
+    for (let i = 0; i < count; i++) {
+      amounts[`M${i}`] = 60;
+      lines.push(
+        { member: `M${i}`, name: 'Sisig', amount: 10 },
+        { member: `M${i}`, name: '', amount: 20 },
+        { member: `M${i}`, name: 'Pancit', amount: 30 },
+      );
+    }
+    const item = parsedItem({ id: 'itm_big', mode: 'custom', name: 'Big', amounts, lines });
+    expect(item?.mode === 'custom' && item.lines).toHaveLength(count * 3);
+    expect(item?.mode === 'custom' && item.lines?.[4]).toEqual({
+      member: 'M1',
+      name: '',
+      amount: 20,
+    });
+
+    // One member's lines off by a centavo still drops every line, as before.
+    const off = lines.map((l, i) => (i === 3 * 700 ? { ...l, amount: 10.01 } : l));
+    dropsLines({ id: 'itm_big', mode: 'custom', name: 'Big', amounts, lines: off });
+  });
+
   it('drops a line for a member not in amounts and keeps the rest when they still agree', () => {
     const item = parsedItem({
       ...itemized,
