@@ -36,7 +36,10 @@ export function billLineParts(line: BillLine, inItem: readonly string[]): BillPa
  * too, and so is a discount holder outside it, with a negative share, so the
  * form can say whose share would go below zero. Keys are in `compareNames` order.
  */
-export function billAmounts(bill: readonly BillLine[], inItem: readonly string[]): Record<string, number> {
+export function billAmounts(
+  bill: readonly BillLine[],
+  inItem: readonly string[],
+): Record<string, number> {
   const sorted = [...inItem].sort(compareNames);
   // A Map, so a member called `__proto__` is an ordinary key and becomes an own
   // property only when `Object.fromEntries` builds the record.
@@ -177,6 +180,7 @@ export function receiptPillText(row: ReceiptRow): string {
     const n = members.length;
     return `${label} ${formatMoney(row.amount)} · ${n === 1 ? members[0] : `split ${n} ways`}`;
   }
-  const printed = row.kind === 'discount' ? formatSignedMoney(-row.amount) : formatMoney(row.amount);
+  const printed =
+    row.kind === 'discount' ? formatSignedMoney(-row.amount) : formatMoney(row.amount);
   return `${label} ${printed} · ${members.join(', ')}`;
 }

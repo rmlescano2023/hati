@@ -92,8 +92,7 @@ describe('billMembers (B-4)', () => {
 });
 
 describe('billAmounts, Examples A to E (B-5)', () => {
-  const of = (item: CustomAmountItem) =>
-    billAmounts(billOf(item), billMembers(billOf(item)));
+  const of = (item: CustomAmountItem) => billAmounts(billOf(item), billMembers(billOf(item)));
 
   it('A: 865.00 and 895.00, and the variant 865.01 and 895.00', () => {
     expect(of(exampleA())).toEqual({ Ana: 865, Ben: 895 });
@@ -277,7 +276,13 @@ describe('receiptRows (B-9)', () => {
   });
 
   it('gives Equal Split and amounts-only items null', () => {
-    const equal: EqualSplitItem = { id: 'e', mode: 'equal', name: 'x', totalPrice: 10, owners: ['Ana'] };
+    const equal: EqualSplitItem = {
+      id: 'e',
+      mode: 'equal',
+      name: 'x',
+      totalPrice: 10,
+      owners: ['Ana'],
+    };
     expect(receiptRows(equal)).toBeNull();
     expect(receiptRows({ id: 'c', mode: 'custom', name: 'x', amounts: { Ana: 5 } })).toBeNull();
   });
@@ -310,7 +315,10 @@ describe('receiptRowLabel and receiptPillText (B-10)', () => {
 
   it('writes the pill of an own order as PR #137 did', () => {
     expect(receiptPillText(rowOf(exampleB(), 0))).toBe('Ana · Sisig ₱280.00');
-    const fay = { ...exampleB(), bill: [{ kind: 'order', member: 'Fay', name: '', amount: 400.5 }] as BillLine[] };
+    const fay = {
+      ...exampleB(),
+      bill: [{ kind: 'order', member: 'Fay', name: '', amount: 400.5 }] as BillLine[],
+    };
     expect(receiptPillText(rowOf(fay, 0))).toBe('Fay: ₱400.50');
   });
 
