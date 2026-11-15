@@ -100,6 +100,38 @@
   color: var(--text3);
 }
 
+/* An itemized item and its lines read as one block: the rule goes under the
+   last line, not under the item row. */
+.table tr.hasLines td {
+  border-bottom: none;
+}
+
+/* `.table tr.lineRow td` outranks the phone block's `.table td`, so these stay
+   compact on a phone too. */
+.table tr.lineRow td {
+  border-bottom: none;
+  padding-top: 2px;
+  padding-bottom: 2px;
+  font-size: 12px;
+  color: var(--text2);
+}
+
+.table tr.lineRow.lastLine td {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 6px;
+}
+
+/* Indented 16px past the item name above it. */
+.table td.lineName {
+  padding-left: 29px;
+  overflow-wrap: anywhere;
+}
+
+.noName {
+  color: var(--text3);
+  font-style: italic;
+}
+
 .totalRow td {
   font-weight: 600;
   background: var(--surface2);

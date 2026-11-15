@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import { Button } from '../shared/Button';
 import { PencilIcon } from '../shared/icons';
 import { useAppDataOptional } from '../../context/AppDataContext';
@@ -58,39 +59,62 @@ export function BreakdownTable({ group, members, editable = true, onEdit }: Prop
                 </Button>
               );
 
+            // What each person ordered, under the item, for an itemized item
+            // only (BR-CO14); the item's own row stays the one that is summed.
+            const lines = row.item.mode === 'custom' ? row.item.lines : undefined;
+
             return (
-              <tr key={row.item.id}>
-                <td className={styles.itemCell}>
-                  <div className={styles.itemWrap}>
-                    <span className={styles.itemName}>{row.item.name}</span>
-                    {editButton(styles.editInline)}
-                  </div>
-                </td>
-                <td className={`${styles.num} ${styles.price}`}>{formatMoney(row.total)}</td>
-                {members.map((m) => {
-                  const share = row.shares[m] ?? 0;
-                  return (
-                    <td key={m} className={`${styles.num} ${share > 0 ? '' : styles.muted}`}>
-                      {share > 0 ? formatMoney(share) : '—'}
-                    </td>
-                  );
-                })}
-                {editable && (
-                  <td className={styles.action}>
-                    <span className={styles.actions}>
-                      {editButton(styles.editAction)}
-                      <Button
-                        variant="icon"
-                        title="Remove item"
-                        aria-label={`Remove ${row.item.name}`}
-                        onClick={() => data?.removeItem(row.recordId, row.item.id)}
-                      >
-                        ×
-                      </Button>
-                    </span>
+              <Fragment key={row.item.id}>
+                <tr className={lines ? styles.hasLines : undefined}>
+                  <td className={styles.itemCell}>
+                    <div className={styles.itemWrap}>
+                      <span className={styles.itemName}>{row.item.name}</span>
+                      {editButton(styles.editInline)}
+                    </div>
                   </td>
-                )}
-              </tr>
+                  <td className={`${styles.num} ${styles.price}`}>{formatMoney(row.total)}</td>
+                  {members.map((m) => {
+                    const share = row.shares[m] ?? 0;
+                    return (
+                      <td key={m} className={`${styles.num} ${share > 0 ? '' : styles.muted}`}>
+                        {share > 0 ? formatMoney(share) : '—'}
+                      </td>
+                    );
+                  })}
+                  {editable && (
+                    <td className={styles.action}>
+                      <span className={styles.actions}>
+                        {editButton(styles.editAction)}
+                        <Button
+                          variant="icon"
+                          title="Remove item"
+                          aria-label={`Remove ${row.item.name}`}
+                          onClick={() => data?.removeItem(row.recordId, row.item.id)}
+                        >
+                          ×
+                        </Button>
+                      </span>
+                    </td>
+                  )}
+                </tr>
+                {lines?.map((line, i) => (
+                  <tr
+                    key={`${row.item.id}:${i}`}
+                    className={`${styles.lineRow} ${i === lines.length - 1 ? styles.lastLine : ''}`}
+                  >
+                    <td className={styles.lineName}>
+                      {line.name || <span className={styles.noName}>No name</span>}
+                    </td>
+                    <td />
+                    {members.map((m) => (
+                      <td key={m} className={styles.num}>
+                        {line.member === m ? formatMoney(line.amount) : ''}
+                      </td>
+                    ))}
+                    {editable && <td />}
+                  </tr>
+                ))}
+              </Fragment>
             );
           })}
           <tr className={styles.totalRow}>
