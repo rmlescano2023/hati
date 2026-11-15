@@ -147,7 +147,7 @@ Markup:
 | 2 | Total Price | `ItemModeFields.tsx` | `"Clear total price"` | none | no |
 | 3 | Total Amount | `CustomAmountFields.tsx` | `"Clear total amount"` | none | no |
 | 4 | Order line name | `CustomAmountFields.tsx` | `` `Clear ${m}'s order ${i + 1} name` `` | none | **yes** |
-| 5 | Order line price | `CustomAmountFields.tsx` | `` `Clear ${m}'s order ${i + 1} price` `` | none | **yes** |
+| 5 | Order line price | `CustomAmountFields.tsx` | `` `Clear ${m}'s order ${i + 1} price` `` | `styles.priceBox` | **yes** |
 | 6 | Contribution | `PayorModeFields.tsx` | `` `Clear ${m}'s contribution` `` | `styles.contribAmount` | no |
 | 7 | New member name | `MemberList.tsx` | `"Clear new member name"` | `styles.nameBox` | no |
 
@@ -244,9 +244,10 @@ Sizes:
 
 | Width | Box | Tap area (w × h) | Padding while filled (slot + 5px inset) |
 |---|---|---|---|
-| Desktop | every in-scope box | 24 × box height (38px; 36px inside the contribution row) | 29px |
-| Phone | order line name and price | 24 × 44 | 29px |
-| Phone | every other in-scope box | 44 × 44 | 49px |
+| Desktop | every in-scope box except the order line's price | 24 × box height (38px; 36px inside the contribution row) | 29px |
+| Phone | order line name | 24 × 44 | 29px |
+| Phone | every other in-scope box except the order line's price | 44 × 44 | 49px |
+| Desktop and phone | order line price | 24 × box height (44px on phones) | 24px (icon inset 2px) |
 
 ### 6.2 Call-site CSS
 
@@ -276,6 +277,11 @@ Sizes:
   stay as they are and now apply inside the wrapper. `--clear-slot` is set on the same element by
   `.wrap`. The label's `flex: 1; min-width: 0` and its ellipsis already make the name give up the
   room. The row stays 38px tall at every width.
+- **Order line price box (`CustomAmountFields.module.css`).** `.line .priceBox` sets
+  `--clear-inset: 2px` and `.line .priceBox[data-filled] > input` sets `padding-right:
+  var(--clear-slot)` (24px), so "1250.00" (about 54.6px of text) fits in the 92px box at 320px
+  (92 − 2 border − 11 left padding − 24 = 55px). The icon sits 2px further in than the other
+  boxes' 5px, and the text still ends 2px short of it. The call site passes `className={styles.priceBox}`.
 - **`MemberList.module.css`.** Add `.nameBox { flex: 1; min-width: 0; }` for the wrapper. Remove
   `.addRow input { flex: 1; min-width: 0; }`: the input is no longer a flex item, so the rule no
   longer does anything. `.addRow button { flex-shrink: 0; }` also reaches the clear button; that's

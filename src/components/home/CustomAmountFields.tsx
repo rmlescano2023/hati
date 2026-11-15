@@ -131,6 +131,7 @@ export function CustomAmountFields({
                     />
                     <ClearableInput
                       type="number"
+                      className={styles.priceBox}
                       clearLabel={`Clear ${m}'s order ${i + 1} price`}
                       compactClear
                       min="0"

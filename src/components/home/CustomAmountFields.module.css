@@ -50,6 +50,17 @@
   overflow-wrap: anywhere;
 }
 
+/* The price box is the one box too narrow for the full 5px inset: "1250.00" needs
+   every pixel beside the icon, so the icon sits 2px in and the text may run up to
+   the slot's edge, which still leaves the icon clear. */
+.line .priceBox {
+  --clear-inset: 2px;
+}
+
+.line .priceBox[data-filled] > input {
+  padding-right: var(--clear-slot);
+}
+
 /* The × column is always there, so the boxes line up whether or not a line has one. */
 .line {
   display: grid;
