@@ -807,3 +807,41 @@ describe('applyItemEdit, records from before flexible Paid By', () => {
     expect(result[1].payors).toEqual([{ member: 'Ana', amount: 300 }]);
   });
 });
+
+describe('order lines in staging', () => {
+  const itemized = (): CustomAmountItem => ({
+    id: nextId('item'),
+    mode: 'custom',
+    name: 'Dinner',
+    amounts: { Ana: 280, Ben: 450 },
+    lines: [
+      { member: 'Ana', name: 'Sisig', amount: 280 },
+      { member: 'Ben', name: 'Kare-kare', amount: 450 },
+    ],
+  });
+
+  it("purgeMemberFromStaged drops a member's lines from an itemized item", () => {
+    const staged = [stagedSingle('2026-11-12', 'Cy', itemized())];
+    const [out] = purgeMemberFromStaged(staged, 'Ben');
+    expect(out.item).toMatchObject({ amounts: { Ana: 280 } });
+    expect(out.item.mode === 'custom' && out.item.lines).toEqual([
+      { member: 'Ana', name: 'Sisig', amount: 280 },
+    ]);
+  });
+
+  it('applyItemEdit in place keeps the lines of an itemized next', () => {
+    const old = itemized();
+    const record = singleRecord('2026-11-12', 'Cy', [old]);
+    const next = stagedSingle('2026-11-12', 'Cy', {
+      ...old,
+      amounts: { Ana: 300, Ben: 450 },
+      lines: [
+        { member: 'Ana', name: 'Sisig', amount: 300 },
+        { member: 'Ben', name: 'Kare-kare', amount: 450 },
+      ],
+    });
+    const [result] = applyItemEdit([record], refOf(record, old), next, FRESH);
+    expect(result.items[0]).toBe(next.item);
+    expect(result.payors).toEqual([{ member: 'Cy', amount: 750 }]);
+  });
+});
