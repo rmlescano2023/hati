@@ -143,6 +143,42 @@ export function CustomAmountFields({
   // discount or charge row (BR-CA31).
   const showShares = hasBillRows(bill);
 
+  const footerLine = (
+    <div className={styles.footer}>
+      <span>Entered</span>
+      <span className={`${styles.sum} ${mismatch ? styles.mismatch : ''}`}>
+        {formatMoney(enteredTotal)}
+      </span>
+      {mismatch && <span className={styles.mismatch}>of {formatMoney(target)}</span>}
+    </div>
+  );
+  // With a discount or a charge the receipt's figures sit above Entered, each on
+  // its own right-aligned line (BR-CA30); otherwise Entered stands alone as before.
+  const footer =
+    billView.discounts > 0 || billView.charges > 0 ? (
+      <div className={styles.totals}>
+        <div className={styles.figure}>
+          <span>Subtotal</span>
+          <span className={styles.figureValue}>{formatMoney(billView.subtotal)}</span>
+        </div>
+        {billView.discounts > 0 && (
+          <div className={styles.figure}>
+            <span>Discounts</span>
+            <span className={styles.figureValue}>{formatSignedMoney(-billView.discounts)}</span>
+          </div>
+        )}
+        {billView.charges > 0 && (
+          <div className={styles.figure}>
+            <span>Charges</span>
+            <span className={styles.figureValue}>{formatMoney(billView.charges)}</span>
+          </div>
+        )}
+        {footerLine}
+      </div>
+    ) : (
+      footerLine
+    );
+
   return (
     <div className={styles.wrap}>
       <div className={styles.topRow}>
@@ -342,16 +378,18 @@ export function CustomAmountFields({
           <Button variant="ghost" size="sm" onClick={() => onAddBillRow('shared')}>
             + Add shared order
           </Button>
+          <Button variant="ghost" size="sm" onClick={() => onAddBillRow('discounts')}>
+            + Add discount
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => onAddBillRow('charges')}>
+            + Add charge
+          </Button>
         </div>
       )}
 
-      <div className={styles.footer}>
-        <span>Entered</span>
-        <span className={`${styles.sum} ${mismatch ? styles.mismatch : ''}`}>
-          {formatMoney(enteredTotal)}
-        </span>
-        {mismatch && <span className={styles.mismatch}>of {formatMoney(target)}</span>}
-      </div>
+      {billView.floorHint && <p className={styles.lineHint}>{billView.floorHint}</p>}
+
+      {footer}
     </div>
   );
 }

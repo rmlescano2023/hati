@@ -20,7 +20,7 @@ const gyoza: BillDraft = {
   shared: [{ key: 'g', name: 'Gyoza', amount: '290', everyone: true, members: {} }],
 };
 
-const render = (bill: BillDraft, picked = members) =>
+const render = (bill: BillDraft, picked = members, typed = lines) =>
   renderToStaticMarkup(
     createElement(CustomAmountFields, {
       members,
@@ -32,16 +32,16 @@ const render = (bill: BillDraft, picked = members) =>
       onToggleAll: noop,
       onToggleOwner: noop,
       picked,
-      lines,
+      lines: typed,
       onLineChange: noop,
       onAddLine: noop,
       onRemoveLine: noop,
-      enteredTotal: 0,
+      enteredTotal: readBillDraft(picked, typed, bill).entered,
       blankCount: 0,
       remainder: 0,
       missingPrice: null,
       bill,
-      billView: readBillDraft(picked, lines, bill),
+      billView: readBillDraft(picked, typed, bill),
       onAddBillRow: noop,
       onBillRowChange: noop,
       onRemoveBillRow: noop,
@@ -113,5 +113,79 @@ describe('Custom Amounts with a shared order', () => {
     expect(view).toContain('Choose who shares Gyoza');
     const blank = render(gyoza, ['Ana', 'Ben', 'Gus']);
     expect(blank).toContain("Gus's share </span>₱96.66");
+  });
+});
+
+describe('Custom Amounts with a discount and a charge', () => {
+  const line = (name: string, price: string) => ({ key: name, name, price });
+  const dinnerLines: LinesDraft = {
+    Ana: [line('Sisig', '280'), line('Rice', '100')],
+    Ben: [line('Kare-kare', '450')],
+    Cy: [line('Bulalo', '520')],
+    Dan: [line('Adobo', '295')],
+    Eve: [line('Pancit', '180'), line('Halo-halo', '230')],
+    Fay: [line('Sinigang', '400.5')],
+  };
+  const six = ['Ana', 'Ben', 'Cy', 'Dan', 'Eve', 'Fay'];
+  const bill: BillDraft = {
+    shared: [],
+    discounts: [{ key: 'd', name: 'PWD', amount: '300', everyone: false, members: { Cy: true } }],
+    charges: [{ key: 'c', name: 'Service charge', amount: '245.55' }],
+  };
+  const html = render(bill, six, dinnerLines);
+
+  it('draws both sections with their helper lines (AC-CA2.1, AC-CA3.1)', () => {
+    expect(html).toContain('>Discounts</span>');
+    expect(html).toContain('Comes off the share of the people ticked.');
+    expect(html).toContain('>Charges</span>');
+    expect(html).toContain('Split equally across everyone in this item.');
+  });
+
+  it('names their boxes and buttons (AC-CA11.4)', () => {
+    const names = labels(html);
+    for (const name of [
+      'Discount 1 name',
+      'Discount 1 amount',
+      'Clear discount 1 amount',
+      'Remove discount PWD',
+      'Who gets PWD',
+      'Charge 1 name',
+      'Charge 1 amount',
+      'Remove charge Service charge',
+    ]) {
+      expect(names).toContain(name);
+    }
+  });
+
+  it('gives a charge no picker', () => {
+    expect(
+      labels(html).some((n) => n.startsWith('Who shares') || n.includes('Who gets Service')),
+    ).toBe(false);
+    expect(html.match(/role="group"/g)).toHaveLength(3);
+  });
+
+  it('shows Subtotal, Discounts, Charges and Entered, each on a line (AC-CA4.3)', () => {
+    for (const text of ['Subtotal', '₱2,455.50', 'Discounts', '−₱300.00', 'Charges', '₱245.55']) {
+      expect(html).toContain(text);
+    }
+    expect(html).toContain('₱2,401.05');
+    expect(html).toContain("Cy's share </span>₱260.93");
+  });
+
+  it('shows Entered alone when there is no discount or charge (AC-CA4.4)', () => {
+    const plain = render({ ...EMPTY_BILL_DRAFT, shared: gyoza.shared });
+    expect(plain).not.toContain('Subtotal');
+    expect(plain).toContain('Entered');
+  });
+
+  it('shows the floor hint, and the negative share as a minus (AC-CA2.6)', () => {
+    const over: BillDraft = {
+      ...bill,
+      discounts: [{ ...bill.discounts[0], amount: '900' }],
+      charges: [],
+    };
+    const view = render(over, six, dinnerLines);
+    expect(view).toContain("Cy's share would be −₱380.00. Lower the discount or add Cy's order.");
+    expect(view).toContain("Cy's share </span>−₱380.00");
   });
 });

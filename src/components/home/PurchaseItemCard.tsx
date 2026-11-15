@@ -94,14 +94,9 @@ function draftFromItem(item: PurchaseItem, members: string[]): ItemDraft {
       owners: everyone ? {} : Object.fromEntries(item.owners.map((o) => [o, true])),
     };
   }
-  // P1 only: P1's form can't show a discount or charge, so such an item loads the
-  // way an older tab loads it, money only (BR-CA45). Deleted in P2.
-  const source = item.bill?.some((l) => l.kind === 'discount' || l.kind === 'charge')
-    ? { id: item.id, mode: 'custom' as const, name: item.name, amounts: item.amounts }
-    : item;
   // Everyone with an amount is picked, and "All Members" is ticked only when
   // that is every current member, as it is for Equal Split.
-  const lines = linesFromItem(source, members);
+  const lines = linesFromItem(item, members);
   const picked = Object.keys(lines);
   const everyone = members.length > 0 && members.every((m) => picked.includes(m));
   return {
@@ -112,7 +107,7 @@ function draftFromItem(item: PurchaseItem, members: string[]): ItemDraft {
     allSelected: everyone,
     owners: everyone ? {} : Object.fromEntries(picked.map((m) => [m, true])),
     lines,
-    bill: billDraftFromItem(source, members),
+    bill: billDraftFromItem(item, members),
   };
 }
 

@@ -134,6 +134,25 @@
   gap: 6px;
 }
 
+.totals {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.figure {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text2);
+}
+
+.figureValue {
+  font-family: var(--mono);
+  color: var(--text);
+}
+
 .footer {
   display: flex;
   align-items: center;
