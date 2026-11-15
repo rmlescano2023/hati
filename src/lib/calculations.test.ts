@@ -19,6 +19,7 @@ import { compareNames, sortNames, toTitleCase } from './format';
 import { billAmounts, billLineParts, billMatches, billMembers } from './bill';
 import { exampleA, exampleB, exampleD1, exampleE } from './billExamples';
 import { parseSession } from './storage';
+import { itemFromLines, linesFromItem } from './orderLines';
 import type {
   BillLine,
   CustomAmountItem,
@@ -702,6 +703,51 @@ describe('purgeMemberFromItem with a bill', () => {
     expect('lines' in item).toBe(false);
     expect(getItemTotal(item)).toBe(2401.05);
     expect(getItemShares(item).Cy).toBe(260.93);
+  });
+
+  describe('OT-3 an older tab edits and saves', () => {
+    /** What a tab that doesn't know the field sees, run through PR #137's Edit path. */
+    const olderEdit = (item: CustomAmountItem): CustomAmountItem => {
+      const seen: CustomAmountItem = {
+        id: item.id,
+        mode: 'custom',
+        name: item.name,
+        amounts: item.amounts,
+      };
+      const members = Object.keys(item.amounts);
+      const lines = linesFromItem(seen, members);
+      return itemFromLines(seen.id, seen.name, Object.keys(lines), lines);
+    };
+    const parsed = (item: CustomAmountItem) =>
+      parseSession({
+        id: 's',
+        members: [],
+        records: [
+          {
+            id: 'r',
+            date: '2026-11-16',
+            payorMode: 'single',
+            payors: [{ member: 'Ana', amount: 1 }],
+            items: [JSON.parse(JSON.stringify(item))],
+            createdAt: '2026-11-16T00:00:00.000Z',
+          },
+        ],
+      })?.records[0].items[0] as CustomAmountItem;
+
+    it('keeps every share above 0 and the total, and drops the bill (AC-CA10.5)', () => {
+      const out = olderEdit(exampleB());
+      expect(out.amounts).toEqual(exampleB().amounts);
+      expect(getItemTotal(out)).toBe(2401.05);
+      const stored = parsed(out);
+      expect('bill' in stored).toBe(false);
+      expect('lines' in stored).toBe(false);
+    });
+
+    it('leaves out a member at 0, who owed nothing either way', () => {
+      const out = olderEdit(exampleD1());
+      expect(out.amounts).toEqual({ Ben: 600 });
+      expect(getItemTotal(out)).toBe(getItemTotal(exampleD1()));
+    });
   });
 
   describe('OT-4 an older tab removes a member (PR #137 purge, then the server parses)', () => {
