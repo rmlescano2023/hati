@@ -31,7 +31,7 @@ describe('clipMoneyInput (app-fixes item 2)', () => {
     expect(clipMoneyInput('-5.678')).toBe('-5.67');
   });
 
-  it('leaves the browser\'s exponent forms alone', () => {
+  it("leaves the browser's exponent forms alone", () => {
     expect(clipMoneyInput('1e5')).toBe('1e5');
     expect(clipMoneyInput('1.234e2')).toBe('1.234e2');
   });
