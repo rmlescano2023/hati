@@ -2,7 +2,8 @@ import { Fragment } from 'react';
 import { Button } from '../shared/Button';
 import { PencilIcon } from '../shared/icons';
 import { useAppDataOptional } from '../../context/AppDataContext';
-import { formatMoney } from '../../lib/format';
+import { receiptRowLabel, receiptRows } from '../../lib/bill';
+import { formatMoney, formatSignedMoney } from '../../lib/format';
 import type { SavedItemRef } from '../../lib/staging';
 import type { BreakdownGroup } from '../../types';
 import styles from './BreakdownTable.module.css';
@@ -59,13 +60,13 @@ export function BreakdownTable({ group, members, editable = true, onEdit }: Prop
                 </Button>
               );
 
-            // What each person ordered, under the item, for an itemized item
-            // only (BR-CO14); the item's own row stays the one that is summed.
-            const lines = row.item.mode === 'custom' ? row.item.lines : undefined;
+            // The receipt under the item, for an itemized item only (BR-CO14,
+            // BR-CA34); the item's own row stays the one that is summed.
+            const rows = receiptRows(row.item);
 
             return (
               <Fragment key={row.item.id}>
-                <tr className={lines ? styles.hasLines : undefined}>
+                <tr className={rows ? styles.hasLines : undefined}>
                   <td className={styles.itemCell}>
                     <div className={styles.itemWrap}>
                       <span className={styles.itemName}>{row.item.name}</span>
@@ -97,23 +98,36 @@ export function BreakdownTable({ group, members, editable = true, onEdit }: Prop
                     </td>
                   )}
                 </tr>
-                {lines?.map((line, i) => (
-                  <tr
-                    key={`${row.item.id}:${i}`}
-                    className={`${styles.lineRow} ${i === lines.length - 1 ? styles.lastLine : ''}`}
-                  >
-                    <td className={styles.lineName}>
-                      {line.name || <span className={styles.noName}>No name</span>}
-                    </td>
-                    <td />
-                    {members.map((m) => (
-                      <td key={m} className={styles.num}>
-                        {line.member === m ? formatMoney(line.amount) : ''}
+                {rows?.map((r, i) => {
+                  const label = receiptRowLabel(r);
+                  return (
+                    <tr
+                      key={`${row.item.id}:${i}`}
+                      className={`${styles.lineRow} ${i === rows.length - 1 ? styles.lastLine : ''}`}
+                    >
+                      <td className={styles.lineName}>
+                        {label.fallback ? (
+                          <span className={styles.noName}>{label.text}</span>
+                        ) : (
+                          label.text
+                        )}
                       </td>
-                    ))}
-                    {editable && <td />}
-                  </tr>
-                ))}
+                      {/* An own order's price is in its member's column; a shared order,
+                          discount or charge prints its amount here (BR-CA35). */}
+                      <td className={styles.num}>
+                        {r.kind === 'order'
+                          ? ''
+                          : formatSignedMoney(r.kind === 'discount' ? -r.amount : r.amount)}
+                      </td>
+                      {members.map((m) => (
+                        <td key={m} className={styles.num}>
+                          {r.parts.has(m) ? formatSignedMoney(r.parts.get(m)!) : ''}
+                        </td>
+                      ))}
+                      {editable && <td />}
+                    </tr>
+                  );
+                })}
               </Fragment>
             );
           })}

@@ -22,6 +22,21 @@ export function formatMoney(value: number): string {
   return `₱${formatAmount(value)}`;
 }
 
+/** U+2212: the true minus sign. DM Mono has it at the digits' width (600/1000 em), so it fits the PDF's columns. */
+const MINUS = '−';
+
+/** Money with a leading minus, "−₱300.00", for a discount (BR-CA37); otherwise formatMoney. */
+export function formatSignedMoney(value: number): string {
+  const safe = Number.isFinite(value) ? value : 0;
+  return safe <= -0.005 ? `${MINUS}${formatMoney(-safe)}` : formatMoney(safe);
+}
+
+/** The same for the PDF, whose amounts carry no currency: "−300.00". */
+export function formatSignedAmount(value: number): string {
+  const safe = Number.isFinite(value) ? value : 0;
+  return safe <= -0.005 ? `${MINUS}${formatAmount(-safe)}` : formatAmount(safe);
+}
+
 /**
  * Money for the PDF. DM Sans and DM Mono have no U+20B1 glyph, so the peso sign
  * would print as a zero-width .notdef struck through the first digit — the
