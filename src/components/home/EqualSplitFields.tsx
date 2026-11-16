@@ -66,7 +66,7 @@ export function EqualSplitFields({
               className={`link-action ${styles.hintLink}`}
               onClick={onSwitchForDiscount}
             >
-              Switch to Custom Amounts and add a shared order.
+              Switch to Custom Amounts and add a shared item.
             </Button>
           </p>
         )}

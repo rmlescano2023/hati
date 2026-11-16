@@ -155,7 +155,7 @@ export function receiptRows(item: PurchaseItem): ReceiptRow[] | null {
 
 const FALLBACK_LABEL: Record<BillLine['kind'], string> = {
   order: 'No name',
-  shared: 'Shared order',
+  shared: 'Shared item',
   discount: 'Discount',
   charge: 'Charge',
 };
