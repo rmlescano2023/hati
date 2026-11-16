@@ -19,6 +19,7 @@ import {
   removeBillRow,
   rowMembers,
   setBillRow,
+  shownTotalAmount,
   toggleRowEveryone,
   toggleRowMember,
   unpickFromBill,
@@ -28,6 +29,7 @@ import {
   type LinesDraft,
 } from './orderLines';
 import { getItemShares } from './calculations';
+import { parsePositiveAmount, roundMoney } from './money';
 import {
   exampleA as mendokoro,
   exampleB as dinner,
@@ -921,5 +923,30 @@ describe('itemFromLines and Edit with discounts and charges (O-5, O-6)', () => {
     });
     expect(draft.charges).toMatchObject([{ name: 'Service charge', amount: '245.55' }]);
     expect(draft.shared).toEqual([]);
+  });
+});
+
+describe('shownTotalAmount (bill-ux-polish item 1)', () => {
+  it('returns what was typed while it does not follow, whatever Entered is', () => {
+    expect(shownTotalAmount('2400', false, 1760)).toBe('2400');
+    expect(shownTotalAmount('', false, 1760)).toBe('');
+    expect(shownTotalAmount('abc', false, 0)).toBe('abc');
+  });
+
+  it('shows Entered to the centavo while it follows', () => {
+    expect(shownTotalAmount('x', true, 1760)).toBe('1760.00');
+    expect(shownTotalAmount('x', true, 2401.05)).toBe('2401.05');
+  });
+
+  it('shows an empty box while it follows and Entered is zero or less', () => {
+    expect(shownTotalAmount('x', true, 0)).toBe('');
+    expect(shownTotalAmount('x', true, -7.5)).toBe('');
+  });
+
+  it('leaves no remainder while it follows, so Fill Remainder cannot be pressed', () => {
+    for (const entered of [2401.05, 0.01, 87469.42]) {
+      const shown = shownTotalAmount('x', true, entered);
+      expect(roundMoney(parsePositiveAmount(shown) - entered)).toBe(0);
+    }
   });
 });
