@@ -31,9 +31,9 @@ const SECTIONS: {
 }[] = [
   {
     section: 'shared',
-    heading: 'Shared orders',
-    noun: 'shared order',
-    placeholder: 'Order name',
+    heading: 'Shared items',
+    noun: 'shared item',
+    placeholder: 'Sub-item name',
     amountWord: 'price',
     helper: null,
     who: 'shares',
@@ -273,7 +273,7 @@ export function CustomAmountFields({
                       clearLabel={`Clear ${m}'s order ${i + 1} name`}
                       compactClear
                       maxLength={ORDER_NAME_MAX}
-                      placeholder="Order name"
+                      placeholder="Sub-item name"
                       aria-label={`${m}'s order ${i + 1} name`}
                       value={line.name}
                       onChange={(e) => onLineChange(m, i, { name: e.target.value })}
@@ -404,7 +404,7 @@ export function CustomAmountFields({
       {picked.length > 0 && (
         <div className={styles.addRow}>
           <Button variant="ghost" size="sm" onClick={() => onAddBillRow('shared')}>
-            + Add shared order
+            + Add shared item
           </Button>
           <Button variant="ghost" size="sm" onClick={() => onAddBillRow('discounts')}>
             + Add discount

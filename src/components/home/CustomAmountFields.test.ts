@@ -65,16 +65,16 @@ describe('Custom Amounts with no bill rows', () => {
     const html = render(EMPTY_BILL_DRAFT);
     expect(html).not.toContain("'s share");
     expect(html).not.toContain('role="group"');
-    expect(html).not.toContain('Shared orders');
+    expect(html).not.toContain('Shared items');
   });
 
-  it('offers + Add shared order once someone is picked, and not before (AC-CA1.1)', () => {
-    expect(render(EMPTY_BILL_DRAFT)).toContain('+ Add shared order');
-    expect(render(EMPTY_BILL_DRAFT, [])).not.toContain('+ Add shared order');
+  it('offers + Add shared item once someone is picked, and not before (AC-CA1.1)', () => {
+    expect(render(EMPTY_BILL_DRAFT)).toContain('+ Add shared item');
+    expect(render(EMPTY_BILL_DRAFT, [])).not.toContain('+ Add shared item');
   });
 });
 
-describe('Custom Amounts with a shared order', () => {
+describe('Custom Amounts with a shared item', () => {
   const html = render(gyoza);
 
   it("shows each member's share beside their name, readable to a screen reader (AC-CA4.1)", () => {
@@ -84,12 +84,12 @@ describe('Custom Amounts with a shared order', () => {
 
   it('names the section, its boxes, its buttons and its picker (AC-CA11.4)', () => {
     expect(html).toContain('aria-labelledby="custom-shared-label"');
-    expect(html).toContain('>Shared orders</span>');
+    expect(html).toContain('>Shared items</span>');
     const names = labels(html);
     for (const name of [
-      'Shared order 1 name',
-      'Shared order 1 price',
-      'Remove shared order Gyoza',
+      'Shared item 1 name',
+      'Shared item 1 price',
+      'Remove shared item Gyoza',
       'Who shares Gyoza',
     ]) {
       expect(names).toContain(name);
@@ -108,8 +108,8 @@ describe('Custom Amounts with a shared order', () => {
       shared: [{ ...gyoza.shared[0], name: '' }],
     };
     const names = labels(render(unnamed));
-    expect(names).toContain('Remove shared order');
-    expect(names).toContain('Who shares shared order 1');
+    expect(names).toContain('Remove shared item');
+    expect(names).toContain('Who shares shared item 1');
   });
 
   it('shows the section hint and the share of a member who is not in the item as a dash', () => {
