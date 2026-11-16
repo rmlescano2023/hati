@@ -312,10 +312,10 @@ export function CustomAmountFields({
                 variant="ghost"
                 size="sm"
                 className={styles.addOrder}
-                aria-label={`Add order for ${m}`}
+                aria-label={`Add sub-item for ${m}`}
                 onClick={() => onAddLine(m)}
               >
-                + Add order
+                + Add sub-item
               </Button>
             </div>
           );
