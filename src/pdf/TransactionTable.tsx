@@ -1,9 +1,10 @@
 import { Fragment } from 'react';
 import { Text, View } from '@react-pdf/renderer';
 import { styles } from './styles';
-import { formatAmount, formatPdfMoney, formatLongDate } from '../lib/format';
-import type { ColumnWidths } from './layout';
-import type { BreakdownGroup, OrderLine } from '../types';
+import { formatAmount, formatPdfMoney, formatLongDate, formatSignedAmount } from '../lib/format';
+import { receiptRowLabel, receiptRows, type ReceiptRow } from '../lib/bill';
+import { fitMonoFontSize, type ColumnWidths } from './layout';
+import type { BreakdownGroup } from '../types';
 
 type Props = {
   group: BreakdownGroup;
@@ -59,9 +60,9 @@ export function TransactionTable({ group, members, columns }: Props) {
       </View>
 
       {group.rows.map((row) => {
-        // What each person ordered, under the item, for an itemized item only
-        // (BR-CO14). Order names are printed as item names are.
-        const lines = row.item.mode === 'custom' ? row.item.lines : undefined;
+        // The receipt under the item, for an itemized item only (BR-CO14,
+        // BR-CA34). Order names are printed as item names are.
+        const lines = receiptRows(row.item);
 
         const itemRow = (
           <View
@@ -94,7 +95,19 @@ export function TransactionTable({ group, members, columns }: Props) {
 
         if (!lines) return <Fragment key={row.item.id}>{itemRow}</Fragment>;
 
-        const lineRow = (line: OrderLine, i: number) => (
+        // A sub-row's amount, shrunk to fit its column: at 17 or more members a
+        // member column is 34pt, which "−300.00" doesn't fit at 7pt (BR-CA35).
+        const fitted = (text: string, width: number) => ({
+          fontSize: fitMonoFontSize(text, width, 7),
+        });
+
+        /** An own order's price is in its member's column; the other rows print theirs here. */
+        const price = (line: ReceiptRow) =>
+          line.kind === 'order'
+            ? ''
+            : formatSignedAmount(line.kind === 'discount' ? -line.amount : line.amount);
+
+        const lineRow = (line: ReceiptRow, i: number) => (
           <View
             key={`${row.item.id}:${i}`}
             style={
@@ -106,13 +119,33 @@ export function TransactionTable({ group, members, columns }: Props) {
             }
             wrap={false}
           >
-            <Text style={[styles.lineCell, { width: columns.item }]}>{line.name || 'No name'}</Text>
-            <Text style={[styles.lineCellNum, { width: columns.price }]}>{''}</Text>
-            {members.map((m) => (
-              <Text key={m} style={[styles.lineCellNum, { width: columns.member }]}>
-                {line.member === m ? formatAmount(line.amount) : ''}
-              </Text>
-            ))}
+            <Text style={[styles.lineCell, { width: columns.item }]}>
+              {receiptRowLabel(line).text}
+            </Text>
+            <Text
+              style={[
+                styles.lineCellNum,
+                { width: columns.price },
+                fitted(price(line), columns.price),
+              ]}
+            >
+              {price(line)}
+            </Text>
+            {members.map((m) => {
+              const text = line.parts.has(m) ? formatSignedAmount(line.parts.get(m)!) : '';
+              return (
+                <Text
+                  key={m}
+                  style={[
+                    styles.lineCellNum,
+                    { width: columns.member },
+                    fitted(text, columns.member),
+                  ]}
+                >
+                  {text}
+                </Text>
+              );
+            })}
           </View>
         );
 

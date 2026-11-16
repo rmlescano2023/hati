@@ -1,7 +1,13 @@
 import { EqualSplitFields } from './EqualSplitFields';
 import { CustomAmountFields } from './CustomAmountFields';
 import { ClearableInput } from '../shared/ClearableInput';
-import type { LineDraft, LinesDraft } from '../../lib/orderLines';
+import type {
+  BillDraft,
+  BillDraftView,
+  BillSection,
+  LineDraft,
+  LinesDraft,
+} from '../../lib/orderLines';
 import type { ItemMode } from '../../types';
 import styles from './ItemModeFields.module.css';
 
@@ -17,6 +23,8 @@ export type ItemDraft = {
   totalAmount: string;
   /** Custom Amounts: each picked member's order lines. */
   lines: LinesDraft;
+  /** Custom Amounts: the receipt's shared orders, discounts and charges. */
+  bill: BillDraft;
 };
 
 export type ItemDraftHandlers = {
@@ -33,6 +41,15 @@ export type ItemDraftHandlers = {
   addLine: (member: string) => void;
   removeLine: (member: string, index: number) => void;
   fillRemainder: () => void;
+  addBillRow: (section: BillSection) => void;
+  setBillRow: (
+    section: BillSection,
+    index: number,
+    patch: { name?: string; amount?: string },
+  ) => void;
+  removeBillRow: (section: BillSection, index: number) => void;
+  toggleRowEveryone: (section: 'shared' | 'discounts', index: number) => void;
+  toggleRowMember: (section: 'shared' | 'discounts', index: number, member: string) => void;
 };
 
 export type ItemDraftDerived = {
@@ -43,6 +60,8 @@ export type ItemDraftDerived = {
   remainder: number;
   /** The first order that has a name but no price, which stops the item being added. */
   missingPrice: string | null;
+  /** The receipt as typed: each member's share, the figures and the hints (BR-CA16, BR-CA17). */
+  bill: BillDraftView;
 };
 
 type Props = {
@@ -115,6 +134,13 @@ export function ItemModeFields({ members, draft, handlers, derived }: Props) {
           blankCount={derived.blankCount}
           remainder={derived.remainder}
           missingPrice={derived.missingPrice}
+          bill={draft.bill}
+          billView={derived.bill}
+          onAddBillRow={handlers.addBillRow}
+          onBillRowChange={handlers.setBillRow}
+          onRemoveBillRow={handlers.removeBillRow}
+          onToggleRowEveryone={handlers.toggleRowEveryone}
+          onToggleRowMember={handlers.toggleRowMember}
         />
       )}
     </div>

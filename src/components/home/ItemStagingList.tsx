@@ -1,6 +1,7 @@
 import { Button } from '../shared/Button';
 import { PencilIcon } from '../shared/icons';
 import { getItemShares, getItemTotal } from '../../lib/calculations';
+import { receiptPillText, receiptRows } from '../../lib/bill';
 import { compareNames, formatLongDate, formatMoney, pluralize } from '../../lib/format';
 import { sumMoney } from '../../lib/money';
 import type { StagedItem } from '../../lib/staging';
@@ -36,6 +37,7 @@ export function ItemStagingList({ items, editingId, onEdit, onRemove }: Props) {
           {items.map(({ item, date, payorMode, payors }) => {
             const shares = getItemShares(item);
             const owners = Object.keys(shares).sort(compareNames);
+            const rows = receiptRows(item);
             return (
               <div
                 className={`${styles.row} ${item.id === editingId ? styles.editing : ''}`}
@@ -54,17 +56,16 @@ export function ItemStagingList({ items, editingId, onEdit, onRemove }: Props) {
                 </div>
                 <span className={styles.num}>{formatMoney(getItemTotal(item))}</span>
                 <div className={styles.pills}>
-                  {/* An itemized item shows what each person ordered, one pill per
-                      line, and any other item shows one pill per member. */}
-                  {item.mode === 'custom' && item.lines
-                    ? item.lines.map((line, i) => (
+                  {/* An itemized item shows its receipt, one pill per row (what each
+                      person ordered, and any shared order, discount or charge), and
+                      any other item shows one pill per member. */}
+                  {rows
+                    ? rows.map((row, i) => (
                         <span
                           className={`${styles.pill} ${styles.linePill}`}
                           key={`${item.id}:${i}`}
                         >
-                          {line.name
-                            ? `${line.member} · ${line.name} ${formatMoney(line.amount)}`
-                            : `${line.member}: ${formatMoney(line.amount)}`}
+                          {receiptPillText(row)}
                         </span>
                       ))
                     : owners.map((owner) => (

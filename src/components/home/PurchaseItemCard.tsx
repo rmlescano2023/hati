@@ -19,13 +19,21 @@ import { useSessionsStore } from '../../context/SessionsStoreContext';
 import { getItemTotal } from '../../lib/calculations';
 import { parsePositiveAmount as num, roundMoney, sumMoney } from '../../lib/money';
 import {
+  EMPTY_BILL_DRAFT,
+  addBillRow,
+  billDraftFromItem,
   blankPicked,
   fillRemainder,
   itemFromLines,
   linesFromEqualSplit,
   linesFromItem,
   linesOf,
-  linesTotal,
+  readBillDraft,
+  removeBillRow,
+  setBillRow,
+  toggleRowEveryone,
+  toggleRowMember,
+  unpickFromBill,
   unpricedNamedLine,
   type LineDraft,
 } from '../../lib/orderLines';
@@ -62,6 +70,7 @@ const EMPTY_DRAFT: ItemDraft = {
   allSelected: false,
   totalAmount: '',
   lines: {},
+  bill: EMPTY_BILL_DRAFT,
 };
 
 /**
@@ -98,6 +107,7 @@ function draftFromItem(item: PurchaseItem, members: string[]): ItemDraft {
     allSelected: everyone,
     owners: everyone ? {} : Object.fromEntries(picked.map((m) => [m, true])),
     lines,
+    bill: billDraftFromItem(item, members),
   };
 }
 
@@ -132,7 +142,7 @@ function stampFields(fields: Fields, members: string[], id: string): StagedItem 
   const item: PurchaseItem =
     draft.mode === 'equal'
       ? { id, mode: 'equal', name, totalPrice: num(draft.price), owners }
-      : itemFromLines(id, name, owners, draft.lines);
+      : itemFromLines(id, name, owners, draft.lines, draft.bill);
   return {
     item,
     date,
@@ -207,10 +217,13 @@ export function PurchaseItemCard({ staged, setStaged, savedEdit, onSavedEditEnd 
     [draft.allSelected, draft.owners, members],
   );
 
-  const enteredTotal = useMemo(
-    () => linesTotal(selectedOwners, draft.lines),
-    [draft.lines, selectedOwners],
+  // What the typed receipt comes to: the own orders and the shared, discount and
+  // charge rows (BR-CA17). With no rows it is the sum of the own orders, as before.
+  const billView = useMemo(
+    () => readBillDraft(selectedOwners, draft.lines, draft.bill),
+    [draft.lines, draft.bill, selectedOwners],
   );
+  const enteredTotal = billView.entered;
   const blankMembers = useMemo(
     () => blankPicked(selectedOwners, draft.lines),
     [draft.lines, selectedOwners],
@@ -231,7 +244,13 @@ export function PurchaseItemCard({ staged, setStaged, savedEdit, onSavedEditEnd 
     toggleAll: () =>
       setDraft((d) =>
         d.allSelected
-          ? { ...d, allSelected: false, owners: {}, lines: {} }
+          ? {
+              ...d,
+              allSelected: false,
+              owners: {},
+              lines: {},
+              bill: unpickFromBill(d.bill, members, []),
+            }
           : { ...d, allSelected: true, owners: {} },
       ),
     toggleOwner: (member) =>
@@ -242,7 +261,10 @@ export function PurchaseItemCard({ staged, setStaged, savedEdit, onSavedEditEnd 
         // Un-ticking a member takes their lines with them (AC-CO1.7).
         const lines = { ...d.lines };
         if (!owners[member]) delete lines[member];
-        return { ...d, owners, allSelected, lines };
+        // And off every shared order and discount they were ticked on (BR-CA24).
+        const pickedAfter = allSelected ? members : members.filter((m) => owners[m]);
+        const bill = owners[member] ? d.bill : unpickFromBill(d.bill, [member], pickedAfter);
+        return { ...d, owners, allSelected, lines, bill };
       }),
     setTotalAmount: (totalAmount) => setDraft((d) => ({ ...d, totalAmount })),
     setLine: (member, index, patch) =>
@@ -269,8 +291,20 @@ export function PurchaseItemCard({ staged, setStaged, savedEdit, onSavedEditEnd 
     fillRemainder: () =>
       setDraft((d) => ({
         ...d,
-        lines: fillRemainder(num(d.totalAmount), selectedOwners, d.lines),
+        lines: fillRemainder(num(d.totalAmount), selectedOwners, d.lines, billView.others),
       })),
+    addBillRow: (section) => setDraft((d) => ({ ...d, bill: addBillRow(d.bill, section) })),
+    setBillRow: (section, index, patch) =>
+      setDraft((d) => ({ ...d, bill: setBillRow(d.bill, section, index, patch) })),
+    removeBillRow: (section, index) =>
+      setDraft((d) => ({ ...d, bill: removeBillRow(d.bill, section, index) })),
+    toggleRowEveryone: (section, index) =>
+      setDraft((d) => ({ ...d, bill: toggleRowEveryone(d.bill, section, index) })),
+    toggleRowMember: (section, index, member) =>
+      setDraft((d) => {
+        const picked = d.allSelected ? members : members.filter((m) => d.owners[m]);
+        return { ...d, bill: toggleRowMember(d.bill, section, index, member, picked) };
+      }),
   };
 
   // The price the contributions have to cover. Custom Amounts uses what the
@@ -286,7 +320,12 @@ export function PurchaseItemCard({ staged, setStaged, savedEdit, onSavedEditEnd 
     draft.name.trim().length > 0 &&
     (draft.mode === 'equal'
       ? num(draft.price) > 0 && selectedOwners.length > 0
-      : enteredTotal > 0 && missingPrice === null);
+      : enteredTotal > 0 &&
+        missingPrice === null &&
+        billView.sharedHint === null &&
+        billView.discountHint === null &&
+        billView.chargeHint === null &&
+        billView.floorHint === null);
   // The date and payor are stamped on the item, so they are checked here and
   // not at Save. A payor name that is no longer a member doesn't count.
   const payorValid =
@@ -377,7 +416,9 @@ export function PurchaseItemCard({ staged, setStaged, savedEdit, onSavedEditEnd 
         delete owners[m];
         delete lines[m];
       }
-      return { ...d, owners, lines };
+      // Rows keep their place; only the removed members come off them (AC-CA9.5).
+      const pickedAfter = d.allSelected ? members : members.filter((m) => owners[m]);
+      return { ...d, owners, lines, bill: unpickFromBill(d.bill, removed, pickedAfter) };
     });
     setContributions((c) => {
       const kept = { ...c };
@@ -559,6 +600,7 @@ export function PurchaseItemCard({ staged, setStaged, savedEdit, onSavedEditEnd 
             blankCount: blankMembers.length,
             remainder,
             missingPrice,
+            bill: billView,
           }}
         />
 

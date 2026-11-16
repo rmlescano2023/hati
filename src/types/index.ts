@@ -20,16 +20,32 @@ export type OrderLine = {
   amount: number;
 };
 
+/**
+ * One row of a Custom item's receipt (BR-CA2 to BR-CA5). `amount` is always the
+ * positive figure printed on the receipt, rounded to the centavo; `kind` says
+ * whether it adds to the members' shares or comes off them.
+ */
+export type BillLine =
+  /** One member's own order. */
+  | { kind: 'order'; member: string; name: string; amount: number }
+  /** Split equally across `members` (BR-CA3). */
+  | { kind: 'shared'; members: string[]; name: string; amount: number }
+  /** Comes off `members`' shares, split equally (BR-CA4). */
+  | { kind: 'discount'; members: string[]; name: string; amount: number }
+  /** Split equally across everyone in the item, the keys of `amounts` (BR-CA5). */
+  | { kind: 'charge'; name: string; amount: number };
+
 /** An explicit per-member amount; the item total is the sum of the amounts. */
 export type CustomAmountItem = {
   id: string;
   mode: 'custom';
   name: string;
   /**
-   * member -> amount owed for this item. Members with no share are absent.
-   * With `lines`, each amount is the sum of that member's lines, kept here so
-   * every calculation, and a tab still running an older release, reads the
-   * money from one place (BR-CO10, BR-CO23).
+   * member -> amount owed for this item, the one place every calculation reads
+   * money from (BR-CO10, BR-CA42). A member who isn't in the item is absent.
+   * With `lines`, each amount is the sum of that member's lines. With `bill`,
+   * every member in the item is present, at ₱0.00 too (BR-CA6), and each amount
+   * is what the bill gives them (`billAmounts`).
    */
   amounts: Record<string, number>;
   /**
@@ -38,6 +54,13 @@ export type CustomAmountItem = {
    * whose lines are all unnamed is stored as `amounts` alone (BR-CO12, BR-CO17).
    */
   lines?: OrderLine[];
+  /**
+   * The whole receipt, own orders included, in BR-CA34 order: own orders by
+   * member alphabetically and then as added, then shared orders, discounts and
+   * charges, each as added. Present only when the item has at least one shared
+   * order, discount or charge, and never alongside `lines` (BR-CA8, BR-CA43).
+   */
+  bill?: BillLine[];
 };
 
 export type PurchaseItem = EqualSplitItem | CustomAmountItem;
