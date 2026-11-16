@@ -143,13 +143,19 @@ export function CustomAmountFields({
   // discount or charge row (BR-CA31).
   const showShares = hasBillRows(bill);
 
+  // While the floor hint blocks Add Item, Entered isn't a total yet, so it goes
+  // quiet and the hint above is the one warning on the screen.
+  const held = billView.floorHint !== null;
+
   const footerLine = (
     <div className={styles.footer}>
       <span>Entered</span>
-      <span className={`${styles.sum} ${mismatch ? styles.mismatch : ''}`}>
+      <span className={`${styles.sum} ${held ? styles.held : mismatch ? styles.mismatch : ''}`}>
         {formatMoney(enteredTotal)}
       </span>
-      {mismatch && <span className={styles.mismatch}>of {formatMoney(target)}</span>}
+      {mismatch && (
+        <span className={held ? styles.held : styles.mismatch}>of {formatMoney(target)}</span>
+      )}
     </div>
   );
   // With a discount or a charge the receipt's figures sit above Entered, each on
