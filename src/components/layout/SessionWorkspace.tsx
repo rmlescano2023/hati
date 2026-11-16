@@ -22,6 +22,10 @@ type Props = {
   onClosed: () => void;
 };
 
+/** The "Edit item" prompt's message (BR-CO25, amended by bill-ux-polish-2 item 6). */
+export const EDIT_ITEM_MESSAGE =
+  'It opens on the Expenses tab with its date and Paid By. Breakdown keeps it as it is until you press Save Edits. Cancel brings you back to Breakdown.';
+
 /**
  * One open session. Everything below the provider still talks to `useAppData()`
  * and is unaware that sessions exist — swapping which session is open is purely
@@ -194,7 +198,7 @@ export function SessionWorkspace({ sessionId, tab, onTabChange, onBack, onClosed
       <ConfirmDialog
         open={editPrompt !== null}
         title={`Edit ${editPrompt?.name ?? ''}?`}
-        message="It opens on the Expenses tab with its date and Paid By. Breakdown keeps it as it is until you press Save Edits."
+        message={EDIT_ITEM_MESSAGE}
         confirmLabel="Edit item"
         onCancel={() => setEditPrompt(null)}
         onConfirm={() => {
