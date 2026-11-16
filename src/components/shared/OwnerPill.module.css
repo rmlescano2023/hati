@@ -1,4 +1,5 @@
 .pill {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -31,8 +32,11 @@
   cursor: not-allowed;
 }
 
-.pill input {
-  display: none;
+/* The checkbox is hidden, so the pill shows where keyboard focus is (app-fixes item 1).
+   :focus-visible leaves a click or a tap without a ring. */
+.pill:has(input:focus-visible) {
+  outline: 2px solid var(--accent-text);
+  outline-offset: 2px;
 }
 
 .dot {

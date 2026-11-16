@@ -246,6 +246,7 @@ staged item.
   - the payor mode stays
   - the split mode returns to Equal Split
   - the item fields clear
+  - *Amended by [`app-fixes-keyboard-decimals-paidby.md`](app-fixes-keyboard-decimals-paidby.md), item 3:* the One Payor pick no longer clears after Save to Breakdown; only the Multiple Payors amounts do, and a One Payor pick hidden behind Multiple Payors (BR-13). The payor mode and the One Payor pick are also remembered per session, in memory only, across tab switches and Back to Home. They clear when the picked member is removed, on Clear All (back to One Payor with nobody picked) and on reload. A saved-item edit opens on the item's own Paid By and doesn't change the remembered pick.
 - **BR-13** Switching payor mode keeps what was typed in the other mode until the next Add Item, Save Edits, Cancel or Save to Breakdown. Only the mode on screen counts.
 - **BR-14** During an edit, switching the split mode keeps the name, and clears the price, owners, Total Amount and member amounts (Q6). Outside an edit, see NQ1.
 - **BR-15** When an edit ends, by Save Edits or Cancel:

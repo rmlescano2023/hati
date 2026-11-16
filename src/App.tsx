@@ -20,6 +20,7 @@ import onboardingStyles from './components/onboarding/OnboardingDialog.module.cs
 import type { ScreenShape } from './components/onboarding/steps';
 import { useOnboarding } from './hooks/useOnboarding';
 import { showsEmptyState } from './lib/writeQueue';
+import type { PaidByPicks } from './lib/staging';
 import styles from './App.module.css';
 
 /**
@@ -45,6 +46,13 @@ export default function App() {
   const [naming, setNaming] = useState(false);
   /** Whether the profile name dialog is open. */
   const [profileOpen, setProfileOpen] = useState(false);
+  /**
+   * The Paid By pick each session's Expenses tab last used, by session id (app-fixes item 3).
+   * Held here so it outlives the workspace and Back to Home, and in memory only, so a reload
+   * forgets it. A Map, never replaced, because only the Expenses card reads it, and only as it
+   * mounts.
+   */
+  const [paidByPicks] = useState<PaidByPicks>(() => new Map());
   const { shouldRun: firstLogin, markSeen, whatsNewDue, markWhatsNewSeen } = useOnboarding();
 
   /**
@@ -361,6 +369,7 @@ export default function App() {
       {screen.kind === 'session' && (
         <SessionWorkspace
           sessionId={screen.sessionId}
+          paidByPicks={paidByPicks}
           tab={screen.tab}
           onTabChange={(tab) => setScreen({ ...screen, tab })}
           onBack={() => {
