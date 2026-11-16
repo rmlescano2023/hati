@@ -102,6 +102,7 @@ export function MemberList({ staged, savedEdit, onClearAll }: Props) {
 
   return (
     <Card
+      data-tour="group-members"
       label="Group Members"
       actions={
         <Button

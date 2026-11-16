@@ -149,7 +149,29 @@
   display: block;
 }
 
+/* The "?" button's icon; on desktop it sits beside its "How this works" label. */
+.helpIcon {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
 @media (max-width: 640px) {
+  /* On a phone "?" is a round icon-only button, as tall as the other touch targets, and its
+     aria-label carries the name. The two-class selector outranks Button.module.css's 38px rule
+     whatever order the stylesheets load in. */
+  .bar .help {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0;
+    border-radius: 50%;
+    border-color: var(--border);
+  }
+
+  .bar .helpLabel {
+    display: none;
+  }
+
   /* A thumb-sized target, still centred on the first line, whose margins give
      the extra height back so the header row is no taller. */
   .rename {

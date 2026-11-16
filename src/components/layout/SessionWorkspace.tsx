@@ -3,15 +3,21 @@ import { AppDataProvider } from '../../context/AppDataContext';
 import { useSessionsStore } from '../../context/SessionsStoreContext';
 import { Button } from '../shared/Button';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
-import { PencilIcon } from '../shared/icons';
+import { HelpIcon, PencilIcon } from '../shared/icons';
 import { SessionNameInput } from '../sessions/SessionNameInput';
 import { SessionTabs, type SessionTabId } from './SessionTabs';
 import { ExpensesPage } from '../../pages/ExpensesPage';
 import { BreakdownPage } from '../../pages/BreakdownPage';
 import { SummaryPage } from '../../pages/SummaryPage';
-import { pluralize } from '../../lib/format';
 import { sessionTitle } from '../../lib/sessionLabel';
-import { paidByMemory, type PaidByPicks, type SavedItemRef } from '../../lib/staging';
+import {
+  leaveMessage,
+  paidByMemory,
+  type PaidByPicks,
+  type PurchaseFormSeed,
+  type SavedItemRef,
+  type StagedItem,
+} from '../../lib/staging';
 import styles from './SessionWorkspace.module.css';
 
 type Props = {
@@ -22,6 +28,12 @@ type Props = {
   onTabChange: (tab: SessionTabId) => void;
   onBack: () => void;
   onClosed: () => void;
+  /** Starts the Expenses guide. "?" shows on the Expenses tab only while this is given. */
+  onHelp?: () => void;
+  /** The "Leave without saving?" message while there's unsaved work, else null, so the app can ask before a tutorial. */
+  onUnsavedChange?: (message: string | null) => void;
+  /** A guide's practice: no leave prompts or reload warning, and the scene's seed (tab-guides). */
+  practice?: { seed?: PurchaseFormSeed; initialStaged?: StagedItem[] };
 };
 
 /** The "Edit item" prompt's message (BR-CO25, amended by bill-ux-polish-2 item 6). */
@@ -40,6 +52,9 @@ export function SessionWorkspace({
   onTabChange,
   onBack,
   onClosed,
+  onHelp,
+  onUnsavedChange,
+  practice,
 }: Props) {
   const { sessions, renameSession, sync } = useSessionsStore();
   const paidBy = useMemo(() => paidByMemory(paidByPicks, sessionId), [paidByPicks, sessionId]);
@@ -69,8 +84,17 @@ export function SessionWorkspace({
     if (tab !== 'breakdown') setNotice(null);
   }, [tab]);
 
-  // An edit of a saved item is unsaved work just as a staged item is.
-  const hasUnsaved = stagedCount > 0 || savedEdit !== null;
+  // An edit of a saved item is unsaved work just as a staged item is. Practice is never saved,
+  // so neither Back nor a tab asks (BR-TG21).
+  const hasUnsaved = !practice && (stagedCount > 0 || savedEdit !== null);
+
+  // The app asks the same question before a tutorial replaces this screen, so it is told what
+  // there is to lose, and told again that there's nothing once this unmounts.
+  const unsavedMessage = hasUnsaved ? leaveMessage(savedEdit, stagedCount) : null;
+  useEffect(() => {
+    onUnsavedChange?.(unsavedMessage);
+  }, [onUnsavedChange, unsavedMessage]);
+  useEffect(() => () => onUnsavedChange?.(null), [onUnsavedChange]);
 
   const endSavedEdit = useCallback(
     (removed: boolean) => {
@@ -150,6 +174,19 @@ export function SessionWorkspace({
             )}
           </div>
         )}
+        {tab === 'expenses' && onHelp && (
+          <Button
+            variant="ghost"
+            size="sm"
+            id="workspace-help"
+            className={styles.help}
+            aria-label="How this works: the Expenses tab"
+            onClick={onHelp}
+          >
+            <HelpIcon className={styles.helpIcon} />
+            <span className={styles.helpLabel}>How this works</span>
+          </Button>
+        )}
       </div>
 
       <SessionTabs
@@ -176,6 +213,7 @@ export function SessionWorkspace({
           savedEdit={savedEdit}
           onSavedEditEnd={endSavedEdit}
           paidBy={paidBy}
+          practice={practice}
         />
       )}
       {tab === 'breakdown' && <BreakdownPage onEditItem={setEditPrompt} />}
@@ -184,11 +222,7 @@ export function SessionWorkspace({
       <ConfirmDialog
         open={leaveTo !== null}
         title="Leave without saving?"
-        message={
-          savedEdit
-            ? `Your changes to ${savedEdit.name} aren't saved.`
-            : `You have ${pluralize(stagedCount, 'staged item')} that ${stagedCount === 1 ? "isn't" : "aren't"} saved.`
-        }
+        message={leaveMessage(savedEdit, stagedCount)}
         confirmLabel="Discard and leave"
         cancelLabel="Stay"
         destructive

@@ -1,0 +1,19 @@
+.banner {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding: 10px 14px;
+  margin-bottom: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--info-bg);
+}
+
+.message {
+  font-size: 13px;
+  color: var(--info-text);
+  margin-right: auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
