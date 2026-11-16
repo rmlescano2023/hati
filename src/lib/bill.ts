@@ -166,8 +166,11 @@ export function receiptRowLabel(row: ReceiptRow): { text: string; fallback: bool
   return { text: row.kind === 'shared' ? `${row.name} (shared)` : row.name, fallback: false };
 }
 
-/** The staged-list pill for a row (BR-CA36). */
-export function receiptPillText(row: ReceiptRow): string {
+/**
+ * The staged-list pill for a row (BR-CA36). `people` is how many members the item has: a shared
+ * order or discount that covers all of them, from four up, ends "· all N" instead of every name.
+ */
+export function receiptPillText(row: ReceiptRow, people: number): string {
   const members = [...row.parts.keys()];
   if (row.kind === 'order') {
     const [member] = members;
@@ -182,5 +185,6 @@ export function receiptPillText(row: ReceiptRow): string {
   }
   const printed =
     row.kind === 'discount' ? formatSignedMoney(-row.amount) : formatMoney(row.amount);
-  return `${label} ${printed} · ${members.join(', ')}`;
+  const who = people >= 4 && members.length === people ? `all ${people}` : members.join(', ');
+  return `${label} ${printed} · ${who}`;
 }

@@ -173,6 +173,11 @@
   color: var(--warn-text);
 }
 
+/* Entered while the floor hint blocks Add Item: still readable, but not a total yet. */
+.held {
+  color: var(--text3);
+}
+
 .hint {
   font-size: 12px;
   color: var(--text3);
@@ -217,6 +222,15 @@
 
   .addRow > button {
     min-height: 44px;
+  }
+
+  /* Outlined on phones, so they read as buttons rather than loose text. The selectors
+     outrank Button's .ghost rules, hover included, which a tap leaves applied on touch. */
+  .block > .addOrder,
+  .block > .addOrder:hover:not(:disabled),
+  .addRow > button,
+  .addRow > button:hover:not(:disabled) {
+    border-color: var(--border2);
   }
 
   /* The row pickers' pills, 44px like every other control in a row. The element

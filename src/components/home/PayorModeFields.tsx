@@ -71,6 +71,7 @@ export function PayorModeFields({
                   id={`contrib-${m}`}
                   className={styles.contribAmount}
                   clearLabel={`Clear ${m}'s contribution`}
+                  aria-label={`${m}'s amount paid`}
                   type="number"
                   min="0"
                   step="0.01"
