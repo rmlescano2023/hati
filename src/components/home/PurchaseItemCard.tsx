@@ -43,10 +43,13 @@ import {
   buildRecords,
   contributionsMatch,
   findSavedItem,
+  keptPaidBy,
+  paidByFor,
   purgeMemberFromStaged,
   readContributions,
   sameStaged,
   stagedFromSaved,
+  type PaidByMemory,
   type SavedItemRef,
   type StagedItem,
 } from '../../lib/staging';
@@ -176,9 +179,11 @@ type Props = {
   savedEdit: SavedItemRef | null;
   /** Ends that edit and goes back to Breakdown; `removed` when the item had gone (BR-CO33, BR-CO35). */
   onSavedEditEnd: (removed: boolean) => void;
+  /** This session's remembered Paid By pick, which the fields start from and keep up to date (app-fixes item 3). */
+  paidBy: PaidByMemory;
 };
 
-export function PurchaseItemCard({ staged, setStaged, savedEdit, onSavedEditEnd }: Props) {
+export function PurchaseItemCard({ staged, setStaged, savedEdit, onSavedEditEnd, paidBy }: Props) {
   const { members, records, addRecords, saveItemEdit } = useAppData();
   const { sync } = useSessionsStore();
 
@@ -194,10 +199,15 @@ export function PurchaseItemCard({ staged, setStaged, savedEdit, onSavedEditEnd 
   });
 
   const [date, setDate] = useState(() => savedBoot?.fields.date ?? todayIso());
+  // A saved-item edit opens on the item's own Paid By. Anything else opens on this session's
+  // last pick, less a payor who has left the group since (app-fixes item 3).
+  const [remembered] = useState(() => paidByFor(paidBy.read(), members));
   const [payorMode, setPayorMode] = useState<PayorMode>(
-    () => savedBoot?.fields.payorMode ?? 'single',
+    () => savedBoot?.fields.payorMode ?? remembered.payorMode,
   );
-  const [singlePayor, setSinglePayor] = useState(() => savedBoot?.fields.singlePayor ?? '');
+  const [singlePayor, setSinglePayor] = useState(
+    () => savedBoot?.fields.singlePayor ?? remembered.singlePayor,
+  );
   const [contributions, setContributions] = useState<Record<string, string>>(
     () => savedBoot?.fields.contributions ?? {},
   );
@@ -498,6 +508,15 @@ export function PurchaseItemCard({ staged, setStaged, savedEdit, onSavedEditEnd 
     document.getElementById(`edit-${id}`)?.focus();
   }, [editing]);
 
+  // Remembers the pick for the next visit to this tab (app-fixes item 3). While a staged item is
+  // being edited, the fields show that item's Paid By, so the pick from before Edit is the one
+  // kept (BR-15). A saved-item edit shows the item's own and changes nothing here.
+  useEffect(() => {
+    if (savedEdit) return;
+    const pick = editing ? editing.restore : { payorMode, singlePayor };
+    paidBy.write(keptPaidBy(pick.payorMode, pick.singlePayor));
+  }, [paidBy, savedEdit, editing, payorMode, singlePayor]);
+
   useEffect(() => {
     if (draft.mode !== 'custom' || !focusDiscount.current) return;
     focusDiscount.current = false;
@@ -549,7 +568,9 @@ export function PurchaseItemCard({ staged, setStaged, savedEdit, onSavedEditEnd 
       dispatch({ type: 'settled', save: thisSave, saved }),
     );
     setStaged([]);
-    setSinglePayor('');
+    // The pick stays for the next purchase; only the mode that isn't on screen is cleared
+    // (BR-12 as amended by app-fixes item 3, BR-13).
+    if (payorMode === 'multiple') setSinglePayor('');
     setContributions({});
     resetItemDraft('equal');
   };

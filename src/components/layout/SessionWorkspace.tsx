@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppDataProvider } from '../../context/AppDataContext';
 import { useSessionsStore } from '../../context/SessionsStoreContext';
 import { Button } from '../shared/Button';
@@ -11,11 +11,13 @@ import { BreakdownPage } from '../../pages/BreakdownPage';
 import { SummaryPage } from '../../pages/SummaryPage';
 import { pluralize } from '../../lib/format';
 import { sessionTitle } from '../../lib/sessionLabel';
-import type { SavedItemRef } from '../../lib/staging';
+import { paidByMemory, type PaidByPicks, type SavedItemRef } from '../../lib/staging';
 import styles from './SessionWorkspace.module.css';
 
 type Props = {
   sessionId: string;
+  /** Every session's remembered Paid By pick, held by the app (app-fixes item 3). */
+  paidByPicks: PaidByPicks;
   tab: SessionTabId;
   onTabChange: (tab: SessionTabId) => void;
   onBack: () => void;
@@ -31,8 +33,16 @@ export const EDIT_ITEM_MESSAGE =
  * and is unaware that sessions exist — swapping which session is open is purely
  * a matter of which `sessionId` this provider is given.
  */
-export function SessionWorkspace({ sessionId, tab, onTabChange, onBack, onClosed }: Props) {
+export function SessionWorkspace({
+  sessionId,
+  paidByPicks,
+  tab,
+  onTabChange,
+  onBack,
+  onClosed,
+}: Props) {
   const { sessions, renameSession, sync } = useSessionsStore();
+  const paidBy = useMemo(() => paidByMemory(paidByPicks, sessionId), [paidByPicks, sessionId]);
   const session = sessions.find((s) => s.id === sessionId);
   const [renaming, setRenaming] = useState(false);
   const pencilRef = useRef<HTMLButtonElement>(null);
@@ -165,6 +175,7 @@ export function SessionWorkspace({ sessionId, tab, onTabChange, onBack, onClosed
           onStagedCountChange={setStagedCount}
           savedEdit={savedEdit}
           onSavedEditEnd={endSavedEdit}
+          paidBy={paidBy}
         />
       )}
       {tab === 'breakdown' && <BreakdownPage onEditItem={setEditPrompt} />}
