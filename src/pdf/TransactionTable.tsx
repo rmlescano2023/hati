@@ -13,6 +13,16 @@ type Props = {
 };
 
 /**
+ * A number cell's font size, shrunk only when the text would overflow its column (BR-CA35).
+ * At 17 or more members a member column is 34pt, which "−300.00" doesn't fit at 7pt and
+ * "5,145.26" doesn't fit at 7.5pt. 7.5 and 7 are the sizes `cellNum`/`totalCellNum` and
+ * `lineCellNum` start from.
+ */
+const fitted = (text: string, width: number, size: number) => ({
+  fontSize: fitMonoFontSize(text, width, size),
+});
+
+/**
  * One date/payor group.
  *
  * Pagination contract (this is the v1.1.7 bug fix):
@@ -72,11 +82,18 @@ export function TransactionTable({ group, members, columns }: Props) {
             wrap={false}
           >
             <Text style={[styles.cell, { width: columns.item }]}>{row.item.name}</Text>
-            <Text style={[styles.cellNum, { width: columns.price }]}>
+            <Text
+              style={[
+                styles.cellNum,
+                { width: columns.price },
+                fitted(formatAmount(row.total), columns.price, 7.5),
+              ]}
+            >
               {formatAmount(row.total)}
             </Text>
             {members.map((m) => {
               const share = row.shares[m] ?? 0;
+              const text = share > 0 ? formatAmount(share) : '—';
               return (
                 <Text
                   key={m}
@@ -84,9 +101,10 @@ export function TransactionTable({ group, members, columns }: Props) {
                     styles.cellNum,
                     { width: columns.member },
                     share <= 0 ? styles.muted : {},
+                    fitted(text, columns.member, 7.5),
                   ]}
                 >
-                  {share > 0 ? formatAmount(share) : '—'}
+                  {text}
                 </Text>
               );
             })}
@@ -94,12 +112,6 @@ export function TransactionTable({ group, members, columns }: Props) {
         );
 
         if (!lines) return <Fragment key={row.item.id}>{itemRow}</Fragment>;
-
-        // A sub-row's amount, shrunk to fit its column: at 17 or more members a
-        // member column is 34pt, which "−300.00" doesn't fit at 7pt (BR-CA35).
-        const fitted = (text: string, width: number) => ({
-          fontSize: fitMonoFontSize(text, width, 7),
-        });
 
         /** An own order's price is in its member's column; the other rows print theirs here. */
         const price = (line: ReceiptRow) =>
@@ -126,7 +138,7 @@ export function TransactionTable({ group, members, columns }: Props) {
               style={[
                 styles.lineCellNum,
                 { width: columns.price },
-                fitted(price(line), columns.price),
+                fitted(price(line), columns.price, 7),
               ]}
             >
               {price(line)}
@@ -139,7 +151,7 @@ export function TransactionTable({ group, members, columns }: Props) {
                   style={[
                     styles.lineCellNum,
                     { width: columns.member },
-                    fitted(text, columns.member),
+                    fitted(text, columns.member, 7),
                   ]}
                 >
                   {text}
@@ -165,14 +177,30 @@ export function TransactionTable({ group, members, columns }: Props) {
 
       <View style={styles.totalRow} wrap={false}>
         <Text style={[styles.totalCell, { width: columns.item }]}>Total</Text>
-        <Text style={[styles.totalCellNum, { width: columns.price }]}>
+        <Text
+          style={[
+            styles.totalCellNum,
+            { width: columns.price },
+            fitted(formatAmount(group.grandTotal), columns.price, 7.5),
+          ]}
+        >
           {formatAmount(group.grandTotal)}
         </Text>
-        {members.map((m) => (
-          <Text key={m} style={[styles.totalCellNum, { width: columns.member }]}>
-            {group.totals[m] > 0 ? formatAmount(group.totals[m]) : '—'}
-          </Text>
-        ))}
+        {members.map((m) => {
+          const text = group.totals[m] > 0 ? formatAmount(group.totals[m]) : '—';
+          return (
+            <Text
+              key={m}
+              style={[
+                styles.totalCellNum,
+                { width: columns.member },
+                fitted(text, columns.member, 7.5),
+              ]}
+            >
+              {text}
+            </Text>
+          );
+        })}
       </View>
     </View>
   );
