@@ -1,6 +1,6 @@
 /** DM Mono draws every character 0.6 em wide (DMMono-Regular.ttf: digits, separators and U+2212 alike). */
 const MONO_ADVANCE = 0.6;
-/** `cellNum` and `lineCellNum` pad 3pt on each side. */
+/** `cellNum`, `totalCellNum` and `lineCellNum` pad 3pt on each side. */
 const NUM_CELL_PADDING = 6;
 
 /**

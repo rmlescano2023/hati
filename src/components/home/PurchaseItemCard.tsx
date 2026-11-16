@@ -31,6 +31,7 @@ import {
   readBillDraft,
   removeBillRow,
   setBillRow,
+  shownTotalAmount,
   toggleRowEveryone,
   toggleRowMember,
   unpickFromBill,
@@ -71,6 +72,7 @@ const EMPTY_DRAFT: ItemDraft = {
   totalAmount: '',
   lines: {},
   bill: EMPTY_BILL_DRAFT,
+  totalFollows: false,
 };
 
 /**
@@ -108,6 +110,8 @@ function draftFromItem(item: PurchaseItem, members: string[]): ItemDraft {
     owners: everyone ? {} : Object.fromEntries(picked.map((m) => [m, true])),
     lines,
     bill: billDraftFromItem(item, members),
+    // The box shows Entered until the user types in it, so Edit never opens on a mismatch.
+    totalFollows: true,
   };
 }
 
@@ -232,7 +236,9 @@ export function PurchaseItemCard({ staged, setStaged, savedEdit, onSavedEditEnd 
     () => unpricedNamedLine(selectedOwners, draft.lines),
     [draft.lines, selectedOwners],
   );
-  const remainder = roundMoney(num(draft.totalAmount) - enteredTotal);
+  // What the box shows: Entered while it follows, which leaves no remainder to fill.
+  const totalAmount = shownTotalAmount(draft.totalAmount, draft.totalFollows, enteredTotal);
+  const remainder = roundMoney(num(totalAmount) - enteredTotal);
 
   const resetItemDraft = (mode: ItemMode = draft.mode) => setDraft({ ...EMPTY_DRAFT, mode });
 
@@ -266,7 +272,9 @@ export function PurchaseItemCard({ staged, setStaged, savedEdit, onSavedEditEnd 
         const bill = owners[member] ? d.bill : unpickFromBill(d.bill, [member], pickedAfter);
         return { ...d, owners, allSelected, lines, bill };
       }),
-    setTotalAmount: (totalAmount) => setDraft((d) => ({ ...d, totalAmount })),
+    // Typing, or clearing with the box's own button, ends the following.
+    setTotalAmount: (totalAmount) =>
+      setDraft((d) => ({ ...d, totalAmount, totalFollows: false })),
     setLine: (member, index, patch) =>
       setDraft((d) => ({
         ...d,
@@ -592,7 +600,7 @@ export function PurchaseItemCard({ staged, setStaged, savedEdit, onSavedEditEnd 
 
         <ItemModeFields
           members={members}
-          draft={draft}
+          draft={{ ...draft, totalAmount }}
           handlers={handlers}
           derived={{
             picked: selectedOwners,

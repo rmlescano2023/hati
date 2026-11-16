@@ -2,6 +2,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { CustomAmountFields } from './CustomAmountFields';
+import styles from './CustomAmountFields.module.css';
 import {
   EMPTY_BILL_DRAFT,
   readBillDraft,
@@ -20,11 +21,11 @@ const gyoza: BillDraft = {
   shared: [{ key: 'g', name: 'Gyoza', amount: '290', everyone: true, members: {} }],
 };
 
-const render = (bill: BillDraft, picked = members, typed = lines) =>
+const render = (bill: BillDraft, picked = members, typed = lines, totalAmount = '') =>
   renderToStaticMarkup(
     createElement(CustomAmountFields, {
       members,
-      totalAmount: '',
+      totalAmount,
       onTotalAmountChange: noop,
       onFillRemainder: noop,
       owners: {},
@@ -187,5 +188,26 @@ describe('Custom Amounts with a discount and a charge', () => {
     const view = render(over, six, dinnerLines);
     expect(view).toContain("Cy's share would be −₱380.00. Lower the discount or add Cy's order.");
     expect(view).toContain("Cy's share </span>−₱380.00");
+  });
+
+  it('mutes Entered, and its "of" figure, while the floor hint blocks Add Item (item 2)', () => {
+    const over: BillDraft = {
+      ...bill,
+      discounts: [{ ...bill.discounts[0], amount: '900' }],
+      charges: [],
+    };
+    // A typed total that doesn't match, so the "of ₱Y" figure shows as well.
+    const view = render(over, six, dinnerLines, '2400');
+    expect(view).toContain(`class="${styles.sum} ${styles.held}"`);
+    expect(view).toContain(`<span class="${styles.held}">of ₱2,400.00</span>`);
+    expect(view).not.toContain(`class="${styles.sum} ${styles.mismatch}"`);
+    expect(view).not.toContain(`<span class="${styles.mismatch}">of`);
+  });
+
+  it('keeps the warning colour on a mismatch when no floor hint shows (item 2)', () => {
+    const view = render(bill, six, dinnerLines, '2400');
+    expect(view).toContain(`class="${styles.sum} ${styles.mismatch}"`);
+    expect(view).toContain(`<span class="${styles.mismatch}">of ₱2,400.00</span>`);
+    expect(view).not.toContain(styles.held);
   });
 });
