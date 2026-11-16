@@ -528,7 +528,7 @@ describe('readBillDraft with shared orders (O-2)', () => {
     ).toBe('Choose who shares Gyoza');
     expect(
       readBillDraft(twoPicked, ramen, billDraft({ shared: [split('', '290', nobody)] })).sharedHint,
-    ).toBe('Choose who shares the unnamed shared order');
+    ).toBe('Choose who shares the unnamed shared item');
   });
 
   it('a priced row with nobody ticked still counts in the figures, but not in the receipt', () => {

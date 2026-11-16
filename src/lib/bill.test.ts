@@ -326,8 +326,8 @@ describe('receiptRowLabel and receiptPillText (B-10)', () => {
     const a = exampleA();
     expect(receiptPillText(rowOf(a, 2), 2)).toBe('Gyoza (shared) ₱290.00 · Ana, Ben');
     const row = unnamedRow(a, 2);
-    expect(receiptPillText(row, 2)).toBe('Shared order ₱290.00 · Ana, Ben');
-    expect(receiptRowLabel(row)).toEqual({ text: 'Shared order', fallback: true });
+    expect(receiptPillText(row, 2)).toBe('Shared item ₱290.00 · Ana, Ben');
+    expect(receiptRowLabel(row)).toEqual({ text: 'Shared item', fallback: true });
     expect(receiptRowLabel(rowOf(a, 2))).toEqual({ text: 'Gyoza (shared)', fallback: false });
   });
 
@@ -387,7 +387,7 @@ describe('receiptRowLabel and receiptPillText (B-10)', () => {
       );
       const bill = billOf(item).map((l, i) => (i === 17 ? { ...l, name: '' } : l));
       const unnamed = receiptRows({ ...item, bill })![17];
-      expect(receiptPillText(unnamed, 17)).toBe('Shared order ₱1,700.00 · all 17');
+      expect(receiptPillText(unnamed, 17)).toBe('Shared item ₱1,700.00 · all 17');
     });
 
     it('says "all 4" for a discount over four people', () => {
