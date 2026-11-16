@@ -72,6 +72,12 @@ describe('Custom Amounts with no bill rows', () => {
     expect(render(EMPTY_BILL_DRAFT)).toContain('+ Add shared item');
     expect(render(EMPTY_BILL_DRAFT, [])).not.toContain('+ Add shared item');
   });
+
+  it('offers + Add sub-item for each picked member, with a matching aria-label', () => {
+    const html = render(EMPTY_BILL_DRAFT);
+    expect(html).toContain('+ Add sub-item');
+    expect(labels(html)).toEqual(expect.arrayContaining(['Add sub-item for Ana', 'Add sub-item for Ben']));
+  });
 });
 
 describe('Custom Amounts with a shared item', () => {
