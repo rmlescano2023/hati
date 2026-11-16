@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { formatDateRange, formatLocalDate, formatLocalDateTime } from './format';
+import {
+  formatAmount,
+  formatDateRange,
+  formatLocalDate,
+  formatLocalDateTime,
+  formatMoney,
+  formatSignedAmount,
+  formatSignedMoney,
+} from './format';
 
 describe('formatDateRange', () => {
   it('joins two dates with an em dash', () => {
@@ -30,5 +38,31 @@ describe('formatLocalDate and formatLocalDateTime', () => {
   it('returns an unreadable time unchanged', () => {
     expect(formatLocalDate('soon')).toBe('soon');
     expect(formatLocalDateTime('soon')).toBe('soon');
+  });
+});
+
+describe('formatSignedMoney and formatSignedAmount (F-1)', () => {
+  it('puts a true minus sign (U+2212) before a negative amount', () => {
+    expect(formatSignedMoney(-300)).toBe('\u2212\u20b1300.00');
+    expect(formatSignedMoney(-1234.5)).toBe('\u2212\u20b11,234.50');
+    expect(formatSignedAmount(-300)).toBe('\u2212300.00');
+  });
+
+  it('reads like formatMoney for a positive amount', () => {
+    expect(formatSignedMoney(300)).toBe('\u20b1300.00');
+    expect(formatSignedAmount(1234.5)).toBe('1,234.50');
+  });
+
+  it('never shows a minus on zero or on dust below half a centavo', () => {
+    expect(formatSignedMoney(0)).toBe('\u20b10.00');
+    expect(formatSignedMoney(-0.004)).toBe('\u20b10.00');
+    expect(formatSignedAmount(-0.004)).toBe('0.00');
+  });
+});
+
+describe('formatMoney and formatAmount with a negative (F-2)', () => {
+  it('keep the output they had before signed money existed', () => {
+    expect(formatMoney(-300)).toBe('\u20b1-300.00');
+    expect(formatAmount(-300)).toBe('-300.00');
   });
 });

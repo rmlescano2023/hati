@@ -1,8 +1,11 @@
 import { allocateProportionally, EPSILON, roundMoney, splitEvenly, sumMoney } from './money.js';
 import { compareNames } from './format.js';
+import { billLineParts, billMatches } from './bill.js';
 import type {
+  BillLine,
   BreakdownGroup,
   BreakdownRow,
+  CustomAmountItem,
   NetBalance,
   OwedMatrix,
   PayorContribution,
@@ -47,6 +50,63 @@ export function getItemShares(item: PurchaseItem): Record<string, number> {
   return shares;
 }
 
+/**
+ * Takes a member out of a Custom item that has a bill (BR-CA40), given its
+ * `amounts` without them. Each row loses the member's part, and nobody else's
+ * part moves: removing the member at index k from a row of c centavos over n
+ * sorted members leaves every other member the same part, whichever of the
+ * `floor(c / n)` and the one extra centavo they had. So `amounts` is never
+ * recomputed; the old one minus the member stands, and `billMatches` confirms
+ * the new bill against it.
+ */
+function purgeMemberFromBill(
+  item: CustomAmountItem & { bill: BillLine[] },
+  member: string,
+  amounts: Record<string, number>,
+): CustomAmountItem | null {
+  // An item worth ₱0.00 moves no money, so there is nothing left to keep (Example F5).
+  if (Math.round(sumMoney(Object.values(amounts)) * 100) <= 0) return null;
+
+  const before = Object.keys(item.amounts);
+  const next: BillLine[] = [];
+  for (const line of item.bill) {
+    if (line.kind === 'order') {
+      if (line.member !== member) next.push(line);
+      continue;
+    }
+    const part = billLineParts(line, before).find((p) => p.member === member);
+    if (!part) {
+      next.push(line);
+      continue;
+    }
+    const amount = roundMoney(line.amount - part.amount);
+    // What is left to the others was ₱0.00 on this row, so it goes.
+    if (amount <= 0) continue;
+    if (line.kind === 'charge') {
+      next.push({ ...line, amount });
+      continue;
+    }
+    const members = line.members.filter((m) => m !== member);
+    if (members.length > 0) next.push({ ...line, members, amount });
+  }
+
+  // The rare centavo case can leave a member on no priced order or shared line;
+  // the money is never touched, only the detail can go.
+  if (billMatches(next, amounts)) {
+    if (next.some((l) => l.kind !== 'order')) {
+      return { id: item.id, mode: 'custom', name: item.name, amounts, bill: next };
+    }
+    // Back to PR #137's shape (BR-CA40).
+    const lines = next.flatMap((l) =>
+      l.kind === 'order' ? [{ member: l.member, name: l.name, amount: l.amount }] : [],
+    );
+    if (lines.some((l) => l.name !== '')) {
+      return { id: item.id, mode: 'custom', name: item.name, amounts, lines };
+    }
+  }
+  return { id: item.id, mode: 'custom', name: item.name, amounts };
+}
+
 /** Drop a member out of an item, keeping the remaining members' shares unchanged. */
 export function purgeMemberFromItem(item: PurchaseItem, member: string): PurchaseItem | null {
   if (item.mode === 'custom') {
@@ -54,6 +114,7 @@ export function purgeMemberFromItem(item: PurchaseItem, member: string): Purchas
     const amounts = { ...item.amounts };
     delete amounts[member];
     if (Object.keys(amounts).length === 0) return null;
+    if (item.bill) return purgeMemberFromBill({ ...item, bill: item.bill }, member, amounts);
     if (!item.lines) return { ...item, amounts };
     const lines = item.lines.filter((l) => l.member !== member);
     // With no named line left it isn't itemized any more, so it goes back to

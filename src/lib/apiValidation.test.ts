@@ -3,8 +3,10 @@ import {
   parsePaymentsInput,
   parseProfileInput,
   parseSessionIdQuery,
+  parseSessionInput,
   parseUserMark,
 } from '../../api/_validate';
+import { exampleB } from './billExamples';
 import { NICKNAMES_MAX } from './profileName';
 
 const entry = (over: Record<string, unknown> = {}) => ({
@@ -158,5 +160,41 @@ describe('parseSessionIdQuery', () => {
     for (const bad of ['', undefined, ['a', 'b'], 'x'.repeat(201)]) {
       expect(parseSessionIdQuery(bad)).toBeNull();
     }
+  });
+});
+
+describe('parseSessionInput and a Custom item with a bill', () => {
+  const session = (item: unknown) => ({
+    members: ['Ana', 'Ben', 'Cy', 'Dan', 'Eve', 'Fay'],
+    records: [
+      {
+        id: 'rec_1',
+        date: '2026-11-16',
+        payorMode: 'single',
+        payors: [{ member: 'Ana', amount: 2401.05 }],
+        items: [item],
+        createdAt: '2026-11-16T02:00:00.000Z',
+      },
+    ],
+  });
+
+  it('A-1 returns the session with the bill of Example B', () => {
+    const b = exampleB();
+    const parsed = parseSessionInput('session_1', session(b));
+    expect(parsed?.id).toBe('session_1');
+    expect(parsed?.records[0].items[0]).toEqual(b);
+  });
+
+  it('A-2 never answers a broken bill with a rejection: it drops the bill and keeps the amounts', () => {
+    const b = exampleB();
+    const parsed = parseSessionInput(
+      'session_1',
+      session({ ...b, amounts: { ...b.amounts, Dan: 1 } }),
+    );
+    expect(parsed).not.toBeNull();
+    const item = parsed?.records[0].items[0];
+    expect(item?.mode === 'custom' && 'bill' in item).toBe(false);
+    expect(item?.mode === 'custom' && item.amounts.Dan).toBe(1);
+    expect(parseSessionInput('session_1', session({ ...b, bill: 'nope' }))).not.toBeNull();
   });
 });

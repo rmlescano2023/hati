@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { ItemModeFields } from '../home/ItemModeFields';
 import { PayorModeFields } from '../home/PayorModeFields';
 import { ClearableInput } from './ClearableInput';
+import { EMPTY_BILL_DRAFT, readBillDraft } from '../../lib/orderLines';
 
 const render = (props: Partial<Parameters<typeof ClearableInput>[0]> = {}) =>
   renderToStaticMarkup(
@@ -84,8 +85,20 @@ const handlers = {
   addLine: () => {},
   removeLine: () => {},
   fillRemainder: () => {},
+  addBillRow: () => {},
+  setBillRow: () => {},
+  removeBillRow: () => {},
+  toggleRowEveryone: () => {},
+  toggleRowMember: () => {},
 };
-const derived = { picked: [], enteredTotal: 0, blankCount: 0, remainder: 0, missingPrice: null };
+const derived = {
+  picked: [],
+  enteredTotal: 0,
+  blankCount: 0,
+  remainder: 0,
+  missingPrice: null,
+  bill: readBillDraft([], {}, EMPTY_BILL_DRAFT),
+};
 
 describe('ClearableInput in the Expenses form', () => {
   it('shows only the filled Item Name box on Equal Split', () => {
@@ -100,6 +113,7 @@ describe('ClearableInput in the Expenses form', () => {
           allSelected: false,
           totalAmount: '',
           lines: {},
+          bill: EMPTY_BILL_DRAFT,
         },
         handlers,
         derived,
@@ -126,6 +140,7 @@ describe('ClearableInput in the Expenses form', () => {
               { key: 'b', name: '', price: '' },
             ],
           },
+          bill: EMPTY_BILL_DRAFT,
         },
         handlers,
         derived: { ...derived, picked: ['Ana'] },
