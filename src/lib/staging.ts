@@ -39,6 +39,42 @@ export function readContributions(
     .filter((p) => p.amount > 0);
 }
 
+/** A session's Paid By pick, which its Expenses tab remembers until reload (app-fixes item 3). */
+export type PaidByPick = { payorMode: PayorMode; singlePayor: string };
+
+/** A session's pick before anything is chosen, and after Clear All: One Payor, nobody picked. */
+export const NO_PAID_BY_PICK: PaidByPick = { payorMode: 'single', singlePayor: '' };
+
+/**
+ * The pick as it's remembered: the mode, and the One Payor name only while One Payor is the mode
+ * on screen. The other mode's entry is cleared at the next Add Item or Save anyway (BR-13).
+ */
+export function keptPaidBy(payorMode: PayorMode, singlePayor: string): PaidByPick {
+  return { payorMode, singlePayor: payorMode === 'single' ? singlePayor : '' };
+}
+
+/** The pick the fields open with: a payor who has left the group since is dropped (BR-18). */
+export function paidByFor(pick: PaidByPick, members: string[]): PaidByPick {
+  return pick.singlePayor === '' || members.includes(pick.singlePayor)
+    ? pick
+    : { ...pick, singlePayor: '' };
+}
+
+/** Every session's remembered pick, by session id. */
+export type PaidByPicks = Map<string, PaidByPick>;
+
+/** One session's remembered pick: what its Expenses tab opens with, and where it saves changes. */
+export type PaidByMemory = { read: () => PaidByPick; write: (pick: PaidByPick) => void };
+
+export function paidByMemory(picks: PaidByPicks, sessionId: string): PaidByMemory {
+  return {
+    read: () => picks.get(sessionId) ?? NO_PAID_BY_PICK,
+    write: (pick) => {
+      picks.set(sessionId, pick);
+    },
+  };
+}
+
 /**
  * Whether the contributions cover the item exactly (BR-5). Compared in whole
  * centavos, so float dust such as 0.1 + 0.2 against 0.3 doesn't fail it. One
