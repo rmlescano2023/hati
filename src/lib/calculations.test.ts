@@ -16,7 +16,17 @@ import {
 } from './calculations';
 import { allocateProportionally, roundMoney, splitEvenly, sumMoney } from './money';
 import { compareNames, sortNames, toTitleCase } from './format';
-import type { CustomAmountItem, EqualSplitItem, PurchaseItem, PurchaseRecord } from '../types';
+import { billAmounts, billLineParts, billMatches, billMembers } from './bill';
+import { exampleA, exampleB, exampleD1, exampleE } from './billExamples';
+import { parseSession } from './storage';
+import { itemFromLines, linesFromItem } from './orderLines';
+import type {
+  BillLine,
+  CustomAmountItem,
+  EqualSplitItem,
+  PurchaseItem,
+  PurchaseRecord,
+} from '../types';
 
 /* ------------------------------- builders -------------------------------- */
 
@@ -465,5 +475,339 @@ describe('an itemized item changes no money (AC-CO5.5)', () => {
     expect(getFinalSettlement(getNettedOwedMatrix(a), members)).toEqual(
       getFinalSettlement(getNettedOwedMatrix(b), members),
     );
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* bills (shared orders, discounts, charges)                                   */
+/* -------------------------------------------------------------------------- */
+
+describe('purgeMemberFromItem with a bill', () => {
+  const billOf = (item: PurchaseItem | null) => (item as CustomAmountItem).bill as BillLine[];
+  const purge = (item: CustomAmountItem, member: string) =>
+    purgeMemberFromItem(item, member) as CustomAmountItem;
+  const charge = (item: CustomAmountItem) =>
+    billOf(item).find((l) => l.kind === 'charge') as Extract<BillLine, { kind: 'charge' }>;
+
+  /** Every result that keeps a bill is a receipt for exactly its amounts. */
+  const reconciles = (item: CustomAmountItem) =>
+    expect(billMatches(item.bill as BillLine[], item.amounts)).toBe(true);
+
+  it('C-1 F1: removing Ben from Example B leaves every other share, and trims the charge', () => {
+    const out = purge(exampleB(), 'Ben');
+    expect(out.amounts).toEqual({ Ana: 420.93, Cy: 260.93, Dan: 335.92, Eve: 450.92, Fay: 441.42 });
+    expect(getItemTotal(out)).toBe(1910.12);
+    expect(charge(out).amount).toBe(204.62);
+    expect(billOf(out).some((l) => l.kind === 'order' && l.member === 'Ben')).toBe(false);
+    reconciles(out);
+  });
+
+  it('C-1 F2: removing Cy takes the PWD line with them', () => {
+    const out = purge(exampleB(), 'Cy');
+    expect(billOf(out).some((l) => l.kind === 'discount')).toBe(false);
+    expect(charge(out).amount).toBe(204.62);
+    expect(getItemTotal(out)).toBe(2140.12);
+    expect(out.amounts.Ana).toBe(420.93);
+    expect(out.amounts.Dan).toBe(335.92);
+    reconciles(out);
+  });
+
+  it('C-1 F3: removing Ben from Example A leaves Ana a one-member shared Gyoza', () => {
+    const out = purge(exampleA(), 'Ben');
+    expect(out.amounts).toEqual({ Ana: 865 });
+    expect(billOf(out)[1]).toEqual({
+      kind: 'shared',
+      members: ['Ana'],
+      name: 'Gyoza',
+      amount: 145,
+    });
+    reconciles(out);
+    const variant = purge(exampleA(true), 'Ben');
+    expect((billOf(variant)[1] as { amount: number }).amount).toBe(145.01);
+    expect(variant.amounts).toEqual({ Ana: 865.01 });
+    reconciles(variant);
+  });
+
+  it('C-1 F4: the discount holder left keeps their part of the Senior discount', () => {
+    const noDan = purge(exampleE(), 'Dan');
+    expect(billOf(noDan)[1]).toEqual({
+      kind: 'discount',
+      members: ['Eve'],
+      name: 'Senior',
+      amount: 125,
+    });
+    expect(noDan.amounts).toEqual({ Eve: 275 });
+    const noEve = purge(exampleE(), 'Eve');
+    expect(billOf(noEve)[1]).toEqual({
+      kind: 'discount',
+      members: ['Dan'],
+      name: 'Senior',
+      amount: 125.01,
+    });
+    expect(noEve.amounts).toEqual({ Dan: 274.99 });
+    reconciles(noDan);
+    reconciles(noEve);
+  });
+
+  it('C-1 F5: an item left worth nothing is removed', () => {
+    expect(purgeMemberFromItem(exampleD1(), 'Ben')).toBeNull();
+  });
+
+  it('C-2 goes back to PR #137 lines when only own orders are left and one is named', () => {
+    const item: CustomAmountItem = {
+      id: 'i',
+      mode: 'custom',
+      name: 'x',
+      amounts: { Ana: 100, Ben: 100, Cy: 30 },
+      bill: [
+        { kind: 'order', member: 'Ana', name: 'Soup', amount: 100 },
+        { kind: 'order', member: 'Ben', name: '', amount: 100 },
+        { kind: 'order', member: 'Cy', name: 'Tea', amount: 40 },
+        { kind: 'discount', members: ['Cy'], name: 'Voucher', amount: 10 },
+      ],
+    };
+    expect(purgeMemberFromItem(item, 'Cy')).toEqual({
+      id: 'i',
+      mode: 'custom',
+      name: 'x',
+      amounts: { Ana: 100, Ben: 100 },
+      lines: [
+        { member: 'Ana', name: 'Soup', amount: 100 },
+        { member: 'Ben', name: '', amount: 100 },
+      ],
+    });
+  });
+
+  it('C-2 goes back to amounts alone when no order left is named', () => {
+    const item: CustomAmountItem = {
+      id: 'i',
+      mode: 'custom',
+      name: 'x',
+      amounts: { Ana: 100, Cy: 30 },
+      bill: [
+        { kind: 'order', member: 'Ana', name: '', amount: 100 },
+        { kind: 'order', member: 'Cy', name: 'Tea', amount: 40 },
+        { kind: 'discount', members: ['Cy'], name: 'Voucher', amount: 10 },
+      ],
+    };
+    const out = purgeMemberFromItem(item, 'Cy');
+    expect(out).toEqual({ id: 'i', mode: 'custom', name: 'x', amounts: { Ana: 100 } });
+  });
+
+  it('C-2 drops a charge whose centavo went with the member who had it', () => {
+    const item: CustomAmountItem = {
+      id: 'i',
+      mode: 'custom',
+      name: 'x',
+      amounts: { Ana: 10.01, Ben: 10, Cy: 10 },
+      bill: [
+        { kind: 'order', member: 'Ana', name: 'Rice', amount: 10 },
+        { kind: 'order', member: 'Ben', name: 'Rice', amount: 10 },
+        { kind: 'order', member: 'Cy', name: 'Rice', amount: 10 },
+        { kind: 'charge', name: 'Fee', amount: 0.01 },
+      ],
+    };
+    const out = purge(item, 'Ana');
+    expect(out.amounts).toEqual({ Ben: 10, Cy: 10 });
+    expect('bill' in out).toBe(false);
+    expect(out.lines).toHaveLength(2);
+  });
+
+  it('C-3 returns the same object for a member who is not on the item', () => {
+    const item = exampleB();
+    expect(purgeMemberFromItem(item, 'Gus')).toBe(item);
+  });
+
+  it("C-4 never moves another member's amount, for every odd centavo", () => {
+    for (let n = 2; n <= 6; n += 1) {
+      const names = Array.from({ length: n }, (_, i) => `M${i}`);
+      for (let c = 1; c <= 200; c += 1) {
+        const bill: BillLine[] = [
+          ...names.map((member) => ({ kind: 'order' as const, member, name: 'Rice', amount: 10 })),
+          { kind: 'shared', members: names, name: 'Gyoza', amount: c / 100 },
+          { kind: 'charge', name: 'Fee', amount: c / 100 },
+        ];
+        const amounts = billAmounts(bill, billMembers(bill));
+        for (const gone of names) {
+          const out = purge({ id: 'i', mode: 'custom', name: 'x', amounts, bill }, gone);
+          const { [gone]: _gone, ...rest } = amounts;
+          void _gone;
+          expect(out.amounts).toEqual(rest);
+          if (out.bill) reconciles(out);
+        }
+      }
+    }
+  });
+
+  it('C-4 also holds row by row: the parts of the others are the same before and after', () => {
+    for (let n = 2; n <= 6; n += 1) {
+      const names = Array.from({ length: n }, (_, i) => `M${i}`);
+      for (let c = 1; c <= 200; c += 1) {
+        const row: BillLine = { kind: 'charge', name: 'Fee', amount: c / 100 };
+        const before = billLineParts(row, names);
+        for (const gone of names) {
+          const part = before.find((p) => p.member === gone)!.amount;
+          const left = names.filter((m) => m !== gone);
+          const after = billLineParts({ ...row, amount: roundMoney(c / 100 - part) }, left);
+          expect(after).toEqual(before.filter((p) => p.member !== gone));
+        }
+      }
+    }
+  });
+
+  describe('C-5 Summary reads the same money as hand-typed shares', () => {
+    const typed = (item: CustomAmountItem): CustomAmountItem => ({
+      id: item.id,
+      mode: 'custom',
+      name: item.name,
+      amounts: item.amounts,
+    });
+    const members = ['Ana', 'Ben', 'Cy', 'Dan', 'Eve', 'Fay'];
+
+    it('Example B', () => {
+      const withBill = exampleB();
+      const recs = (item: CustomAmountItem) => [record('2026-11-16', single('Ana'), [item])];
+      expect(getItemTotal(withBill)).toBe(2401.05);
+      expect(getItemTotal(withBill)).toBe(getItemTotal(typed(withBill)));
+      expect(getItemShares(withBill)).toEqual(getItemShares(typed(withBill)));
+
+      const raw = getRawOwedMatrix(recs(withBill), members);
+      expect(raw).toEqual(getRawOwedMatrix(recs(typed(withBill)), members));
+      expect(raw.Ana).toMatchObject({
+        Ben: 490.93,
+        Cy: 260.93,
+        Dan: 335.92,
+        Eve: 450.92,
+        Fay: 441.42,
+      });
+      expect(getNetBalances(raw, members)).toEqual(
+        getNetBalances(getRawOwedMatrix(recs(typed(withBill)), members), members),
+      );
+      expect(getFinalSettlement(raw, members)).toEqual(
+        getFinalSettlement(getRawOwedMatrix(recs(typed(withBill)), members), members),
+      );
+    });
+
+    it('D1: Ana owes Ben nothing', () => {
+      const raw = getRawOwedMatrix(
+        [record('2026-11-16', single('Ben'), [exampleD1()])],
+        ['Ana', 'Ben'],
+      );
+      expect(raw.Ben.Ana).toBe(0);
+      expect(getItemShares(exampleD1())).toEqual({ Ana: 0, Ben: 600 });
+    });
+  });
+
+  it('OT-1 an older tab shows the right money: the bill item has no lines', () => {
+    const item = exampleB();
+    expect('lines' in item).toBe(false);
+    expect(getItemTotal(item)).toBe(2401.05);
+    expect(getItemShares(item).Cy).toBe(260.93);
+  });
+
+  describe('OT-3 an older tab edits and saves', () => {
+    /** What a tab that doesn't know the field sees, run through PR #137's Edit path. */
+    const olderEdit = (item: CustomAmountItem): CustomAmountItem => {
+      const seen: CustomAmountItem = {
+        id: item.id,
+        mode: 'custom',
+        name: item.name,
+        amounts: item.amounts,
+      };
+      const members = Object.keys(item.amounts);
+      const lines = linesFromItem(seen, members);
+      return itemFromLines(seen.id, seen.name, Object.keys(lines), lines);
+    };
+    const parsed = (item: CustomAmountItem) =>
+      parseSession({
+        id: 's',
+        members: [],
+        records: [
+          {
+            id: 'r',
+            date: '2026-11-16',
+            payorMode: 'single',
+            payors: [{ member: 'Ana', amount: 1 }],
+            items: [JSON.parse(JSON.stringify(item))],
+            createdAt: '2026-11-16T00:00:00.000Z',
+          },
+        ],
+      })?.records[0].items[0] as CustomAmountItem;
+
+    it('keeps every share above 0 and the total, and drops the bill (AC-CA10.5)', () => {
+      const out = olderEdit(exampleB());
+      expect(out.amounts).toEqual(exampleB().amounts);
+      expect(getItemTotal(out)).toBe(2401.05);
+      const stored = parsed(out);
+      expect('bill' in stored).toBe(false);
+      expect('lines' in stored).toBe(false);
+    });
+
+    it('leaves out a member at 0, who owed nothing either way', () => {
+      const out = olderEdit(exampleD1());
+      expect(out.amounts).toEqual({ Ben: 600 });
+      expect(getItemTotal(out)).toBe(getItemTotal(exampleD1()));
+    });
+  });
+
+  describe('OT-4 an older tab removes a member (PR #137 purge, then the server parses)', () => {
+    /** PR #137's purge: the amounts without the member, everything else as it was. */
+    const olderPurge = (item: CustomAmountItem, member: string): CustomAmountItem => {
+      const amounts = { ...item.amounts };
+      delete amounts[member];
+      return { ...item, amounts };
+    };
+    const parsed = (item: CustomAmountItem) =>
+      parseSession({
+        id: 's',
+        members: [],
+        records: [
+          {
+            id: 'r',
+            date: '2026-11-16',
+            payorMode: 'single',
+            payors: [{ member: 'Ana', amount: 1 }],
+            items: [JSON.parse(JSON.stringify(item))],
+            createdAt: '2026-11-16T00:00:00.000Z',
+          },
+        ],
+      })?.records[0].items[0] as CustomAmountItem;
+
+    it('drops the bill of Example B, because the charge split changed, and keeps the amounts', () => {
+      const out = parsed(olderPurge(exampleB(), 'Ben'));
+      expect('bill' in out).toBe(false);
+      expect(out.amounts).toEqual({
+        Ana: 420.93,
+        Cy: 260.93,
+        Dan: 335.92,
+        Eve: 450.92,
+        Fay: 441.42,
+      });
+    });
+
+    it('drops the bill of Example A, because the Gyoza names Ben', () => {
+      const out = parsed(olderPurge(exampleA(), 'Ben'));
+      expect('bill' in out).toBe(false);
+      expect(out.amounts).toEqual({ Ana: 865 });
+    });
+
+    it('keeps a bill that is still a correct receipt for the money stored', () => {
+      const item: CustomAmountItem = {
+        id: 'i',
+        mode: 'custom',
+        name: 'x',
+        amounts: { Ana: 70, Ben: 100 },
+        bill: [
+          { kind: 'order', member: 'Ana', name: 'Soup', amount: 100 },
+          { kind: 'order', member: 'Ben', name: 'Soup', amount: 100 },
+          { kind: 'discount', members: ['Ana'], name: 'PWD', amount: 30 },
+        ],
+      };
+      // Ben goes, and the order for him is skipped; what is left still adds up.
+      expect(parsed(olderPurge(item, 'Ben')).bill).toEqual([
+        (item.bill as BillLine[])[0],
+        (item.bill as BillLine[])[2],
+      ]);
+    });
   });
 });

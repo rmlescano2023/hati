@@ -17,6 +17,7 @@ import {
   getRawOwedMatrix,
   groupRecordsForBreakdown,
 } from './calculations';
+import { exampleB, exampleD1 } from './billExamples';
 import type {
   CustomAmountItem,
   EqualSplitItem,
@@ -843,5 +844,41 @@ describe('order lines in staging', () => {
     const [result] = applyItemEdit([record], refOf(record, old), next, FRESH);
     expect(result.items[0]).toBe(next.item);
     expect(result.payors).toEqual([{ member: 'Cy', amount: 750 }]);
+  });
+});
+
+/* ------------------------- Custom items with a bill ------------------------ */
+
+describe('staged Custom items with a bill', () => {
+  it('T-1 files Example B under One Payor Ana at its net total (AC-CA6.1)', () => {
+    const [record] = buildRecords([stagedSingle('2026-11-16', 'Ana', exampleB())]);
+    expect(record.payors).toEqual([{ member: 'Ana', amount: 2401.05 }]);
+    expect(record.items[0]).toEqual(exampleB());
+  });
+
+  it('T-2 matches Multiple Payors against the net total (AC-CA6.2, AC-CA6.3)', () => {
+    const total = getItemTotal(exampleB());
+    const pay = (...amounts: number[]) => amounts.map((amount, i) => ({ member: `P${i}`, amount }));
+    expect(contributionsMatch(pay(1200, 1201.05), total)).toBe(true);
+    expect(contributionsMatch(pay(1200, 1200), total)).toBe(false);
+  });
+
+  it('T-3 takes Ben out of a staged Example B and leaves the other shares (F1)', () => {
+    const before = getItemShares(exampleB());
+    const [kept] = purgeMemberFromStaged([stagedSingle('2026-11-16', 'Ana', exampleB())], 'Ben');
+    const after = getItemShares(kept.item);
+    expect(after).toEqual({
+      Ana: before.Ana,
+      Cy: before.Cy,
+      Dan: before.Dan,
+      Eve: before.Eve,
+      Fay: before.Fay,
+    });
+    expect(getItemTotal(kept.item)).toBe(1910.12);
+  });
+
+  it('T-4 asks to confirm removing a member who is on the item at ₱0.00', () => {
+    const staged = [stagedSingle('2026-11-16', 'Ben', exampleD1())];
+    expect(stagedNamesMember(staged, 'Ana')).toBe(true);
   });
 });

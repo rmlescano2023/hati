@@ -1,6 +1,7 @@
-import type { AppData, OrderLine, PurchaseItem, PurchaseRecord, Session } from '../types';
+import type { AppData, BillLine, OrderLine, PurchaseItem, PurchaseRecord, Session } from '../types';
 import { roundMoney, sumMoney } from './money.js';
 import { normaliseOrderName } from './orderLines.js';
+import { billMatches } from './bill.js';
 import { createId } from './id.js';
 import { normaliseSessionName } from './sessionName.js';
 import { parseActivityAt } from './activity.js';
@@ -68,6 +69,60 @@ function parseOrderLines(raw: unknown, amounts: Record<string, number>): OrderLi
   return lines.some((l) => l.name !== '') ? lines : null;
 }
 
+/** A list of member names for a shared order or discount: strings, non-empty, no repeats. */
+function parseBillMembers(raw: unknown): string[] | null {
+  if (!Array.isArray(raw) || raw.length === 0) return null;
+  if (!raw.every((m): m is string => typeof m === 'string')) return null;
+  return new Set(raw).size === raw.length ? [...raw] : null;
+}
+
+/**
+ * The bill of a Custom item worth keeping, or null for "store no bill". Like
+ * `parseOrderLines` it never rejects over it: any failure drops the whole bill
+ * and the item is stored from `amounts` alone (BR-CA44), so a tab that changes
+ * amounts without knowing about bills keeps saving. A bill is kept only while it
+ * is a receipt for exactly `amounts` (`billMatches`), so money is never two
+ * things at once.
+ */
+function parseBill(raw: unknown, amounts: Record<string, number>): BillLine[] | null {
+  if (!Array.isArray(raw) || raw.length === 0) return null;
+
+  const bill: BillLine[] = [];
+  for (const entry of raw) {
+    if (
+      !isRecordObject(entry) ||
+      typeof entry.name !== 'string' ||
+      typeof entry.amount !== 'number' ||
+      !Number.isFinite(entry.amount)
+    ) {
+      return null;
+    }
+    const amount = roundMoney(entry.amount);
+    if (amount <= 0) return null;
+    const name = normaliseOrderName(entry.name);
+
+    if (entry.kind === 'order') {
+      if (typeof entry.member !== 'string') return null;
+      // A member removed by a tab that doesn't know about bills, as with lines.
+      // Own keys only, so a member named `constructor` isn't taken for one.
+      if (!Object.hasOwn(amounts, entry.member)) continue;
+      bill.push({ kind: 'order', member: entry.member, name, amount });
+    } else if (entry.kind === 'shared' || entry.kind === 'discount') {
+      const members = parseBillMembers(entry.members);
+      if (!members) return null;
+      bill.push({ kind: entry.kind, members, name, amount });
+    } else if (entry.kind === 'charge') {
+      bill.push({ kind: 'charge', name, amount });
+    } else {
+      return null;
+    }
+  }
+
+  // Own orders alone are PR #137's shape (BR-CA43).
+  if (bill.every((l) => l.kind === 'order')) return null;
+  return billMatches(bill, amounts) ? bill : null;
+}
+
 function parseItem(raw: unknown): PurchaseItem | null {
   if (!isRecordObject(raw)) return null;
   const id = typeof raw.id === 'string' ? raw.id : null;
@@ -83,6 +138,10 @@ function parseItem(raw: unknown): PurchaseItem | null {
         }
       }
     }
+    // A valid bill wins and any lines beside it are ignored, so the two never
+    // coexist; a bill that doesn't hold falls through to the lines rule.
+    const bill = parseBill(raw.bill, amounts);
+    if (bill) return { id, mode: 'custom', name, amounts, bill };
     const lines = parseOrderLines(raw.lines, amounts);
     return lines
       ? { id, mode: 'custom', name, amounts, lines }
