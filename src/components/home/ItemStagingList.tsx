@@ -65,7 +65,7 @@ export function ItemStagingList({ items, editingId, onEdit, onRemove }: Props) {
                           className={`${styles.pill} ${styles.linePill}`}
                           key={`${item.id}:${i}`}
                         >
-                          {receiptPillText(row)}
+                          {receiptPillText(row, owners.length)}
                         </span>
                       ))
                     : owners.map((owner) => (
