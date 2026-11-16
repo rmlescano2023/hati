@@ -1198,3 +1198,15 @@ approval.
   because existing tests already use it.
   - **Alternative, if the owner disagrees:** test 6 becomes a source-level check, which is
     weaker.
+
+### Decided (2026-11-16)
+The owner delegated these overnight, and the coordinating session decided them. The spec is
+approved for the build with the following:
+
+- **D1.** Use `aria-label="How this works: the Expenses tab"`. It contains the visible text, as
+  WCAG 2.5.3 requires, and still names the tab when the button is icon-only on a phone.
+  AC-TG1.1 is amended to match.
+- **D2.** The first-run tour's Escape stays as it is in PR 1. It's flagged to the owner as a
+  possible follow-up.
+- **D3.** `sub-items` goes on one block, as specified.
+- **D4.** `renderToStaticMarkup` in the scene test is accepted.
