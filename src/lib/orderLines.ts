@@ -463,7 +463,7 @@ export function readBillDraft(picked: string[], lines: LinesDraft, bill: BillDra
       bill.shared,
       picked,
       (name) => `Add a price for ${name} or remove it`,
-      (name) => (name ? `Choose who shares ${name}` : 'Choose who shares the unnamed shared order'),
+      (name) => (name ? `Choose who shares ${name}` : 'Choose who shares the unnamed shared item'),
     ),
     discountHint: splitHint(
       bill.discounts,

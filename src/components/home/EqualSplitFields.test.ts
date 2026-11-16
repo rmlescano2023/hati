@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { EqualSplitFields } from './EqualSplitFields';
 
 const noop = () => {};
-const HINT = 'Need a discount for one person? Switch to Custom Amounts and add a shared order.';
+const HINT = 'Need a discount for one person? Switch to Custom Amounts and add a shared item.';
 
 const propsFor = (members: string[], selectedCount: number, onSwitchForDiscount = noop) => ({
   members,
@@ -62,7 +62,7 @@ describe('Equal Split hint toward Custom Amounts (item 8)', () => {
 });
 
 describe('Equal Split hint button (bill-ux-polish-2 item 5)', () => {
-  const LABEL = 'Switch to Custom Amounts and add a shared order.';
+  const LABEL = 'Switch to Custom Amounts and add a shared item.';
 
   it('is a link-styled button named by its visible text', () => {
     const html = render(['Ana', 'Ben'], 1);
