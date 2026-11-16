@@ -56,6 +56,8 @@ export type ItemDraftHandlers = {
   removeBillRow: (section: BillSection, index: number) => void;
   toggleRowEveryone: (section: 'shared' | 'discounts', index: number) => void;
   toggleRowMember: (section: 'shared' | 'discounts', index: number, member: string) => void;
+  /** The Equal Split hint's switch to Custom Amounts with a shared order and a discount. */
+  switchForDiscount: () => void;
 };
 
 export type ItemDraftDerived = {
@@ -120,11 +122,13 @@ export function ItemModeFields({ members, draft, handlers, derived }: Props) {
           onToggleAll={handlers.toggleAll}
           onToggleOwner={handlers.toggleOwner}
           selectedCount={derived.picked.length}
+          onSwitchForDiscount={handlers.switchForDiscount}
         />
       ) : (
         <CustomAmountFields
           members={members}
           totalAmount={draft.totalAmount}
+          totalFollows={draft.totalFollows}
           onTotalAmountChange={handlers.setTotalAmount}
           onFillRemainder={handlers.fillRemainder}
           owners={draft.owners}
