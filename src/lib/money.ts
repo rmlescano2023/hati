@@ -81,3 +81,14 @@ export function parsePositiveAmount(raw: string | undefined): number {
   const parsed = Number.parseFloat(raw ?? '');
   return Number.isFinite(parsed) && parsed > 0 ? roundMoney(parsed) : 0;
 }
+
+/**
+ * A money box's text held to two decimal places as it's typed (app-fixes item 2). Digits past the
+ * second decimal are dropped, not rounded, so "800.009" becomes "800.00". Anything else is
+ * returned as it is: "1.", "-", "" and the browser's own forms such as "1e5" are left for the
+ * next key and for `parsePositiveAmount`, exactly as today.
+ */
+export function clipMoneyInput(raw: string): string {
+  const match = /^(-?\d*\.\d{2})\d+$/.exec(raw);
+  return match ? match[1] : raw;
+}

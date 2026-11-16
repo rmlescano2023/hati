@@ -8,6 +8,7 @@ import type {
   LineDraft,
   LinesDraft,
 } from '../../lib/orderLines';
+import { clipMoneyInput } from '../../lib/money';
 import type { ItemMode } from '../../types';
 import styles from './ItemModeFields.module.css';
 
@@ -107,7 +108,7 @@ export function ItemModeFields({ members, draft, handlers, derived }: Props) {
               step="0.01"
               placeholder="0.00"
               value={draft.price}
-              onChange={(e) => handlers.setPrice(e.target.value)}
+              onChange={(e) => handlers.setPrice(clipMoneyInput(e.target.value))}
             />
           </div>
         )}

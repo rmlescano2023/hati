@@ -2,6 +2,7 @@ import { Button } from '../shared/Button';
 import { ClearableInput } from '../shared/ClearableInput';
 import { OwnerGrid } from '../shared/OwnerGrid';
 import { formatMoney, formatSignedMoney } from '../../lib/format';
+import { clipMoneyInput } from '../../lib/money';
 import {
   ORDER_NAME_MAX,
   hasBillRows,
@@ -206,7 +207,7 @@ export function CustomAmountFields({
               placeholder="0.00"
               aria-describedby={totalFollows ? 'custom-total-follows' : undefined}
               value={totalAmount}
-              onChange={(e) => onTotalAmountChange(e.target.value)}
+              onChange={(e) => onTotalAmountChange(clipMoneyInput(e.target.value))}
             />
           </div>
           <Button
@@ -287,7 +288,9 @@ export function CustomAmountFields({
                       placeholder="0.00"
                       aria-label={`${m}'s order ${i + 1} price`}
                       value={line.price}
-                      onChange={(e) => onLineChange(m, i, { price: e.target.value })}
+                      onChange={(e) =>
+                        onLineChange(m, i, { price: clipMoneyInput(e.target.value) })
+                      }
                     />
                     {/* A member always keeps one line, so a lone line has no ×. */}
                     {memberLines.length > 1 && (
@@ -361,7 +364,9 @@ export function CustomAmountFields({
                       placeholder="0.00"
                       aria-label={`${noun[0].toUpperCase()}${noun.slice(1)} ${n} ${amountWord}`}
                       value={row.amount}
-                      onChange={(e) => onBillRowChange(section, i, { amount: e.target.value })}
+                      onChange={(e) =>
+                        onBillRowChange(section, i, { amount: clipMoneyInput(e.target.value) })
+                      }
                     />
                     <Button
                       variant="icon"

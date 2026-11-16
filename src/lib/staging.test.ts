@@ -4,6 +4,10 @@ import {
   buildRecords,
   contributionsMatch,
   findSavedItem,
+  keptPaidBy,
+  NO_PAID_BY_PICK,
+  paidByFor,
+  paidByMemory,
   purgeMemberFromStaged,
   readContributions,
   sameStaged,
@@ -880,5 +884,39 @@ describe('staged Custom items with a bill', () => {
   it('T-4 asks to confirm removing a member who is on the item at ₱0.00', () => {
     const staged = [stagedSingle('2026-11-16', 'Ben', exampleD1())];
     expect(stagedNamesMember(staged, 'Ana')).toBe(true);
+  });
+});
+
+describe('the remembered Paid By pick (app-fixes item 3)', () => {
+  it('starts as One Payor with nobody picked', () => {
+    expect(paidByMemory(new Map(), 's1').read()).toBe(NO_PAID_BY_PICK);
+    expect(NO_PAID_BY_PICK).toEqual({ payorMode: 'single', singlePayor: '' });
+  });
+
+  it('survives a remount, and belongs to its own session', () => {
+    const picks = new Map();
+    paidByMemory(picks, 's1').write({ payorMode: 'single', singlePayor: 'Ana' });
+    // A new memory over the same Map is what a remounted card reads.
+    expect(paidByMemory(picks, 's1').read()).toEqual({ payorMode: 'single', singlePayor: 'Ana' });
+    expect(paidByMemory(picks, 's2').read()).toBe(NO_PAID_BY_PICK);
+  });
+
+  it('keeps the One Payor name only while One Payor is the mode on screen', () => {
+    expect(keptPaidBy('single', 'Ana')).toEqual({ payorMode: 'single', singlePayor: 'Ana' });
+    expect(keptPaidBy('multiple', 'Ana')).toEqual({ payorMode: 'multiple', singlePayor: '' });
+  });
+
+  it('keeps the pick when a member is added', () => {
+    const pick = { payorMode: 'single', singlePayor: 'Ana' } as const;
+    expect(paidByFor(pick, ['Ana', 'Ben', 'Cy'])).toBe(pick);
+  });
+
+  it('drops a payor who has left the group, and leaves the rest alone', () => {
+    expect(paidByFor({ payorMode: 'single', singlePayor: 'Cy' }, ['Ana', 'Ben'])).toEqual({
+      payorMode: 'single',
+      singlePayor: '',
+    });
+    const multiple = { payorMode: 'multiple', singlePayor: '' } as const;
+    expect(paidByFor(multiple, [])).toBe(multiple);
   });
 });
