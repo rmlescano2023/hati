@@ -64,10 +64,15 @@ const sectionHint = (view: BillDraftView, section: BillSection) =>
       ? view.discountHint
       : view.chargeHint;
 
+/** Under Total Amount while it follows Entered (bill-ux-polish-2 item 2), and Fill Remainder's tooltip then. */
+const FOLLOW_NOTE = 'Matches Entered. Type a total to use Fill Remainder.';
+
 type Props = {
   members: string[];
   /** The target total the picked members' lines should add up to. */
   totalAmount: string;
+  /** True while Total Amount follows Entered after Edit (`ItemDraft.totalFollows`). */
+  totalFollows: boolean;
   onTotalAmountChange: (raw: string) => void;
   onFillRemainder: () => void;
   owners: Record<string, boolean>;
@@ -108,6 +113,7 @@ type Props = {
 export function CustomAmountFields({
   members,
   totalAmount,
+  totalFollows,
   onTotalAmountChange,
   onFillRemainder,
   owners,
@@ -187,33 +193,43 @@ export function CustomAmountFields({
 
   return (
     <div className={styles.wrap}>
-      <div className={styles.topRow}>
-        <div className={`${styles.field} ${styles.totalField}`}>
-          <label htmlFor="custom-total">Total Amount (₱)</label>
-          <ClearableInput
-            id="custom-total"
-            clearLabel="Clear total amount"
-            type="number"
-            min="0"
-            step="0.01"
-            placeholder="0.00"
-            value={totalAmount}
-            onChange={(e) => onTotalAmountChange(e.target.value)}
-          />
+      <div className={styles.totalGroup}>
+        <div className={styles.topRow}>
+          <div className={`${styles.field} ${styles.totalField}`}>
+            <label htmlFor="custom-total">Total Amount (₱)</label>
+            <ClearableInput
+              id="custom-total"
+              clearLabel="Clear total amount"
+              type="number"
+              min="0"
+              step="0.01"
+              placeholder="0.00"
+              aria-describedby={totalFollows ? 'custom-total-follows' : undefined}
+              value={totalAmount}
+              onChange={(e) => onTotalAmountChange(e.target.value)}
+            />
+          </div>
+          <Button
+            onClick={onFillRemainder}
+            disabled={!canFill}
+            title={
+              canFill
+                ? `Split ${formatMoney(remainder)} across ${blankCount} blank member${
+                    blankCount === 1 ? '' : 's'
+                  }`
+                : totalFollows
+                  ? FOLLOW_NOTE
+                  : 'Enter a total amount and leave at least one member blank'
+            }
+          >
+            Fill Remainder
+          </Button>
         </div>
-        <Button
-          onClick={onFillRemainder}
-          disabled={!canFill}
-          title={
-            canFill
-              ? `Split ${formatMoney(remainder)} across ${blankCount} blank member${
-                  blankCount === 1 ? '' : 's'
-                }`
-              : 'Enter a total amount and leave at least one member blank'
-          }
-        >
-          Fill Remainder
-        </Button>
+        {totalFollows && (
+          <p id="custom-total-follows" className={styles.helper}>
+            {FOLLOW_NOTE}
+          </p>
+        )}
       </div>
 
       <div className={styles.field}>
@@ -325,6 +341,7 @@ export function CustomAmountFields({
                 <div className={styles.billRow} key={row.key}>
                   <div className={styles.line}>
                     <ClearableInput
+                      id={`custom-${section}-${n}-name`}
                       type="text"
                       clearLabel={`Clear ${noun} ${n} name`}
                       compactClear

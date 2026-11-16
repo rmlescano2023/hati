@@ -22,6 +22,7 @@ import {
   EMPTY_BILL_DRAFT,
   addBillRow,
   billDraftFromItem,
+  billForOneDiscount,
   blankPicked,
   fillRemainder,
   itemFromLines,
@@ -215,6 +216,9 @@ export function PurchaseItemCard({ staged, setStaged, savedEdit, onSavedEditEnd 
   // Set when an edit ends, so focus goes back to that row's Edit button rather
   // than being dropped on the page when its own button was the one disabled.
   const restoreFocusTo = useRef<string | null>(null);
+  // Set by the Equal Split hint's switch. Its button unmounts with Equal Split, so focus goes
+  // to the new discount's name box instead of being dropped on the page.
+  const focusDiscount = useRef(false);
 
   const selectedOwners = useMemo(
     () => (draft.allSelected ? members : members.filter((m) => draft.owners[m])),
@@ -313,6 +317,21 @@ export function PurchaseItemCard({ staged, setStaged, savedEdit, onSavedEditEnd 
         const picked = d.allSelected ? members : members.filter((m) => d.owners[m]);
         return { ...d, bill: toggleRowMember(d.bill, section, index, member, picked) };
       }),
+    // The Equal Split hint's switch: like the mode toggle it keeps the name and who is in the
+    // item, but the price becomes one shared order rather than equal shares in each member's
+    // lines, and an empty discount is added for the user to fill (bill-ux-polish-2 item 5).
+    switchForDiscount: () => {
+      setDraft((d) => ({
+        ...EMPTY_DRAFT,
+        mode: 'custom',
+        name: d.name,
+        owners: d.owners,
+        allSelected: d.allSelected,
+        bill: billForOneDiscount(num(d.price)),
+      }));
+      dispatch({ type: 'clearValidation' });
+      focusDiscount.current = true;
+    },
   };
 
   // The price the contributions have to cover. Custom Amounts uses what the
@@ -478,6 +497,12 @@ export function PurchaseItemCard({ staged, setStaged, savedEdit, onSavedEditEnd 
     restoreFocusTo.current = null;
     document.getElementById(`edit-${id}`)?.focus();
   }, [editing]);
+
+  useEffect(() => {
+    if (draft.mode !== 'custom' || !focusDiscount.current) return;
+    focusDiscount.current = false;
+    document.getElementById('custom-discounts-1-name')?.focus();
+  }, [draft.mode]);
 
   const missing: MissingFlags = { items: staged.length === 0 };
 

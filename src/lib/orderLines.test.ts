@@ -5,6 +5,7 @@ import {
   ORDER_NAME_MAX,
   addBillRow,
   billDraftFromItem,
+  billForOneDiscount,
   billFromDraft,
   blankPicked,
   fillRemainder,
@@ -948,5 +949,65 @@ describe('shownTotalAmount (bill-ux-polish item 1)', () => {
       const shown = shownTotalAmount('x', true, entered);
       expect(roundMoney(parsePositiveAmount(shown) - entered)).toBe(0);
     }
+  });
+});
+
+describe('billForOneDiscount (bill-ux-polish-2 item 5)', () => {
+  const picked = ['Ana', 'Ben', 'Cy'];
+
+  it('starts one unnamed shared order on Everyone and one empty discount', () => {
+    const bill = billForOneDiscount(1000);
+    expect(bill.shared).toHaveLength(1);
+    expect(bill.shared[0]).toMatchObject({
+      name: '',
+      amount: '1000.00',
+      everyone: true,
+      members: {},
+    });
+    expect(bill.discounts).toHaveLength(1);
+    expect(bill.discounts[0]).toMatchObject({ name: '', amount: '', everyone: false, members: {} });
+    expect(bill.charges).toEqual([]);
+  });
+
+  it('gives each member the share Equal Split gave them', () => {
+    const view = readBillDraft(picked, {}, billForOneDiscount(1000));
+    expect(view.entered).toBe(1000);
+    expect(view.shares).toEqual(
+      getItemShares({ id: 'x', mode: 'equal', name: 'x', totalPrice: 1000, owners: picked }),
+    );
+    expect(view.shares).toEqual({ Ana: 333.34, Ben: 333.33, Cy: 333.33 });
+    expect(view.sharedHint).toBeNull();
+    expect(view.discountHint).toBeNull();
+    expect(view.chargeHint).toBeNull();
+    expect(view.floorHint).toBeNull();
+  });
+
+  it('leaves every member own order line empty', () => {
+    for (const m of picked) expect(linesOf({}, m)).toHaveLength(1);
+    for (const m of picked) expect(linesOf({}, m)[0]).toMatchObject({ name: '', price: '' });
+  });
+
+  it('starts no shared order without a price', () => {
+    for (const price of [0, -5]) {
+      const bill = billForOneDiscount(price);
+      expect(bill.shared).toEqual([]);
+      expect(bill.discounts).toHaveLength(1);
+      expect(bill.discounts[0]).toMatchObject({
+        name: '',
+        amount: '',
+        everyone: false,
+        members: {},
+      });
+      const view = readBillDraft(picked, {}, bill);
+      expect(view.entered).toBe(0);
+      expect(view.sharedHint).toBeNull();
+      expect(view.discountHint).toBeNull();
+      expect(view.chargeHint).toBeNull();
+      expect(view.floorHint).toBeNull();
+    }
+  });
+
+  it('writes the price to the centavo', () => {
+    expect(billForOneDiscount(100.5).shared[0].amount).toBe('100.50');
   });
 });

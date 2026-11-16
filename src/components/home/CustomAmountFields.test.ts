@@ -21,11 +21,18 @@ const gyoza: BillDraft = {
   shared: [{ key: 'g', name: 'Gyoza', amount: '290', everyone: true, members: {} }],
 };
 
-const render = (bill: BillDraft, picked = members, typed = lines, totalAmount = '') =>
+const render = (
+  bill: BillDraft,
+  picked = members,
+  typed = lines,
+  totalAmount = '',
+  totalFollows = false,
+) =>
   renderToStaticMarkup(
     createElement(CustomAmountFields, {
       members,
       totalAmount,
+      totalFollows,
       onTotalAmountChange: noop,
       onFillRemainder: noop,
       owners: {},
@@ -209,5 +216,36 @@ describe('Custom Amounts with a discount and a charge', () => {
     expect(view).toContain(`class="${styles.sum} ${styles.mismatch}"`);
     expect(view).toContain(`<span class="${styles.mismatch}">of ₱2,400.00</span>`);
     expect(view).not.toContain(styles.held);
+  });
+});
+
+describe('Total Amount following Entered (bill-ux-polish-2 item 2)', () => {
+  const NOTE = 'Matches Entered. Type a total to use Fill Remainder.';
+  const NO_TOTAL = 'Enter a total amount and leave at least one member blank';
+
+  it('says so under the box, ties it to the box, and explains Fill Remainder', () => {
+    const html = render(EMPTY_BILL_DRAFT, members, lines, '1470.00', true);
+    expect(html).toContain(`<p id="custom-total-follows" class="${styles.helper}">${NOTE}</p>`);
+    expect(html).toContain('aria-describedby="custom-total-follows"');
+    expect(html).toContain(`title="${NOTE}"`);
+  });
+
+  it('shows nothing once the user types or presses the reset', () => {
+    const html = render(EMPTY_BILL_DRAFT, members, lines, '1470.00', false);
+    expect(html).not.toContain('custom-total-follows');
+    expect(html).not.toContain('aria-describedby');
+    expect(html).not.toContain(NOTE);
+    expect(html).toContain(`title="${NO_TOTAL}"`);
+  });
+});
+
+describe('Receipt rows name boxes carry an id (bill-ux-polish-2 item 5)', () => {
+  it('numbers each box by its section and position', () => {
+    expect(render(gyoza)).toContain('id="custom-shared-1-name"');
+    const discount: BillDraft = {
+      ...EMPTY_BILL_DRAFT,
+      discounts: [{ key: 'd', name: '', amount: '', everyone: false, members: {} }],
+    };
+    expect(render(discount)).toContain('id="custom-discounts-1-name"');
   });
 });

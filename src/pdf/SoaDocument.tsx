@@ -2,7 +2,7 @@ import { Document, Page, Text, View } from '@react-pdf/renderer';
 import { styles, palette } from './styles';
 import { SettlementSection, NetBalancesSection } from './SettlementSection';
 import { TransactionTable } from './TransactionTable';
-import { computeColumnWidths } from './layout';
+import { breakdownPage, computeColumnWidths, fitMonoFontSize } from './layout';
 import {
   getFinalSettlement,
   getGrandTotal,
@@ -30,13 +30,6 @@ export type SoaProps = {
   /** The session's name; null when it has none. */
   name: string | null;
 };
-
-const A4_WIDTH = 595.28;
-const A4_HEIGHT = 841.89;
-const H_MARGIN = 80;
-
-/** Wide member lists get a landscape breakdown page rather than unreadable columns. */
-const needsLandscape = (memberCount: number) => memberCount > 5;
 
 function DocHeader({
   name,
@@ -79,7 +72,7 @@ function DocHeader({
   );
 }
 
-function OwedMatrixSection({
+export function OwedMatrixSection({
   matrix,
   members,
   usableWidth,
@@ -110,6 +103,7 @@ function OwedMatrixSection({
           <Text style={[styles.cell, { width: payorWidth, fontWeight: 700 }]}>{payor}</Text>
           {members.map((member) => {
             const amount = member === payor ? -1 : (matrix[payor]?.[member] ?? 0);
+            const text = amount < 0 ? '—' : formatAmount(amount);
             return (
               <Text
                 key={member}
@@ -117,9 +111,12 @@ function OwedMatrixSection({
                   styles.cellNum,
                   { width: memberWidth },
                   amount > EPSILON ? styles.owes : styles.muted,
+                  // Shrinks only an amount that would run into the next column, as the breakdown
+                  // tables do (BR-CA35). 7.5 is `cellNum`'s size.
+                  { fontSize: fitMonoFontSize(text, memberWidth, 7.5) },
                 ]}
               >
-                {amount < 0 ? '—' : formatAmount(amount)}
+                {text}
               </Text>
             );
           })}
@@ -155,8 +152,8 @@ export function SoaDocument({ members, records, name }: SoaProps) {
   // with nothing the font can draw reads as unnamed in both.
   const printable = printableSessionName(name);
 
-  const landscape = needsLandscape(sortedMembers.length);
-  const breakdownWidth = (landscape ? A4_HEIGHT : A4_WIDTH) - H_MARGIN;
+  const page = breakdownPage(sortedMembers.length);
+  const breakdownWidth = page.usableWidth;
   const columns = computeColumnWidths(sortedMembers.length, breakdownWidth);
 
   return (
@@ -181,7 +178,7 @@ export function SoaDocument({ members, records, name }: SoaProps) {
         <Footer />
       </Page>
 
-      <Page size="A4" orientation={landscape ? 'landscape' : 'portrait'} style={styles.page}>
+      <Page size={page.size} orientation={page.orientation} style={styles.page}>
         <Text style={[styles.wordmark, { fontSize: 13, marginBottom: 14 }]}>
           Transaction Breakdown
         </Text>

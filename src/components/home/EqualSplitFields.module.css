@@ -22,6 +22,28 @@
   padding-top: 5px;
 }
 
+/* The hint's action, inside the sentence like a link. The selector outranks Button's .btn, .sm
+   and .ghost (0,1,0), which would pad it, keep it on one line and give it a border. */
+.hint > .hintLink {
+  display: inline;
+  padding: 0;
+  border: 0;
+  font-size: inherit;
+  line-height: inherit;
+  white-space: normal;
+  text-align: left;
+}
+
+/* Its own line on phones, so it's a 44px tap target without stretching the sentence's line. */
+@media (max-width: 640px) {
+  .hint > .hintLink {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    min-height: 44px;
+  }
+}
+
 .share {
   font-size: 11px;
   color: var(--text3);
