@@ -1,5 +1,5 @@
 import { getItemShares, getItemTotal, purgeMemberFromItem } from './calculations.js';
-import { compareNames } from './format.js';
+import { compareNames, pluralize } from './format.js';
 import type { ItemRef } from './includeMember.js';
 import { allocateProportionally, parsePositiveAmount, roundMoney, sumMoney } from './money.js';
 import type {
@@ -23,6 +23,17 @@ export type StagedItem = {
    * multiple: the contributions above 0, rounded, in member order (BR-5).
    */
   payors: PayorContribution[];
+};
+
+/** What a guide scene loads into Purchase Details as the card mounts (tab-guides, scenes B1). */
+export type PurchaseFormSeed = {
+  /** Date, Paid By and the item, loaded exactly as Edit loads a staged item (`fieldsFromStaged`). */
+  row: StagedItem;
+  /**
+   * Custom Amounts only: Total Amount as the scene typed it, apart from what is entered, so the
+   * footer reads "Entered ₱X of ₱Y" and Fill Remainder has a remainder to fill (scene X3).
+   */
+  totalAmount?: number;
 };
 
 /**
@@ -174,6 +185,17 @@ export function stagedNamesMember(staged: StagedItem[], member: string): boolean
 
 /** A saved item addressed as Breakdown addresses it, with its name as it was when Edit was pressed. */
 export type SavedItemRef = ItemRef & { name: string };
+
+/**
+ * The "Leave without saving?" message: the saved item being edited if there is one, otherwise
+ * the staged items. It's shared by the workspace's own prompt and the app's, which asks the same
+ * question before a tutorial replaces the screen.
+ */
+export function leaveMessage(savedEdit: SavedItemRef | null, stagedCount: number): string {
+  return savedEdit
+    ? `Your changes to ${savedEdit.name} aren't saved.`
+    : `You have ${pluralize(stagedCount, 'staged item')} that ${stagedCount === 1 ? "isn't" : "aren't"} saved.`;
+}
 
 /** The saved item a ref points at, with the record that holds it, or null once either has gone. */
 export function findSavedItem(
