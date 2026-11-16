@@ -7,6 +7,7 @@ import { SyncBanner } from './components/layout/SyncBanner';
 import { NewSessionDialog } from './components/sessions/NewSessionDialog';
 import type { SessionTabId } from './components/layout/SessionTabs';
 import { Button } from './components/shared/Button';
+import { ConfirmDialog } from './components/shared/ConfirmDialog';
 import { PlusIcon } from './components/shared/icons';
 import { useSessionsStore } from './context/SessionsStoreContext';
 import { HomePage } from './pages/HomePage';
@@ -16,6 +17,8 @@ import { CollectionPage } from './pages/CollectionPage';
 import { ProfileDialog } from './components/profile/ProfileDialog';
 import { OnboardingTour } from './components/onboarding/OnboardingTour';
 import { OnboardingDialog } from './components/onboarding/OnboardingDialog';
+import { TutorialsDialog, type Tutorial } from './components/onboarding/TutorialsDialog';
+import { PracticeExpenses } from './components/onboarding/guides/PracticeExpenses';
 import onboardingStyles from './components/onboarding/OnboardingDialog.module.css';
 import type { ScreenShape } from './components/onboarding/steps';
 import { useOnboarding } from './hooks/useOnboarding';
@@ -29,12 +32,19 @@ import styles from './App.module.css';
  * inner tabs. Collection can be landed on with one session open, which is
  * where finishing a session goes.
  */
-type Screen =
+type RealScreen =
   | { kind: 'home' }
   | { kind: 'collection'; openSessionId?: string; previewSettled?: boolean }
   | { kind: 'history' }
   | { kind: 'historyDetail'; sessionId: string }
   | { kind: 'session'; sessionId: string; tab: SessionTabId };
+
+/**
+ * A guide's practice screen, in place of the real one (BR-TG18). `back` is where it ends
+ * (BR-TG20); `via` is how it started, so focus can go back to "?" (AC-TG4.1).
+ */
+type Screen =
+  RealScreen | { kind: 'practice'; guide: 'expenses'; back: RealScreen; via: 'help' | 'menu' };
 
 /** The three screens that sit under a top-level tab and keep the tab bar. */
 const TOP_LEVEL = new Set<Screen['kind']>(['home', 'collection', 'history']);
@@ -46,6 +56,19 @@ export default function App() {
   const [naming, setNaming] = useState(false);
   /** Whether the profile name dialog is open. */
   const [profileOpen, setProfileOpen] = useState(false);
+  /** Whether the Tutorials dialog is open. */
+  const [tutorialsOpen, setTutorialsOpen] = useState(false);
+  /** Remounts the practice when a guide is started again from inside one (BR-TG26). */
+  const [guideKey, setGuideKey] = useState(0);
+  /** What there is to lose on the open session's Expenses tab, reported by the workspace; else null. */
+  const [unsavedNote, setUnsavedNote] = useState<string | null>(null);
+  /** A tutorial waiting on the "Leave without saving?" answer. */
+  const [pendingTutorial, setPendingTutorial] = useState<{
+    tutorial: Tutorial;
+    via: 'help' | 'menu';
+  } | null>(null);
+  /** Set when a guide that started from "?" ends, so focus goes back to it. */
+  const focusHelp = useRef(false);
   /**
    * The Paid By pick each session's Expenses tab last used, by session id (app-fixes item 3).
    * Held here so it outlives the workspace and Back to Home, and in memory only, so a reload
@@ -68,7 +91,9 @@ export default function App() {
   const [whatsNewPreview, setWhatsNewPreview] = useState(false);
   // A returning account sees it once, on whatever screen the app opens to. It
   // waits out the welcome and the tour, which a new account gets instead (BR-W5).
-  const whatsNewOpen = phase === 'off' && (whatsNewDue || whatsNewPreview);
+  // A guide is never interrupted (BR-TG10), so a due one opens once the guide has ended.
+  const whatsNewOpen =
+    phase === 'off' && screen.kind !== 'practice' && (whatsNewDue || whatsNewPreview);
   const closeWhatsNew = () => {
     if (whatsNewPreview) setWhatsNewPreview(false);
     else markWhatsNewSeen();
@@ -89,10 +114,10 @@ export default function App() {
   const [tourCleanup, setTourCleanup] = useState<string | null>(null);
 
   /**
-   * Dev-only: a tour started from the Preview Tour button rather than from the
-   * account flag. It skips the offer, and its ending is not written back to
-   * the account, so an already-onboarded developer can rerun it freely. The
-   * key remounts the tour, which otherwise keeps its step from the last run.
+   * A tour started from the Preview Tour button (dev only) or from Tutorials → App overview,
+   * rather than from the account flag. It skips the offer, and its ending is not written back
+   * to the account, so an already-onboarded user can rerun it freely. The key remounts the
+   * tour, which otherwise keeps its step from the last run.
    */
   const previewing = useRef(false);
   const [tourKey, setTourKey] = useState(0);
@@ -149,6 +174,49 @@ export default function App() {
     },
     [markSeen],
   );
+
+  /**
+   * Starts a tutorial from "?" or from the Tutorials dialog. Unsaved work on the Expenses tab
+   * asks first, as leaving the tab does (BR-TG6, AC-TG5.5).
+   */
+  const startTutorial = (tutorial: Tutorial, via: 'help' | 'menu') => {
+    if (screen.kind === 'session' && unsavedNote !== null) setPendingTutorial({ tutorial, via });
+    else launch(tutorial, via);
+  };
+
+  const launch = (tutorial: Tutorial, via: 'help' | 'menu') => {
+    // A tutorial chosen during the first-run tour ends it as Skip does (BR-TG27).
+    if (phase === 'running') endTour(false);
+    if (tutorial === 'overview') {
+      previewTour();
+      return;
+    }
+    window.scrollTo(0, 0);
+    setGuideKey((k) => k + 1);
+    // Restarting during a guide keeps the first origin (BR-TG26).
+    setScreen((s) =>
+      s.kind === 'practice' ? { ...s } : { kind: 'practice', guide: 'expenses', back: s, via },
+    );
+  };
+
+  /** Skip, Escape, Done and End practice return to the origin; Back to Home goes Home (BR-TG20, BR-TG21). */
+  const endGuide = (to: 'origin' | 'home') => {
+    if (screen.kind !== 'practice') return;
+    const { back, via } = screen;
+    // The origin's session may have been deleted on another device meanwhile (BR-TG20).
+    const gone = back.kind === 'session' && !sessions.some((s) => s.id === back.sessionId);
+    window.scrollTo(0, 0);
+    setScreen(to === 'home' || gone ? { kind: 'home' } : back);
+    focusHelp.current = to === 'origin' && !gone && via === 'help';
+  };
+
+  // After returning through "?", focus goes back to it (AC-TG4.1). The workspace has
+  // committed by the time this runs, since a child's DOM is in place before its parent's effects.
+  useEffect(() => {
+    if (!focusHelp.current || screen.kind !== 'session') return;
+    focusHelp.current = false;
+    document.getElementById('workspace-help')?.focus();
+  }, [screen]);
 
   // Keep the tour's session if they actually put something in it — silently
   // deleting what someone typed is worse than leaving a session behind. Run as
@@ -231,7 +299,12 @@ export default function App() {
   // Collection, from "Try again" after a failed payment, keeps the page up, so
   // its open cards and the amount typed into a refused form survive and can be
   // saved again once the server's copy shows the payment wasn't recorded.
-  if (sync.status === 'loading' && !(hasLoaded && screen.kind === 'collection')) {
+  // The practice stays up for the same reason: a reload of the real store behind it mustn't
+  // replace the guide with a spinner.
+  if (
+    sync.status === 'loading' &&
+    !(hasLoaded && (screen.kind === 'collection' || screen.kind === 'practice'))
+  ) {
     return (
       <PageShell header={<Header />}>
         <div className={styles.loading} role="status">
@@ -243,13 +316,23 @@ export default function App() {
   }
 
   // The tour only needs the shape of the screen, not which session is open.
+  // The tour never runs during a guide, because starting one ends it first.
+  const shown = screen.kind === 'practice' ? screen.back : screen;
   const tourScreen: ScreenShape =
-    screen.kind === 'session'
-      ? { kind: 'session', tab: screen.tab }
-      : { kind: screen.kind === 'historyDetail' ? 'history' : screen.kind };
+    shown.kind === 'session'
+      ? { kind: 'session', tab: shown.tab }
+      : { kind: shown.kind === 'historyDetail' ? 'history' : shown.kind };
 
   return (
-    <PageShell header={<Header onOpenProfile={() => setProfileOpen(true)} />} nav={nav}>
+    <PageShell
+      header={
+        <Header
+          onOpenProfile={() => setProfileOpen(true)}
+          onOpenTutorials={() => setTutorialsOpen(true)}
+        />
+      }
+      nav={nav}
+    >
       <OnboardingDialog
         open={phase === 'intro'}
         title="Welcome to Hati!"
@@ -329,10 +412,38 @@ export default function App() {
         />
       )}
       {profileOpen && <ProfileDialog onClose={() => setProfileOpen(false)} />}
-      <SyncBanner
-        sticky={screen.kind === 'collection'}
-        showProfileError={screen.kind === 'collection'}
+      {tutorialsOpen && (
+        <TutorialsDialog
+          onChoose={(tutorial) => {
+            setTutorialsOpen(false);
+            startTutorial(tutorial, 'menu');
+          }}
+          onClose={() => setTutorialsOpen(false)}
+        />
+      )}
+      <ConfirmDialog
+        open={pendingTutorial !== null}
+        title="Leave without saving?"
+        message={unsavedNote ?? ''}
+        confirmLabel="Discard and leave"
+        cancelLabel="Stay"
+        destructive
+        onCancel={() => setPendingTutorial(null)}
+        onConfirm={() => {
+          // Launching replaces the workspace, which drops the staged items or ends the
+          // saved-item edit with the saved item unchanged, as leaving does today.
+          const pending = pendingTutorial;
+          setPendingTutorial(null);
+          if (pending) launch(pending.tutorial, pending.via);
+        }}
       />
+      {/* Failures stay in the store, so they show as soon as the guide ends (BR-TG25). */}
+      {screen.kind !== 'practice' && (
+        <SyncBanner
+          sticky={screen.kind === 'collection'}
+          showProfileError={screen.kind === 'collection'}
+        />
+      )}
       {screen.kind === 'home' && (
         <HomePage
           onOpenSession={openFromHome}
@@ -351,7 +462,7 @@ export default function App() {
           key={screen.openSessionId ?? ''}
           openSessionId={screen.openSessionId}
           // Never over the tour, What's new or another dialog (BR-W10, E-S11).
-          canAsk={phase === 'off' && !whatsNewOpen && !profileOpen && !naming}
+          canAsk={phase === 'off' && !whatsNewOpen && !profileOpen && !tutorialsOpen && !naming}
           previewSettled={screen.previewSettled}
         />
       )}
@@ -383,8 +494,11 @@ export default function App() {
             window.scrollTo(0, 0);
             setScreen({ kind: 'collection', openSessionId: screen.sessionId });
           }}
+          onHelp={phase === 'running' ? undefined : () => startTutorial('expenses', 'help')}
+          onUnsavedChange={setUnsavedNote}
         />
       )}
+      {screen.kind === 'practice' && <PracticeExpenses key={guideKey} onEnd={endGuide} />}
     </PageShell>
   );
 }

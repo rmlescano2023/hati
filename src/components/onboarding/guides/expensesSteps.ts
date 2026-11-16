@@ -17,15 +17,13 @@ export const EXPENSES_STEPS: GuideStep<ExpensesSceneId>[] = [
   {
     target: 'purchase-date',
     title: 'When was it?',
-    content:
-      'Pick the day of the purchase. It starts on today.',
+    content: 'Pick the day of the purchase. It starts on today.',
     place: 'X1',
   },
   {
     target: 'paid-by',
     title: 'Who paid?',
-    content:
-      'Choose who paid at the counter. Here, Ana paid.',
+    content: 'Choose who paid at the counter. Here, Ana paid.',
     place: 'X1',
   },
   {
@@ -38,8 +36,7 @@ export const EXPENSES_STEPS: GuideStep<ExpensesSceneId>[] = [
   {
     target: 'item-name',
     title: 'What was bought?',
-    content:
-      "Give it a name you'll recognise later, and type the total price.",
+    content: "Give it a name you'll recognise later, and type the total price.",
     place: 'X2',
   },
   {
@@ -66,8 +63,7 @@ export const EXPENSES_STEPS: GuideStep<ExpensesSceneId>[] = [
   {
     target: 'who-in-item',
     title: "Who's at the table?",
-    content:
-      'Tick everyone in this item. Each person gets their own box below.',
+    content: 'Tick everyone in this item. Each person gets their own box below.',
     place: 'X3',
   },
   {

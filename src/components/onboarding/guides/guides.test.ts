@@ -165,7 +165,9 @@ describe('each scene shows its targets (AC-TG2.2, BR-TG14)', () => {
 
   it('shows the two payors in X2', () => {
     const markup = html('X2');
-    expect(markup).toMatch(/id="contrib-Ana"[^>]*value="700.00"|value="700.00"[^>]*id="contrib-Ana"/);
+    expect(markup).toMatch(
+      /id="contrib-Ana"[^>]*value="700.00"|value="700.00"[^>]*id="contrib-Ana"/,
+    );
   });
 
   it('shows the staged count in X4', () => {
