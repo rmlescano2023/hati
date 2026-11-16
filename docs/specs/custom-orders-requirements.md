@@ -359,6 +359,7 @@ nobody's real balances move.
 - **BR-CO25** Edit always asks first. The prompt:
   - **Title:** "Edit <item name>?"
   - **Message:** "It opens on the Expenses tab with its date and Paid By. Breakdown keeps it as it is until you press Save Edits."
+    - *Amended by [`bill-ux-polish-2.md`](bill-ux-polish-2.md), item 6:* the message ends with "Cancel brings you back to Breakdown." The same goes for the message AC-CO7.1 quotes.
   - **Buttons:** "Edit item" (the main action, not styled as destructive) and "Cancel". Escape and tapping outside are Cancel.
   - A long item name wraps in the title.
 - **BR-CO26** Unsaved work on Expenses blocks the edit. If the Expenses tab holds staged items or any typed field when Edit is pressed, the prompt says "Finish on Expenses first" / "The Expenses tab has unsaved work. Save it to Breakdown or clear it, then edit this item." with one "OK" button, and nothing else happens. Today this can't arise, because leaving Expenses already discards it (section 0, item 15), but the rule holds if that ever changes.

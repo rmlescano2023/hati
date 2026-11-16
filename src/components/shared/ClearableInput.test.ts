@@ -90,6 +90,7 @@ const handlers = {
   removeBillRow: () => {},
   toggleRowEveryone: () => {},
   toggleRowMember: () => {},
+  switchForDiscount: () => {},
 };
 const derived = {
   picked: [],
