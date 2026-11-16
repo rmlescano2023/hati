@@ -47,6 +47,13 @@ export function EqualSplitFields({
             onToggle={onToggleOwner}
           />
         )}
+        {/* Equal Split can't take a discount off one person; Custom Amounts can, with a
+            shared order for everyone and a discount for that person. */}
+        {members.length > 0 && selectedCount > 0 && (
+          <p className={styles.hint}>
+            Need a discount for one person? Switch to Custom Amounts and add a shared order.
+          </p>
+        )}
       </div>
     </div>
   );
