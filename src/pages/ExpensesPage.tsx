@@ -1,7 +1,12 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { MemberList } from '../components/home/MemberList';
 import { PurchaseItemCard } from '../components/home/PurchaseItemCard';
-import type { SavedItemRef, StagedItem } from '../lib/staging';
+import {
+  NO_PAID_BY_PICK,
+  type PaidByMemory,
+  type SavedItemRef,
+  type StagedItem,
+} from '../lib/staging';
 
 // Dev-only: `import.meta.env.DEV` is statically false in a production build, so
 // this branch and everything it pulls in are dropped at build time.
@@ -16,6 +21,8 @@ type Props = {
   savedEdit: SavedItemRef | null;
   /** Ends that edit and returns to Breakdown; `removed` when the item had gone. */
   onSavedEditEnd: (removed: boolean) => void;
+  /** This session's remembered Paid By pick (app-fixes item 3). */
+  paidBy: PaidByMemory;
 };
 
 /**
@@ -28,7 +35,7 @@ function warnAboutStaged(event: BeforeUnloadEvent) {
   event.returnValue = '';
 }
 
-export function ExpensesPage({ onStagedCountChange, savedEdit, onSavedEditEnd }: Props) {
+export function ExpensesPage({ onStagedCountChange, savedEdit, onSavedEditEnd, paidBy }: Props) {
   // Held here rather than in the card so Group Members can see what is staged.
   // Unmounting this page still drops it, which is what leaving the tab means.
   const [staged, setStaged] = useState<StagedItem[]>([]);
@@ -66,6 +73,7 @@ export function ExpensesPage({ onStagedCountChange, savedEdit, onSavedEditEnd }:
         savedEdit={savedEdit}
         onClearAll={() => {
           setStaged([]);
+          paidBy.write(NO_PAID_BY_PICK);
           setFormKey((k) => k + 1);
         }}
       />
@@ -75,6 +83,7 @@ export function ExpensesPage({ onStagedCountChange, savedEdit, onSavedEditEnd }:
         setStaged={setStaged}
         savedEdit={savedEdit}
         onSavedEditEnd={onSavedEditEnd}
+        paidBy={paidBy}
       />
     </>
   );

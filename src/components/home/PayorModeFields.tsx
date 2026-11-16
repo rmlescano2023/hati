@@ -1,6 +1,7 @@
 import { ClearableInput } from '../shared/ClearableInput';
 import { ModeToggle } from '../shared/ModeToggle';
 import { formatMoney } from '../../lib/format';
+import { clipMoneyInput } from '../../lib/money';
 import type { PayorMode } from '../../types';
 import styles from './PayorModeFields.module.css';
 
@@ -77,7 +78,7 @@ export function PayorModeFields({
                   step="0.01"
                   placeholder="0.00"
                   value={contributions[m] ?? ''}
-                  onChange={(e) => onContributionChange(m, e.target.value)}
+                  onChange={(e) => onContributionChange(m, clipMoneyInput(e.target.value))}
                 />
               </div>
             ))}
