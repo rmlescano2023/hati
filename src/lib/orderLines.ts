@@ -420,6 +420,15 @@ function floorHintFor(shares: Record<string, number>): string | null {
     : `${below}'s share would be ${formatSignedMoney(shares[below])}. Lower the discount or add ${below}'s order.`;
 }
 
+/**
+ * What the Total Amount box shows: Entered while it follows (bill-ux-polish item 1),
+ * empty when Entered is ₱0.00 or less, and otherwise what was typed.
+ */
+export function shownTotalAmount(typed: string, follows: boolean, entered: number): string {
+  if (!follows) return typed;
+  return entered > 0 ? entered.toFixed(2) : '';
+}
+
 export function readBillDraft(picked: string[], lines: LinesDraft, bill: BillDraft): BillDraftView {
   const receipt = billFromDraft(picked, lines, bill);
   const own = linesTotal(picked, lines);

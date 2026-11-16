@@ -274,6 +274,7 @@ balances move.
   - Save Edits is enabled under exactly the same checks.
 - **BR-CA29 Sections.** "+ Add shared order", "+ Add discount" and "+ Add charge" show when at least one member is picked. A section ("Shared orders", "Discounts", "Charges") shows only while it has at least one row. Every row has a ×; a section can have no rows, unlike a member's own lines (BR-CO5).
 - **BR-CA30 The footer.** When the item has at least one priced discount or charge, the footer shows, one per line, "Subtotal ₱X", "Discounts −₱Y" (only when there is a priced discount), "Charges ₱Z" (only when there is a priced charge), then "Entered ₱N" with the usual red "of ₱T". Otherwise it shows "Entered ₱N" alone, as today. *Reasoning:* receipts print these figures in this order, so the user can check each against the paper.
+  - *Amended by [`bill-ux-polish.md`](bill-ux-polish.md), item 2:* while the floor hint (BR-CA6) shows, the "Entered ₱N" figure and any "of ₱T" are muted (`--text3`) instead of their usual or red colour. The wording doesn't change.
 - **BR-CA31 Share figures.** While the item has at least one shared order, discount or charge row, each member block shows the member's final share (BR-CA16) beside their name: "—" when they have no priced order, no shared order and no discount; a negative share in the warning colour.
 
 ### Switching mode
@@ -300,12 +301,14 @@ balances move.
   - Columns of members not on a row are empty, never "—".
   - The group's Total row adds up item rows only, unchanged.
   - **PDF:** the same rows and labels. A discount part prints in full with a leading minus inside the narrowest member column the PDF uses (34pt), never clipped and never running into the next column. An item row is never left at the foot of a page without its first sub-row (BR-CO15).
+  - *Amended by [`bill-ux-polish.md`](bill-ux-polish.md), item 4:* on the PDF only, sub-rows print in `palette.text2` instead of `palette.text3`, still indented and smaller. Item-row and Total-row amounts, Item Total included, shrink to fit their column the way sub-row amounts do, and keep 7.5pt wherever they already fit. Breakdown and History on screen are unchanged.
 - **BR-CA36 Staged pills**, for an item with a receipt, one pill per row in the BR-CA34 order:
   - own order: unchanged, "Ana · Sisig ₱280.00" or "Fay: ₱400.50"
   - shared order: "Gyoza (shared) ₱290.00 · Ana, Ben", or "Shared order ₱290.00 · Ana, Ben"
   - discount: "PWD −₱300.00 · Cy", or "Discount −₱300.00 · Cy"
   - charge: "Service charge ₱245.55 · split 6 ways", or "Charge ₱245.55 · split 6 ways"; with one member in the item, "· Ana" instead of "split 1 way"
   - The staged price is the item's total (BR-CA18).
+  - *Amended by [`bill-ux-polish.md`](bill-ux-polish.md), item 3:* a shared order or discount whose members are everyone in the item ends "· all N" instead of the names when N is 4 or more: "Group platter (shared) ₱1,700.00 · all 17". With 2 or 3 people it keeps the names. Charges are unchanged.
 - **BR-CA37 Negative amounts** read "−₱300.00" on screen (minus, then the peso sign), not "₱-300.00", which is what `formatMoney` prints for a negative today. The PDF spells the currency as it does today and prints a leading minus.
 
 ### Editing
@@ -315,6 +318,7 @@ balances move.
   - each member's own orders, names and prices, in stored order; a member with none gets one empty line
   - each shared order, discount and charge with its name and amount; a shared order's or discount's picker has "Everyone" ticked when its members are every member in the item, and the members ticked otherwise
   - Total Amount: the item's total
+    - *Amended by [`bill-ux-polish.md`](bill-ux-polish.md), item 1:* after the load, Total Amount follows Entered as rows change, until the user types in the box or clears it with ↺. From then on it behaves as BR-CA19 says. While it follows, Fill Remainder is disabled, because the remainder is ₱0.00.
   - Save Edits with nothing changed writes nothing (BR-CO32). Stamping the loaded fields must give back the same stored item.
   - An item with own orders only loads exactly as in PR #137.
 - **BR-CA39 Closed sessions** are read-only, as today; their receipts show in History and the PDF.

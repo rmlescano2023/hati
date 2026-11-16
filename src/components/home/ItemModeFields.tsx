@@ -25,6 +25,12 @@ export type ItemDraft = {
   lines: LinesDraft;
   /** Custom Amounts: the receipt's shared orders, discounts and charges. */
   bill: BillDraft;
+  /**
+   * Custom Amounts: true from the moment Edit loads an item until the Total Amount box is
+   * typed in (or cleared with its ↺). While true the box shows Entered, so editing a row never
+   * shows a mismatch the user didn't make.
+   */
+  totalFollows: boolean;
 };
 
 export type ItemDraftHandlers = {

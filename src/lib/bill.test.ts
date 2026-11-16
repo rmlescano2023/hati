@@ -314,34 +314,34 @@ describe('receiptRowLabel and receiptPillText (B-10)', () => {
     })![i];
 
   it('writes the pill of an own order as PR #137 did', () => {
-    expect(receiptPillText(rowOf(exampleB(), 0))).toBe('Ana · Sisig ₱280.00');
+    expect(receiptPillText(rowOf(exampleB(), 0), 6)).toBe('Ana · Sisig ₱280.00');
     const fay = {
       ...exampleB(),
       bill: [{ kind: 'order', member: 'Fay', name: '', amount: 400.5 }] as BillLine[],
     };
-    expect(receiptPillText(rowOf(fay, 0))).toBe('Fay: ₱400.50');
+    expect(receiptPillText(rowOf(fay, 0), 1)).toBe('Fay: ₱400.50');
   });
 
   it('writes a shared order, named and unnamed', () => {
     const a = exampleA();
-    expect(receiptPillText(rowOf(a, 2))).toBe('Gyoza (shared) ₱290.00 · Ana, Ben');
+    expect(receiptPillText(rowOf(a, 2), 2)).toBe('Gyoza (shared) ₱290.00 · Ana, Ben');
     const row = unnamedRow(a, 2);
-    expect(receiptPillText(row)).toBe('Shared order ₱290.00 · Ana, Ben');
+    expect(receiptPillText(row, 2)).toBe('Shared order ₱290.00 · Ana, Ben');
     expect(receiptRowLabel(row)).toEqual({ text: 'Shared order', fallback: true });
     expect(receiptRowLabel(rowOf(a, 2))).toEqual({ text: 'Gyoza (shared)', fallback: false });
   });
 
   it('writes a discount, named and unnamed, with a minus sign', () => {
-    expect(receiptPillText(rowOf(exampleB(), 8))).toBe('PWD −₱300.00 · Cy');
+    expect(receiptPillText(rowOf(exampleB(), 8), 6)).toBe('PWD −₱300.00 · Cy');
     const row = unnamedRow(exampleB(), 8);
-    expect(receiptPillText(row)).toBe('Discount −₱300.00 · Cy');
+    expect(receiptPillText(row, 6)).toBe('Discount −₱300.00 · Cy');
     expect(receiptRowLabel(row).fallback).toBe(true);
   });
 
   it('writes a charge, named and unnamed', () => {
-    expect(receiptPillText(rowOf(exampleB(), 9))).toBe('Service charge ₱245.55 · split 6 ways');
+    expect(receiptPillText(rowOf(exampleB(), 9), 6)).toBe('Service charge ₱245.55 · split 6 ways');
     const row = unnamedRow(exampleB(), 9);
-    expect(receiptPillText(row)).toBe('Charge ₱245.55 · split 6 ways');
+    expect(receiptPillText(row, 6)).toBe('Charge ₱245.55 · split 6 ways');
     expect(receiptRowLabel(row)).toEqual({ text: 'Charge', fallback: true });
   });
 
@@ -353,11 +353,64 @@ describe('receiptRowLabel and receiptPillText (B-10)', () => {
       amounts: { Ana: 112 },
       bill: [{ kind: 'order', member: 'Ana', name: 'Soup', amount: 100 }, charge(12, 'VAT')],
     };
-    expect(receiptPillText(rowOf(item, 1))).toBe('VAT ₱12.00 · Ana');
+    expect(receiptPillText(rowOf(item, 1), 1)).toBe('VAT ₱12.00 · Ana');
   });
 
   it('flags an unnamed own order as the fallback', () => {
     const row = { kind: 'order' as const, name: '', amount: 5, parts: new Map([['Ana', 5]]) };
     expect(receiptRowLabel(row)).toEqual({ text: 'No name', fallback: true });
+  });
+
+  describe('"all N" for everyone in the item (bill-ux-polish item 3)', () => {
+    /** An item of `n` members at ₱100.00 each, plus the given shared, discount and charge lines. */
+    const itemOf = (n: number, extra: BillLine[]): CustomAmountItem => {
+      const names = Array.from({ length: n }, (_, i) => `P${String(i + 1).padStart(2, '0')}`);
+      const bill: BillLine[] = [
+        ...names.map((member): BillLine => ({ kind: 'order', member, name: '', amount: 100 })),
+        ...extra,
+      ];
+      return {
+        id: 'x',
+        mode: 'custom',
+        name: 'x',
+        amounts: billAmounts(bill, names),
+        bill,
+      };
+    };
+    const names = (n: number, from = 1) =>
+      Array.from({ length: n }, (_, i) => `P${String(i + from).padStart(2, '0')}`);
+
+    it('says "all 17" for a shared order over 17 people, named and unnamed', () => {
+      const item = itemOf(17, [shared(names(17), 1700, 'Group platter')]);
+      expect(receiptPillText(rowOf(item, 17), 17)).toBe(
+        'Group platter (shared) ₱1,700.00 · all 17',
+      );
+      const bill = billOf(item).map((l, i) => (i === 17 ? { ...l, name: '' } : l));
+      const unnamed = receiptRows({ ...item, bill })![17];
+      expect(receiptPillText(unnamed, 17)).toBe('Shared order ₱1,700.00 · all 17');
+    });
+
+    it('says "all 4" for a discount over four people', () => {
+      const item = itemOf(4, [
+        shared(names(4), 400, 'Platter'),
+        { kind: 'discount', members: names(4), name: 'Promo', amount: 400 },
+      ]);
+      expect(receiptPillText(rowOf(item, 5), 4)).toBe('Promo −₱400.00 · all 4');
+    });
+
+    it('keeps the names for three people, even when it is everyone', () => {
+      const item = itemOf(3, [shared(names(3), 90, 'Nachos')]);
+      expect(receiptPillText(rowOf(item, 3), 3)).toBe('Nachos (shared) ₱90.00 · P01, P02, P03');
+    });
+
+    it('keeps the names for three of four people', () => {
+      const item = itemOf(4, [shared(names(3), 300, 'Nachos')]);
+      expect(receiptPillText(rowOf(item, 4), 4)).toBe('Nachos (shared) ₱300.00 · P01, P02, P03');
+    });
+
+    it('still says "split 17 ways" for a charge over 17 people', () => {
+      const item = itemOf(17, [charge(170, 'VAT')]);
+      expect(receiptPillText(rowOf(item, 17), 17)).toBe('VAT ₱170.00 · split 17 ways');
+    });
   });
 });
