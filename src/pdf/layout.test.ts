@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fitMonoFontSize } from './layout';
+import { breakdownPage, computeColumnWidths, fitMonoFontSize } from './layout';
 
 describe('fitMonoFontSize (L-1)', () => {
   // The narrowest member column is 34pt, which leaves a 28pt text box after the cell's padding.
@@ -45,5 +45,42 @@ describe('fitMonoFontSize at 7.5pt, for item and Total rows (L-2)', () => {
 
   it('shrinks a seven-digit grand total in the 58pt Price column to 7.2pt', () => {
     expect(fitMonoFontSize('1,234,567.89', 58, 7.5)).toBe(7.2);
+  });
+});
+
+describe('breakdownPage (L-3)', () => {
+  it('is portrait A4 up to 5 members', () => {
+    for (const n of [0, 5]) {
+      const page = breakdownPage(n);
+      expect(page.size).toBe('A4');
+      expect(page.orientation).toBe('portrait');
+      expect(page.usableWidth).toBeCloseTo(515.28, 2);
+    }
+  });
+
+  it('is landscape A4 from 6 to 16 members', () => {
+    for (const n of [6, 16]) {
+      const page = breakdownPage(n);
+      expect(page.size).toBe('A4');
+      expect(page.orientation).toBe('landscape');
+      expect(page.usableWidth).toBeCloseTo(761.89, 2);
+    }
+  });
+
+  it('is landscape A3 from 17 members', () => {
+    for (const n of [17, 30]) {
+      const page = breakdownPage(n);
+      expect(page.size).toBe('A3');
+      expect(page.orientation).toBe('landscape');
+      expect(page.usableWidth).toBeCloseTo(1110.55, 2);
+    }
+  });
+
+  it('gives amounts their full size back at 17 members', () => {
+    const w = computeColumnWidths(17, breakdownPage(17).usableWidth).member;
+    expect(w).toBeCloseTo(54.27, 2);
+    expect(fitMonoFontSize('5,145.26', w, 7.5)).toBe(7.5);
+    expect(fitMonoFontSize('12,345.67', w, 7.5)).toBe(7.5);
+    expect(fitMonoFontSize('−1,234.56', w, 7)).toBe(7);
   });
 });

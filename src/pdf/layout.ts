@@ -37,3 +37,30 @@ export function computeColumnWidths(memberCount: number, usableWidth: number): C
 
   return { item, price, member };
 }
+
+/** Paper sizes in points, as react-pdf has them: [short side, long side]. */
+const A4 = [595.28, 841.89] as const;
+const A3 = [841.89, 1190.55] as const;
+/** `styles.page` pads 40pt on the left and the right. */
+const H_MARGIN = 80;
+
+export type BreakdownPage = {
+  size: 'A4' | 'A3';
+  orientation: 'portrait' | 'landscape';
+  /** What the tables can use: the page's width less its padding. */
+  usableWidth: number;
+};
+
+/**
+ * The breakdown page's paper: portrait A4 up to 5 members, landscape A4 up to 16, and landscape
+ * A3 from 17 (bill-ux-polish-2 item 4), so wide member lists get readable columns.
+ */
+export function breakdownPage(memberCount: number): BreakdownPage {
+  if (memberCount <= 5) {
+    return { size: 'A4', orientation: 'portrait', usableWidth: A4[0] - H_MARGIN };
+  }
+  if (memberCount <= 16) {
+    return { size: 'A4', orientation: 'landscape', usableWidth: A4[1] - H_MARGIN };
+  }
+  return { size: 'A3', orientation: 'landscape', usableWidth: A3[1] - H_MARGIN };
+}

@@ -1,3 +1,4 @@
+import { Button } from '../shared/Button';
 import { OwnerGrid } from '../shared/OwnerGrid';
 import { formatMoney } from '../../lib/format';
 import { splitEvenly } from '../../lib/money';
@@ -12,6 +13,11 @@ type Props = {
   onToggleAll: () => void;
   onToggleOwner: (member: string) => void;
   selectedCount: number;
+  /**
+   * Switches the item to Custom Amounts with its price as a shared order and an empty discount
+   * (bill-ux-polish-2 item 5).
+   */
+  onSwitchForDiscount: () => void;
 };
 
 export function EqualSplitFields({
@@ -22,6 +28,7 @@ export function EqualSplitFields({
   onToggleAll,
   onToggleOwner,
   selectedCount,
+  onSwitchForDiscount,
 }: Props) {
   const parsed = Number.parseFloat(price);
   const perHead =
@@ -48,10 +55,19 @@ export function EqualSplitFields({
           />
         )}
         {/* Equal Split can't take a discount off one person; Custom Amounts can, with a
-            shared order for everyone and a discount for that person. */}
+            shared order for everyone and a discount for that person. Tapping it does that switch
+            for the user (bill-ux-polish-2 item 5). */}
         {members.length > 0 && selectedCount > 0 && (
           <p className={styles.hint}>
-            Need a discount for one person? Switch to Custom Amounts and add a shared order.
+            Need a discount for one person?{' '}
+            <Button
+              variant="ghost"
+              size="sm"
+              className={`link-action ${styles.hintLink}`}
+              onClick={onSwitchForDiscount}
+            >
+              Switch to Custom Amounts and add a shared order.
+            </Button>
           </p>
         )}
       </div>

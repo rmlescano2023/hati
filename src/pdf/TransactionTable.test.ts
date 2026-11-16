@@ -1,8 +1,7 @@
-import { isValidElement, type ReactElement, type ReactNode } from 'react';
-import { Text } from '@react-pdf/renderer';
 import { describe, expect, it } from 'vitest';
 import { TransactionTable } from './TransactionTable';
 import { computeColumnWidths } from './layout';
+import { includes, monoCells, textCells, type Cell } from './pdfTree.testutil';
 import { palette, styles } from './styles';
 import { billAmounts } from '../lib/bill';
 import { getItemShares, getItemTotal } from '../lib/calculations';
@@ -55,47 +54,6 @@ function groupOf(members: string[]): BreakdownGroup {
   };
 }
 
-/* ------------------------------- the walker ------------------------------ */
-
-type StyleValue = Record<string, unknown> | StyleValue[] | null | undefined | false;
-
-const flatten = (style: StyleValue): Record<string, unknown> =>
-  Array.isArray(style)
-    ? Object.assign({}, ...style.map(flatten))
-    : ((style || {}) as Record<string, unknown>);
-
-const includes = (style: StyleValue, wanted: object): boolean =>
-  Array.isArray(style) ? style.some((s) => includes(s, wanted)) : style === wanted;
-
-const textOf = (node: ReactNode): string =>
-  Array.isArray(node)
-    ? node.map(textOf).join('')
-    : typeof node === 'string' || typeof node === 'number'
-      ? String(node)
-      : '';
-
-type Cell = { text: string; style: Record<string, unknown>; raw: StyleValue };
-
-/** Every `Text` in the tree, with its text and its style flattened. */
-function textCells(node: ReactNode, out: Cell[] = []): Cell[] {
-  if (Array.isArray(node)) {
-    node.forEach((n) => textCells(n, out));
-  } else if (isValidElement(node)) {
-    const el = node as ReactElement<{ style?: StyleValue; children?: ReactNode }>;
-    if (el.type === Text) {
-      out.push({
-        text: textOf(el.props.children),
-        style: flatten(el.props.style),
-        raw: el.props.style,
-      });
-    } else {
-      textCells(el.props.children, out);
-    }
-  }
-  return out;
-}
-
-const monoCells = (cells: Cell[]) => cells.filter((c) => c.style.fontFamily === 'DM Mono');
 const kind = (cell: Cell, base: object) => includes(cell.raw, base);
 
 function cellsFor(memberCount: number, usable: number) {

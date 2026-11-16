@@ -255,6 +255,21 @@ export function addBillRow(bill: BillDraft, section: BillSection): BillDraft {
   return { ...bill, [section]: [...bill[section], split] };
 }
 
+/**
+ * What the Equal Split hint's switch starts the receipt with (bill-ux-polish-2 item 5): the price
+ * as one unnamed shared order on "Everyone", when there is a price, then one empty discount with
+ * nobody ticked (BR-CA22), ready for the person who gets it.
+ */
+export function billForOneDiscount(price: number): BillDraft {
+  const shared =
+    price > 0
+      ? setBillRow(addBillRow(EMPTY_BILL_DRAFT, 'shared'), 'shared', 0, {
+          amount: price.toFixed(2),
+        })
+      : EMPTY_BILL_DRAFT;
+  return addBillRow(shared, 'discounts');
+}
+
 /** Types into one row's name or amount. */
 export function setBillRow(
   bill: BillDraft,
