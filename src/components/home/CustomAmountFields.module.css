@@ -4,6 +4,14 @@
   gap: 14px;
 }
 
+/* Total Amount's row and, while the box follows Entered, the line that says so. The line sits
+   5px under the box, as a label sits above its box. */
+.totalGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
 .topRow {
   display: flex;
   align-items: flex-end;

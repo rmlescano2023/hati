@@ -280,6 +280,7 @@ balances move.
 ### Switching mode
 
 - **BR-CA32 Equal Split to Custom Amounts:** unchanged (BR-CO4). No shared, discount or charge rows are created.
+  - *Amended by [`bill-ux-polish-2.md`](bill-ux-polish-2.md), item 5:* the mode toggle is still as above. The Equal Split hint's button is a second way to switch: it keeps the name and who's in the item, turns a price above ₱0 into one unnamed shared order with "Everyone" ticked, and adds one empty discount with nobody ticked. Each member's own line stays empty, Total Amount stays empty, and focus goes to the discount's name box. With no price, only the empty discount is added.
 - **BR-CA33 Custom Amounts to Equal Split:** the picked members become the owners and the name stays, as today; Total Amount, every own line, shared order, discount and charge clear, with no confirmation. *Reasoning:* BR-CO4 and the flexible Paid By decision NQ1 both set "no confirmation" on a mode switch, and Equal Split has nowhere to keep a discount for one member. If the owner wants a warning, it should cover any Custom item with typed lines, not only these rows, so it's a change to BR-CO4 rather than part of this feature.
 
 ### Display
@@ -302,6 +303,7 @@ balances move.
   - The group's Total row adds up item rows only, unchanged.
   - **PDF:** the same rows and labels. A discount part prints in full with a leading minus inside the narrowest member column the PDF uses (34pt), never clipped and never running into the next column. An item row is never left at the foot of a page without its first sub-row (BR-CO15).
   - *Amended by [`bill-ux-polish.md`](bill-ux-polish.md), item 4:* on the PDF only, sub-rows print in `palette.text2` instead of `palette.text3`, still indented and smaller. Item-row and Total-row amounts, Item Total included, shrink to fit their column the way sub-row amounts do, and keep 7.5pt wherever they already fit. Breakdown and History on screen are unchanged.
+  - *Amended by [`bill-ux-polish-2.md`](bill-ux-polish-2.md), items 1 and 4:* the PDF's breakdown page is landscape A3 (1190.55 × 841.89pt) from 17 members, and stays portrait A4 up to 5 and landscape A4 from 6 to 16. The first page stays portrait A4. The table columns follow the paper, so at 17 members a member column is 54.27pt and amounts print at full size again. The 34pt minimum still applies from 28 members. The "Amounts Owed to Each Payor" matrix's amounts shrink to fit their column the same way.
 - **BR-CA36 Staged pills**, for an item with a receipt, one pill per row in the BR-CA34 order:
   - own order: unchanged, "Ana · Sisig ₱280.00" or "Fay: ₱400.50"
   - shared order: "Gyoza (shared) ₱290.00 · Ana, Ben", or "Shared order ₱290.00 · Ana, Ben"
@@ -319,6 +321,7 @@ balances move.
   - each shared order, discount and charge with its name and amount; a shared order's or discount's picker has "Everyone" ticked when its members are every member in the item, and the members ticked otherwise
   - Total Amount: the item's total
     - *Amended by [`bill-ux-polish.md`](bill-ux-polish.md), item 1:* after the load, Total Amount follows Entered as rows change, until the user types in the box or clears it with ↺. From then on it behaves as BR-CA19 says. While it follows, Fill Remainder is disabled, because the remainder is ₱0.00.
+    - *Amended by [`bill-ux-polish-2.md`](bill-ux-polish-2.md), item 2:* while it follows, a muted line under the box reads "Matches Entered. Type a total to use Fill Remainder." It's tied to the box with `aria-describedby`, and Fill Remainder's tooltip says the same. The line goes once the user types in the box or presses ↺.
   - Save Edits with nothing changed writes nothing (BR-CO32). Stamping the loaded fields must give back the same stored item.
   - An item with own orders only loads exactly as in PR #137.
 - **BR-CA39 Closed sessions** are read-only, as today; their receipts show in History and the PDF.
