@@ -365,11 +365,22 @@ export default function App() {
       <OnboardingDialog
         open={phase === 'done'}
         title="You're all set!"
-        message="That's the whole app. Start a session whenever your group spends something together, and Hati will keep track of the rest."
+        message="Next, see how to log an expense with a practice group. Nothing you do there is saved."
         onDismiss={() => setPhase('off')}
       >
-        <Button variant="primary" onClick={() => setPhase('off')}>
-          Get started
+        <Button variant="ghost" onClick={() => setPhase('off')}>
+          Maybe later
+        </Button>
+        <Button
+          variant="primary"
+          onClick={() => {
+            setPhase('off');
+            // The tour's own end has already put the app on Home and scheduled its draft for
+            // cleanup, so Home is where the guide starts and where it ends.
+            launch('expenses', 'menu');
+          }}
+        >
+          Show me
         </Button>
       </OnboardingDialog>
       <OnboardingDialog

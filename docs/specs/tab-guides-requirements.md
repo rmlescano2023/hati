@@ -248,12 +248,27 @@ the choice I made on day one.
 
 - **AC-TG6.1** When I choose App overview, then the first-run tour runs from its first step on
   Home, exactly as for a new account, with no welcome dialog first.
-- **AC-TG6.2** Given I finish it, then "You're all set!" shows, as today. Given I skip it, then
-  I land on Home with no dialog.
+- **AC-TG6.2** Given I finish it, then "You're all set!" shows with the Expenses offer (AC-TG6.5).
+  Given I skip it, then I land on Home with no dialog.
 - **AC-TG6.3** Replaying never changes whether my account counts as onboarded, never shows What's
   new, and never writes a guide's seen mark.
 - **AC-TG6.4** The empty session the tour creates is removed afterwards if I didn't type into it,
   as with the dev Preview Tour today (owner decision 4).
+- **AC-TG6.5** (owner feedback, round 3) Given I finish the tour, whether it's the first-run tour,
+  an App overview replay or the dev Preview Tour, then "You're all set!" reads "Next, see how to
+  log an expense with a practice group. Nothing you do there is saved." with Maybe later and Show
+  me (primary).
+  - When I tap Maybe later, or press Escape, then the dialog closes and I stay on Home.
+  - When I tap Show me, then the dialog closes and the Expenses guide starts on the practice
+    screen, with Home as its origin. When it ends (Skip, Escape, Done, End practice or Back to
+    Home), I land on Home.
+  - Given I skipped the tour or left it by navigating away, then no dialog and no guide follow.
+  - The tour's empty draft is still removed, and the guide never shows it.
+- **BR-TG28 (PR 2 rule, for the tech lead).** For a new account's first-run tour, Show me counts
+  as starting the Expenses guide and Maybe later counts as declining the Expenses offer. Either
+  way the Expenses guide flag is written once flags exist, so the reader isn't offered the guide
+  again on their first Expenses visit. A replay or the dev Preview Tour writes no flag
+  (AC-TG6.3).
 
 ### US-TG7: Walk through the Collection guide (PR 2)
 

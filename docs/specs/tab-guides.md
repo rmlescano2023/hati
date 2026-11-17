@@ -1258,3 +1258,32 @@ The text and the icon of "Need help?" no longer sit together at the right of the
 - **Phone (375px).** The icon column is 32px wide, inside the bar, so nothing overflows. On an
   unnamed session the phone's tall tap target overlaps the pencil's by a few pixels, and the
   pencil (`z-index: 1`) wins there. The text and the rest of the icon's box still tap "Need help?".
+
+### Owner feedback, round 3 (2026-11-17)
+For new users, the Expenses guide follows the first-ever tour. It runs right after the tour, not
+inside it. The change is the closing dialog in `App.tsx` (`phase === 'done'`):
+
+- Title "You're all set!". Message: "Next, see how to log an expense with a practice group.
+  Nothing you do there is saved."
+- **Maybe later** (ghost) is `setPhase('off')`, so the reader stays on Home. Escape is the same
+  (`onDismiss`).
+- **Show me** (primary) sets `setPhase('off')` and calls `launch('expenses', 'menu')`, the same
+  path Tutorials uses. `endTour` has already set the screen to Home, so the practice's `back` is
+  Home, never the tour's session. The guide ends on Home, with no focus return to "Need help?"
+  (`via: 'menu'`).
+- The dialog still opens only after a completed tour. A skipped tour, or one ended by wandering
+  off, has no dialog and no guide. A completed App overview replay and the dev Preview Tour
+  reach the same dialog.
+- **Clean start.**
+  - `tourCleanup` runs as an effect right after `endTour`, long before the reader can tap Show
+    me, so the untouched tour draft is already gone.
+  - The tour's Joyride unmounts when `phase` leaves `'running'`, so nothing of it is left.
+  - `tourKey` remounts `OnboardingTour` and `guideKey` remounts `PracticeExpenses`. They're
+    separate counters on separate components, so they can't collide.
+  - What's new stays gated while the practice is on screen.
+- **No schema or API change.** No flag is written in PR 1. PR 2 adds the rule BR-TG28 (see the
+  requirements): for a new account, Show me counts as starting the Expenses guide and Maybe later
+  as declining it, and either way the flag is written once flags exist.
+- **Tester check.** Run the tour to the end (Preview Tour on Home in dev) and confirm the dialog,
+  both buttons, and that Show me ends on Home with no leftover session. Skip the tour and confirm
+  nothing follows.
