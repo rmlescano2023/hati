@@ -98,7 +98,14 @@ export const EXPENSES_STEPS: GuideStep<ExpensesSceneId>[] = [
     target: 'custom-figures',
     title: 'Does it add up?',
     content:
-      "Entered is what you've typed so far. It turns red, with \"of\" and the receipt total, until the two match. Dino's order is still blank, so ₱120 is missing. Fill Remainder, next to the total at the top, gives what's missing to whoever is still blank.",
+      "Entered is what you've typed so far. It's highlighted, with \"of\" and the receipt total, until the two match. Dino's order is still blank, so ₱120 is missing.",
+    place: 'X3',
+  },
+  {
+    target: 'custom-total',
+    title: "Fill in what's missing",
+    content:
+      'Tap Fill Remainder and Hati gives the missing ₱120 to whoever is still blank, here Dino. Entered then matches the receipt.',
     place: 'X3',
   },
   {

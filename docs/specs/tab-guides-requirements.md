@@ -34,7 +34,7 @@ Only what this feature builds on.
    - **Purchase Details:**
      - Date.
      - Paid By: One Payor with a picker, or Multiple Payors with one amount box per member and
-       "Contributed ₱X", red with "of ₱Y" when it doesn't match.
+       "Contributed ₱X", highlighted with "of ₱Y" when it doesn't match.
      - The Add Item mode toggle (Equal Split / Custom Amounts).
      - Item Name, plus Total Price (₱) in Equal Split.
      - Equal Split: "Owner(s) — Split Equally Among (₱X each)" with All Members and a pill per
@@ -47,7 +47,7 @@ Only what this feature builds on.
        - Shared items, Discounts and Charges sections, added with "+ Add shared item",
          "+ Add discount" and "+ Add charge".
        - The footer: Subtotal, Discounts and Charges (when there's a discount or charge), then
-         "Entered ₱X", red with "of ₱Y" when it differs from Total Amount.
+         "Entered ₱X", highlighted with "of ₱Y" when it differs from Total Amount.
      - + Add Item.
    - **The staged list:** "N items staged ₱X", then a row per item with a pencil (Edit) and ×
      (Remove).
@@ -153,7 +153,7 @@ can see how every field works whenever I'm unsure.
 As a non-technical user, I want each part of the form shown to me already filled in and explained
 in plain words, so that I understand it without having to fill it in first.
 
-- **AC-TG2.1** Given the guide has started, then steps E1 to E17 show in the order in
+- **AC-TG2.1** Given the guide has started, then steps E1 to E17, with E14a after E14, show in the order in
   section 6.1, each highlighting its target and showing its title and text.
 - **AC-TG2.2** Given any step, then its target is filled as its scene describes. For example, at
   E10 Ben's block shows "Chicken inasal ₱120.00" and "Iced tea ₱40.00".
@@ -161,8 +161,8 @@ in plain words, so that I understand it without having to fill it in first.
   Skip and Next. E17's primary button reads "Done".
 - **AC-TG2.4** Given a step, when I tap inside the highlighted element, then I can use it as in
   a real session: type a name, tick a member, tap Fill Remainder, Edit a staged item.
-- **AC-TG2.5** Given step E14, when I tap Fill Remainder, then Dino's first sub-item becomes
-  ₱120.00 and the footer reads "Entered ₱860.00" with no red "of".
+- **AC-TG2.5** Given step E14a, when I tap Fill Remainder, then Dino's first sub-item becomes
+  ₱120.00 and the footer reads "Entered ₱860.00" with no highlighted "of".
 - **AC-TG2.6** Given step E15, when I tap + Add Item, then the item appears in the staged list,
   and the form clears as it does in a real session.
 - **AC-TG2.7** Given I typed something within a scene, when Next or Back stays in the same scene,
@@ -535,7 +535,7 @@ row or card goes on exactly one instance or on its container (approved rule).
 - **Sessions:** Beach trip (the Expenses practice, and Outstanding on Collection), Movie night
   (Needs setup), Karaoke night (Settled).
 
-### 6.1 The Expenses guide ("Logging expenses"), 17 steps
+### 6.1 The Expenses guide ("Logging expenses"), 18 steps (E1 to E17, plus E14a)
 
 **Scenes:**
 
@@ -559,7 +559,7 @@ row or card goes on exactly one instance or on its container (approved rule).
   - Discounts: Senior discount 30.00, Dino.
   - Charges: Service charge 80.00.
   - Shares beside the names: Ana ₱250.00, Ben ₱230.00, Carla ₱220.00, Dino ₱40.00.
-  - Footer: Subtotal ₱690.00, Discounts −₱30.00, Charges ₱80.00, then "Entered ₱740.00" in red
+  - Footer: Subtotal ₱690.00, Discounts −₱30.00, Charges ₱80.00, then "Entered ₱740.00" highlighted
     with "of ₱860.00".
   - Fill Remainder would give Dino ₱120.00. His share would then be ₱160.00, and Entered
     ₱860.00.
@@ -586,7 +586,8 @@ row or card goes on exactly one instance or on its container (approved rule).
 | E11 | X3 | Shared items [`shared-items`] | Shared dishes | A dish people shared goes here. Hati splits it between the people ticked. Everyone shared the rice platter. |
 | E12 | X3 | Discounts [`discounts`] | Discounts | A discount, like PWD or senior, comes off only the share of the people ticked. Dino gets the senior discount. |
 | E13 | X3 | Charges [`charges`] | Charges | A service charge or delivery fee goes here. It's split equally across everyone in the item. |
-| E14 | X3 | Footer, Subtotal to Entered [`custom-figures`] | Does it add up? | Entered is what you've typed so far. It turns red, with "of" and the receipt total, until the two match. Dino's order is still blank, so ₱120 is missing. Fill Remainder, next to the total at the top, gives what's missing to whoever is still blank. |
+| E14 | X3 | Footer, Subtotal to Entered [`custom-figures`] | Does it add up? | Entered is what you've typed so far. It's highlighted, with "of" and the receipt total, until the two match. Dino's order is still blank, so ₱120 is missing. |
+| E14a | X3 | Total Amount and Fill Remainder [`custom-total`] | Fill in what's missing | Tap Fill Remainder and Hati gives the missing ₱120 to whoever is still blank, here Dino. Entered then matches the receipt. |
 | E15 | X3 | + Add Item [`add-item`] | Add it to the list | When the item looks right, tap + Add Item. It waits in the list below, so you can add several before saving. |
 | E16 | X4 | Staged list [`staged-list`] | Check before saving | Everything you've added waits here. Tap the pencil to load an item back into the form and change it, or × to take it out. |
 | E17 | X4 | Save to Breakdown [`save-to-breakdown`] | Save it | Tap Save to Breakdown to save everything in the list to the session. That's it: tap Done to go back to your own session. |
@@ -604,8 +605,9 @@ row or card goes on exactly one instance or on its container (approved rule).
 | 7. + Add Item into the staged list, editing and removing a staged item | E15, E16 |
 | 8. Save to Breakdown | E17 |
 
-Fill Remainder sits beside Total Amount, far from the footer on a phone. If the owner wants it
-highlighted, add a step E14a on Fill Remainder [`fill-remainder`] in X3, making 18 steps
+Fill Remainder sits beside Total Amount, far from the footer on a phone. (Done, QA round: E14a
+is in the table above, with target `custom-total`. The note below is the original suggestion.)
+If the owner wants it highlighted, add a step E14a on Fill Remainder [`fill-remainder`] in X3, making 18 steps
 (OQ-TG5).
 
 ### 6.2 The Collection guide ("Tracking payments"), 7 steps
@@ -761,7 +763,7 @@ Other recommendations:
      owner to confirm (OQ-TG2).
 2. **Focus when a guide ends.** It returns to the "?" button when the guide started from there.
    Otherwise it goes to the top of the origin screen.
-3. **Guide length.** 17 Expenses steps cover the eight required topics at one idea per step. The
+3. **Guide length.** 18 Expenses steps (E1 to E17, plus E14a) cover the eight required topics at one idea per step. The
    candidates to cut, if the owner wants it shorter, are:
    - merging E2 (Date) into E3 (Paid By), as "When and who paid";
    - merging E12 and E13 into "Discounts and charges".
@@ -780,7 +782,7 @@ Other recommendations:
 
 - The practice session (memory store, practice profile, `practice_` ids, the server guard) and
   the practice banner.
-- The shared guide engine and the Expenses guide (E1 to E17, scenes X1 to X4).
+- The shared guide engine and the Expenses guide (E1 to E17 plus E14a, scenes X1 to X4).
 - "?" on Expenses, with the "Leave without saving?" prompt.
 - Profile → Tutorials, with App overview and Logging expenses (Tracking payments may arrive with
   PR 2).
@@ -868,8 +870,10 @@ reversed then.
   the Collection offer waits for the next visit.
 - **OQ-TG4, remainder line.** Yes: the footer's "Entered ₱X of ₱Y" together
   with Fill Remainder.
-- **OQ-TG5, guide length.** Keep 17 steps. Fill Remainder doesn't get its own
-  step, and no steps are merged.
+- **OQ-TG5, guide length.** ~~Keep 17 steps. Fill Remainder doesn't get its own
+  step, and no steps are merged.~~ **Reversed (QA round, 2026-11-17).** At E14 the Fill Remainder
+  button sat outside the footer's spotlight, so a tap on it was swallowed (AC-TG2.5 failed).
+  Fill Remainder now has its own step, E14a, on the Total Amount row, making 18 steps.
 - **OQ-TG6, Back to Home in practice.** It goes Home, as its label says.
 - **OQ-TG7, closing dialog.** None. Done on the last step returns to where the
   guide started.

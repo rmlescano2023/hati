@@ -13,7 +13,7 @@ empty session. PR 1 adds:
   server;
 - a generic **guide engine**, `GuideTour<P>`. The first-run tour becomes a thin wrapper over it,
   with no change to its steps or its tests;
-- the 17-step **Expenses guide** ("Logging expenses"), with four scenes (X1 to X4) and new
+- the 18-step **Expenses guide** ("Logging expenses"), with four scenes (X1 to X4) and new
   `data-tour` targets on the Expenses form;
 - a **"?" button** on a real session's Expenses tab;
 - **Tutorials** in the account menu, with "App overview" (a replay of the first-run tour through
@@ -80,7 +80,7 @@ Assumptions, stated openly:
 | `src/components/onboarding/OnboardingTour.tsx` | Becomes a thin wrapper over `GuideTour`. Same name and props. | `TOUR_STEPS`, `screenMatches`, `wentToNextStep` |
 | `src/components/onboarding/steps.ts`, `steps.test.ts` | **No change.** | |
 | `src/components/onboarding/guides/expensesScenes.ts` (new) | Scenes X1 to X4 (section 5.2). | |
-| `src/components/onboarding/guides/expensesSteps.ts` (new) | `EXPENSES_STEPS`, E1 to E17 (section 6.4). | |
+| `src/components/onboarding/guides/expensesSteps.ts` (new) | `EXPENSES_STEPS`, E1 to E17 plus E14a (section 6.4). | |
 | `src/components/onboarding/guides/PracticeExpenses.tsx` (new) | The practice screen: `PracticeExpenses` and `PracticeScene` (section 6.3). | `SessionWorkspace`, `GuideTour` |
 | `src/components/onboarding/guides/PracticeBanner.tsx` + `.module.css` (new) | "Practice session. Nothing here is saved." with End practice. | `Button` |
 | `src/components/onboarding/TutorialsDialog.tsx` + `.module.css` (new) | The Tutorials dialog. | `OnboardingDialog`, `Button` |
@@ -300,7 +300,7 @@ const dinner = (dino: boolean): CustomAmountItem => ({
 |---|---|---|---|
 | X1 | `{ row: { item: groceries, date: today, payorMode: 'single', payors: [{ member: 'Ana', amount: 1200 }] } }` | `[]` | One Payor Ana. Equal Split, Groceries, ₱1,200.00, owners Ana, Ben and Carla, "(₱400.00 each)". |
 | X2 | `{ row: { item: groceries, date: today, payorMode: 'multiple', payors: [{ member: 'Ana', amount: 700 }, { member: 'Ben', amount: 500 }] } }` | `[]` | Multiple Payors: Ana 700.00, Ben 500.00, "Contributed ₱1,200.00". The rest as X1. |
-| X3 | `{ row: { item: dinner(false), date: today, payorMode: 'single', payors: [{ member: 'Ana', amount: 740 }] }, totalAmount: 860 }` | `[]` | Custom Amounts and All Members. Dino has one blank sub-item. Shares: Ana ₱250.00, Ben ₱230.00, Carla ₱220.00, Dino ₱40.00. Footer: Subtotal ₱690.00, Discounts −₱30.00, Charges ₱80.00, then "Entered ₱740.00" in red with "of ₱860.00". |
+| X3 | `{ row: { item: dinner(false), date: today, payorMode: 'single', payors: [{ member: 'Ana', amount: 740 }] }, totalAmount: 860 }` | `[]` | Custom Amounts and All Members. Dino has one blank sub-item. Shares: Ana ₱250.00, Ben ₱230.00, Carla ₱220.00, Dino ₱40.00. Footer: Subtotal ₱690.00, Discounts −₱30.00, Charges ₱80.00, then "Entered ₱740.00" highlighted with "of ₱860.00". |
 | X4 | omitted | `[X2's row with id 'practice_groceries', { item: dinner(true), date: today, payorMode: 'single', payors: [{ member: 'Ana', amount: 860 }] }]` | An empty Equal Split form with One Payor Ana (from `paidBy`) and today's date. The list reads "2 items staged ₱2,060.00". |
 
 How the existing code produces those figures, which the tests check:
@@ -900,7 +900,7 @@ export function TutorialsIcon(props: Props) {
 export const EXPENSES_STEPS: GuideStep<ExpensesSceneId>[] = [ /* E1 to E17 */ ];
 ```
 
-There are 17 steps, in the order of requirements section 6.1. `title` and `content` are copied
+There are 18 steps (E14a is new, see the QA round), in the order of requirements section 6.1. `title` and `content` are copied
 **verbatim** from that table. The copy is provisionally approved (OQ-TG9), and changes at the
 owner check are expected to be copy-only. `place` is the scene, and `target` is from section 7.
 
@@ -1014,8 +1014,8 @@ Write these first and watch them fail, then build until they pass.
 **`src/components/onboarding/guides/guides.test.ts`** (new)
 
 1. **Steps** (AC-TG2.1):
-   - there are 17 steps;
-   - the targets, in order, are `group-members, purchase-date, paid-by, paid-by, item-name, equal-owners, item-mode, custom-total, who-in-item, sub-items, bill-shared, bill-discounts, bill-charges, custom-figures, add-item, staged-list, save-to-breakdown`;
+   - there are 18 steps;
+   - the targets, in order, are `group-members, purchase-date, paid-by, paid-by, item-name, equal-owners, item-mode, custom-total, who-in-item, sub-items, bill-shared, bill-discounts, bill-charges, custom-figures, custom-total, add-item, staged-list, save-to-breakdown`;
    - the places, in order, are `X1 ×3, X2 ×3, X3 ×9, X4 ×2`;
    - every target matches `/^[a-z-]+$/`, and every content is longer than 20 characters.
 2. **"Every step names a scene that exists."** `place` is a key of `expensesScenes(today)`.
@@ -1074,8 +1074,8 @@ network log open):
 | AC-TG1.3 | With nothing staged, "?" starts E1 at once, with the banner on top. |
 | AC-TG1.4, AC-TG1.5 | With 2 staged items, the prompt reads as specified: Stay keeps both, and Discard and leave starts the guide. From Breakdown's Edit on Taxi, the prompt reads "Your changes to Taxi aren't saved.", and after Discard Taxi is unchanged on Breakdown. |
 | AC-TG1.6 | A typed but unadded name starts the guide with no prompt and is gone on return. |
-| AC-TG2.1 to AC-TG2.3 | E1 to E17 run in order with the right copy and a filled target. E1 offers Skip and Next, E2 on add Back, and E17's button reads "Done". |
-| AC-TG2.4 to AC-TG2.6 | Type in a highlighted field, tick a member, tap Fill Remainder at E14 (Dino's sub-item becomes 120.00 and Entered ₱860.00 has no red), and + Add Item at E15 (it's staged and the form clears). |
+| AC-TG2.1 to AC-TG2.3 | E1 to E17, with E14a after E14, run in order with the right copy and a filled target. E1 offers Skip and Next, E2 on add Back, and E17's button reads "Done". |
+| AC-TG2.4 to AC-TG2.6 | Type in a highlighted field, tick a member, tap Fill Remainder at E14a (Dino's sub-item becomes 120.00 and Entered ₱860.00 has no highlighted "of"), and + Add Item at E15 (it's staged and the form clears). |
 | AC-TG2.7, AC-TG2.8 | What's typed survives Next within X3 and resets on the move to X4 and on Back to X2. Removing the Senior discount at E9, then going to E12, brings the row back. Clear All at E1, then going to E3, brings the members back. |
 | AC-TG2.9 | A tap on the dimmed area does nothing. |
 | AC-TG3.1 to AC-TG3.4 | The banner shows. Through the whole guide (add a member, + Add Item, Save to Breakdown), the network log has **no** `/api/sessions`, `/api/payments` or `/api/user` request. Afterwards the real sessions, Home's order and the real Paid By pick are unchanged, and no "Beach trip" appears anywhere. |
@@ -1287,3 +1287,26 @@ inside it. The change is the closing dialog in `App.tsx` (`phase === 'done'`):
 - **Tester check.** Run the tour to the end (Preview Tour on Home in dev) and confirm the dialog,
   both buttons, and that Show me ends on Home with no leftover session. Skip the tour and confirm
   nothing follows.
+
+### QA round 1 fixes (2026-11-17)
+QA failed AC-TG2.5 and found cosmetic issues. Fixes:
+
+1. **E14a (AC-TG2.5).** At E14 the copy told the reader to tap Fill Remainder, but the button is
+   outside the `custom-figures` spotlight, so the tap was swallowed. A new step E14a follows
+   E14 in X3, with target `custom-total` (the Total Amount row, which holds Fill Remainder, so
+   the click passes through the spotlight as at E8). Title "Fill in what's missing". The guide is
+   now **18 steps**, which reverses OQ-TG5 (recorded in the requirements). E14's text drops the
+   Fill Remainder sentence. Reusing a target across steps is allowed, as `paid-by` is for E3/E4.
+   The step count, the targets order and the X3 places in `guides.test.ts` follow.
+2. **"Highlighted", not "red".** Entered, and Contributed, use the warning (amber) colour, so the
+   copy and the docs now say "highlighted".
+3. **Phone hint.** Inside `@media (max-width: 640px)`, "See how to log expenses." now flows
+   inline with "New to Hati?" and wraps like text. Its tap area comes from 12px of vertical
+   padding on the inline box, which doesn't add to the line's height. Desktop is unchanged.
+4. **End practice by mouse and touch.** Joyride's overlay (z-index 10000) was blocking the
+   banner. The banner is now `position: relative; z-index: 10001`. The tooltip is 10001 too and
+   comes later in the page (Joyride's portal is appended to the body), so it still wins where they
+   overlap. The first-run tour is unchanged, because it has no banner.
+
+Left as is, at the owner's request: the stranded tooltip when the reader deletes a step's own
+target (it resets on Back or Next), the pencil and dev bar in practice, and E17 having no Skip.

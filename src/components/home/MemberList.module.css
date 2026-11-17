@@ -74,12 +74,11 @@
   text-align: left;
 }
 
+/* On a phone the link keeps flowing inline, wrapping with the sentence like text. The vertical
+   padding of an inline box makes the tap area taller without adding to the line's height. */
 @media (max-width: 640px) {
   .hint > .hintLink {
-    display: flex;
-    align-items: center;
-    justify-content: flex-start;
-    min-height: 44px;
+    padding-block: 12px;
   }
 }
 

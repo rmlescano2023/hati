@@ -1,4 +1,8 @@
 .banner {
+  /* Above the guide's overlay (z-index 10000), so End practice works by mouse and touch at every
+     step. The tooltip is 10001 too and sits later in the page, so it still wins if they overlap. */
+  position: relative;
+  z-index: 10001;
   display: flex;
   align-items: center;
   flex-wrap: wrap;

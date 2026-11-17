@@ -33,15 +33,15 @@ const rowsOf = (id: ExpensesSceneId): StagedItem[] => [
 ];
 
 describe('the Expenses guide steps', () => {
-  it('has the 17 steps in the approved order (AC-TG2.1)', () => {
-    expect(EXPENSES_STEPS).toHaveLength(17);
+  it('has the 18 steps in the approved order (AC-TG2.1)', () => {
+    expect(EXPENSES_STEPS).toHaveLength(18);
     expect(EXPENSES_STEPS.map((s) => s.target).join(', ')).toBe(
-      'group-members, purchase-date, paid-by, paid-by, item-name, equal-owners, item-mode, custom-total, who-in-item, sub-items, bill-shared, bill-discounts, bill-charges, custom-figures, add-item, staged-list, save-to-breakdown',
+      'group-members, purchase-date, paid-by, paid-by, item-name, equal-owners, item-mode, custom-total, who-in-item, sub-items, bill-shared, bill-discounts, bill-charges, custom-figures, custom-total, add-item, staged-list, save-to-breakdown',
     );
     expect(EXPENSES_STEPS.map((s) => s.place)).toEqual([
       ...Array(3).fill('X1'),
       ...Array(3).fill('X2'),
-      ...Array(9).fill('X3'),
+      ...Array(10).fill('X3'),
       ...Array(2).fill('X4'),
     ]);
   });
