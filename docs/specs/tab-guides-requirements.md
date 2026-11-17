@@ -286,7 +286,7 @@ cards, so that I can use it when my friends start paying me back.
 - **AC-TG7.4** Given C5, when I tap Undo on Carla's ₱200.00 payment and confirm, then her line
   goes back to Unpaid. When I go on to C6, then Mark all as paid is still there.
 - **AC-TG7.5** Given C6, when I tap Mark all as paid and confirm, then Beach trip moves to Settled
-  and C7 still shows.
+  and C7 still shows. (Amended for PR 2, section 12: the guide moves on to C7 by itself.)
 - **AC-TG7.6** Given C2, when I open Movie night, pick "Anna" and Confirm, then it moves to
   Outstanding, showing that I owe Ben ₱500.00. Nothing is remembered on my real profile.
 - **AC-TG7.7** "Already settled?" never appears in the practice, and neither does the profile
@@ -298,7 +298,8 @@ As someone on Collection, I want a "How this works" button there too.
 
 - **AC-TG8.1** Given I'm on Collection, with or without finished sessions, including the
   "Nothing to collect yet" empty state and "Couldn't load your profile", then a "?" button shows
-  without scrolling. Its accessible name is "How Collection works".
+  without scrolling. Its accessible name is "How Collection works". (Amended for PR 2, section 12:
+  "Need help?", named "Need help? See how to track payments".)
 - **AC-TG8.2** While Collection shows its "Loading…" spinner, the button isn't shown.
 - **AC-TG8.3** When I tap it, then the Collection guide starts at C1. There's never a "Leave
   without saving?" prompt from Collection.
@@ -389,7 +390,8 @@ me in dialogs.
   scrolls so the highlighted element is in view. When the element is taller than the screen,
   its top is in view.
 - **AC-TG13.3** At 375px, the practice banner fits on one or two lines, never covers the
-  highlighted element, and doesn't make the page scroll sideways.
+  highlighted element, and doesn't make the page scroll sideways. (Amended for PR 2, section 12:
+  the banner is sticky; it doesn't cover the highlighted element when a step shows.)
 - **AC-TG13.4** On desktop, the "?" buttons, the Tutorials item and the practice banner keep the
   existing layout: no element moves except to make room for the "?" button.
 
@@ -461,7 +463,8 @@ me in dialogs.
   (an unticked member, a removed row, a switch back to Equal Split, a card moved to another
   section), reaching that step resets its scene as designed first.
 - **BR-TG15** **Scene boundaries.** The Expenses guide has 4 scenes (X1 to X4), and the
-  Collection guide 2 (K1, K2), as listed in section 6. A guide adds a scene only when a step
+  Collection guide 2 (K1, K2), as listed in section 6. (Amended for PR 2, section 12: Collection
+  has 3, K1 to K3.) A guide adds a scene only when a step
   needs a state the reader can't be expected to create with Next alone.
 - **BR-TG16** **Dates in practice are relative to today,** so the practice never looks stale:
   - the Expenses purchase date is today;
@@ -505,7 +508,8 @@ me in dialogs.
   - an "End practice" button.
 
   It's announced once to screen readers when the guide starts, and it's the only place
-  End practice lives. It isn't a step target.
+  End practice lives. It isn't a step target. (Amended for PR 2, section 12: it stays in view
+  while the reader scrolls, and the practice workspace has no rename pencil.)
 - **BR-TG24** **No closing dialog.** A guide ends on its last step's Done. The last step's text
   says the reader is going back to their own sessions. The first-run tour keeps
   "You're all set!".
@@ -641,6 +645,8 @@ setup".
 - **K1, overview:** every card collapsed, Settled closed.
 - **K2, Beach trip open:** K1 with the Beach trip card expanded.
 
+(Amended for PR 2, section 12: a third scene K3, C3 in K1, C7 in K3, and the final targets.)
+
 | # | Scene | Target | Title | Text |
 |---|---|---|---|---|
 | C1 | K1 | Summary strip [`collection-totals`] | Who owes what | This is a practice with made-up sessions, so tap freely: nothing here is saved. Collection tracks money from finished sessions only. A session lands here when you finish it on its Summary tab. In this practice you're Ana. Owed to you is what others still have to pay you; You owe is what you still have to pay them. |
@@ -669,6 +675,8 @@ The architect left one choice to the tech lead: point C4 at the button, or open 
 the reader can tap it to see the form.
 
 ### 6.3 Dialog copy
+
+(Amended for PR 2, section 12: "?" reads "Need help?" in the offers and What's new.)
 
 **Expenses offer:**
 
@@ -883,3 +891,37 @@ reversed then.
   example people (Ana, Ben, Carla, Dino) and sessions are **provisionally
   approved** for the build. The owner reviews the exact wording at the owner
   check, and changes are expected to be copy-only.
+
+## 12. Amendments for PR 2 (tech lead, 2026-11-17)
+
+Made in the PR 2 spec ([`tab-guides-2.md`](tab-guides-2.md)), for the owner to approve with it.
+Copy in sections 6.2 and 6.3 is otherwise unchanged.
+
+- **Collection scenes (BR-TG15, section 6.2).** Three scenes:
+  - K1, the overview: every card collapsed;
+  - K2: Beach trip open;
+  - K3: Beach trip paid in full and moved to Settled, which is what Mark all at C6 produces.
+- **Steps and targets (section 6.2).**
+
+  | Step | Scene | Target |
+  |---|---|---|
+  | C1 | K1 | `collection-totals`, the Summary section |
+  | C2 | K1 | `collection-unsettled`, the Needs setup and Outstanding sections together, so the confirmed card stays in the spotlight as it moves |
+  | C3 | K1 | `collection-outstanding`, the Outstanding list, collapsed, so "Tap a card to open it" opens it |
+  | C4, C5 | K2 | `collection-owed`, the open card's "Owed to you" group: Record payment, the form it opens and Undo are all inside |
+  | C6 | K2 | `collection-mark-all` |
+  | C7 | K3 | `collection-settled`, the Settled section |
+
+  C4 points at neither the Record payment button alone nor a `LineRow initialOpen` form.
+- **AC-TG7.5.** Given C6, when I tap Mark all as paid and confirm, then Beach trip moves to
+  Settled and the guide moves on to C7 by itself. Back from C7 shows C6 with Beach trip open
+  again.
+- **AC-TG8.1.** The control is the "Need help?" text link, as on Expenses, beside the Summary
+  heading, or alone at the right above the empty state and "Couldn't load your profile". Its
+  accessible name is "Need help? See how to track payments".
+- **Section 6.3.** The offers say 'under “Need help?” on this tab' (Expenses) and 'on this page'
+  (Collection). What's new v2's second point says 'Tap “Need help?” on Expenses or Collection'.
+- **BR-TG23 and AC-TG13.3 (owner, 2026-11-17).** The practice banner is sticky at the top while
+  the reader scrolls, above the guide's overlay, with the tooltip on top where they overlap. Each
+  step scrolls its target clear of it. The practice workspace shows no rename pencil.
+
