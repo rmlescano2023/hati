@@ -1210,3 +1210,29 @@ approved for the build with the following:
   possible follow-up.
 - **D3.** `sub-items` goes on one block, as specified.
 - **D4.** `renderToStaticMarkup` in the scene test is accepted.
+
+### Owner feedback, round 1 (2026-11-17)
+The owner looked at PR 1 and changed the help control. This supersedes the "?" button in
+section 6.3 and the "?" rows of the tester table in section 8, and amends AC-TG1.1 (in the
+requirements) and decision D1.
+
+1. **Placement.** The control is a third line in the right-hand title stack of the session bar,
+   under the date, right-aligned with it. It's still shown only on the Expenses tab, only when
+   `onHelp` is given, and not during the first-run tour. It's hidden while the session is being
+   renamed, because the rename box replaces the title stack.
+2. **Wording.** The visible text is "Need help?" with the "?" icon after it. The accessible name
+   is `aria-label="Need help? See how to log expenses"`, which contains the visible text
+   (WCAG 2.5.3).
+3. **Style.** It's a small accent-green text link with no border or fill, but a real
+   `<button type="button">`, with a visible focus ring. On a phone its padding makes the tap
+   target about 44px tall, and negative margins give the height back, so the bar's row doesn't
+   grow.
+4. **Phones.** The icon-only round button is gone. Phones show "Need help?" the same way as
+   desktop. No other phone-only rule was needed.
+5. **Empty-session hint.** While a real session has no members, Group Members shows a second
+   line under "No members yet. Add some above.": "New to Hati? See how to log expenses." The
+   second part is a link-styled button that calls the same `startTutorial('expenses', 'help')`.
+   It reaches Group Members through `onHelp` (`SessionWorkspace` → `ExpensesPage` →
+   `MemberList`), so it's hidden whenever "Need help?" is (the first-run tour) and never appears
+   in practice, which doesn't pass `onHelp` and always has members. It isn't a `data-tour`
+   target. On return from the guide, focus goes to "Need help?" as before.

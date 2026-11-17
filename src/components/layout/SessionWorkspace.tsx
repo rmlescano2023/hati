@@ -158,6 +158,20 @@ export function SessionWorkspace({
               <span className={styles.titles}>
                 {session.name !== null && <span className={styles.name}>{session.name}</span>}
                 <span className={styles.started}>{sessionTitle(session)}</span>
+                {/* A third line in the title stack, under the date. The accessible name
+                    contains the visible text, so a voice user saying "click Need help" finds it. */}
+                {tab === 'expenses' && onHelp && (
+                  <button
+                    type="button"
+                    id="workspace-help"
+                    className={styles.help}
+                    aria-label="Need help? See how to log expenses"
+                    onClick={onHelp}
+                  >
+                    Need help?
+                    <HelpIcon className={styles.helpIcon} />
+                  </button>
+                )}
               </span>
             )}
             {session.status === 'draft' && !renaming && (
@@ -173,19 +187,6 @@ export function SessionWorkspace({
               </button>
             )}
           </div>
-        )}
-        {tab === 'expenses' && onHelp && (
-          <Button
-            variant="ghost"
-            size="sm"
-            id="workspace-help"
-            className={styles.help}
-            aria-label="How this works: the Expenses tab"
-            onClick={onHelp}
-          >
-            <HelpIcon className={styles.helpIcon} />
-            <span className={styles.helpLabel}>How this works</span>
-          </Button>
         )}
       </div>
 
@@ -214,6 +215,7 @@ export function SessionWorkspace({
           onSavedEditEnd={endSavedEdit}
           paidBy={paidBy}
           practice={practice}
+          onHelp={onHelp}
         />
       )}
       {tab === 'breakdown' && <BreakdownPage onEditItem={setEditPrompt} />}

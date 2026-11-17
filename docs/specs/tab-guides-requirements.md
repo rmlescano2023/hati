@@ -129,8 +129,9 @@ As someone logging a purchase, I want a "How this works" button on the Expenses 
 can see how every field works whenever I'm unsure.
 
 - **AC-TG1.1** Given I'm on a real session's Expenses tab, then I see a "?" button without
-  scrolling, on phone (375px) and desktop (1280px). Its accessible name is "How the Expenses tab
-  works".
+  scrolling, on phone (375px) and desktop (1280px). It reads "Need help?" with a "?" icon after
+  the text, as a small text link under the date. Its accessible name is "Need help? See how to log
+  expenses" (amended in the owner feedback, round 1).
 - **AC-TG1.2** Given I'm on Breakdown or Summary, then the "?" button isn't shown.
 - **AC-TG1.3** Given nothing is staged and no saved item is open for editing, when I tap "?",
   then the practice screen replaces the session at once, with no prompt, and step E1 shows.

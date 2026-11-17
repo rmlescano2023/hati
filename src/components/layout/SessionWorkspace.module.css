@@ -149,27 +149,48 @@
   display: block;
 }
 
-/* The "?" button's icon; on desktop it sits beside its "How this works" label. */
+/* "Need help?" is a text link, not a button: small, accent green, with no border or fill, so it
+   reads as secondary to the name and date above it. It is a real button for semantics. The
+   icon follows the text. */
+.help {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--accent-text);
+  cursor: pointer;
+}
+
+.help:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* A ring the page's faint default for buttons doesn't give a text link. */
+.help:focus-visible {
+  outline: none;
+  border-radius: var(--radius-sm);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
 .helpIcon {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   display: block;
 }
 
 @media (max-width: 640px) {
-  /* On a phone "?" is a round icon-only button, as tall as the other touch targets, and its
-     aria-label carries the name. The two-class selector outranks Button.module.css's 38px rule
-     whatever order the stylesheets load in. */
-  .bar .help {
-    min-width: 44px;
-    min-height: 44px;
-    padding: 0;
-    border-radius: 50%;
-    border-color: var(--border);
-  }
-
-  .bar .helpLabel {
-    display: none;
+  /* A comfortable tap target on a phone: the padding makes it tall, and the negative margins
+     give the height back, so the title stack and the bar's row are no taller. */
+  .help {
+    padding-block: 12px;
+    margin-block: -10px;
   }
 
   /* A thumb-sized target, still centred on the first line, whose margins give

@@ -26,6 +26,8 @@ type Props = {
   paidBy: PaidByMemory;
   /** A guide's practice: the scene's staged list and form seed, and no reload warning (tab-guides). */
   practice?: { seed?: PurchaseFormSeed; initialStaged?: StagedItem[] };
+  /** Starts the Expenses guide; Group Members offers it while the session has no members. */
+  onHelp?: () => void;
 };
 
 /**
@@ -44,6 +46,7 @@ export function ExpensesPage({
   onSavedEditEnd,
   paidBy,
   practice,
+  onHelp,
 }: Props) {
   // Held here rather than in the card so Group Members can see what is staged.
   // Unmounting this page still drops it, which is what leaving the tab means.
@@ -81,6 +84,7 @@ export function ExpensesPage({
       <MemberList
         staged={staged}
         savedEdit={savedEdit}
+        onHelp={onHelp}
         onClearAll={() => {
           setStaged([]);
           paidBy.write(NO_PAID_BY_PICK);

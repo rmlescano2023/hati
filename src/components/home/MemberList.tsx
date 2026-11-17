@@ -17,9 +17,11 @@ type Props = {
   savedEdit: SavedItemRef | null;
   /** Called after Clear All goes through, so the page can reset what it holds. */
   onClearAll: () => void;
+  /** Starts the Expenses guide. Offered under the empty state while there are no members. */
+  onHelp?: () => void;
 };
 
-export function MemberList({ staged, savedEdit, onClearAll }: Props) {
+export function MemberList({ staged, savedEdit, onClearAll, onHelp }: Props) {
   const { members, records, addMember, removeMember, clearMembers } = useAppData();
   const [draft, setDraft] = useState('');
   const [error, setError] = useState('');
@@ -141,7 +143,24 @@ export function MemberList({ staged, savedEdit, onClearAll }: Props) {
       </div>
 
       {members.length === 0 ? (
-        <p className={styles.hint}>No members yet. Add some above.</p>
+        <>
+          <p className={styles.hint}>No members yet. Add some above.</p>
+          {/* A first-time user in an empty session is the one most likely to want the guide, and
+              the "Need help?" link in the header is easy to miss. */}
+          {onHelp && (
+            <p className={styles.hint}>
+              New to Hati?{' '}
+              <Button
+                variant="ghost"
+                size="sm"
+                className={`link-action ${styles.hintLink}`}
+                onClick={onHelp}
+              >
+                See how to log expenses.
+              </Button>
+            </p>
+          )}
+        </>
       ) : (
         <div className={styles.chips}>
           {members.map((m) => (
