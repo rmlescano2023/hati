@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { clampActivityAt } from '../../src/lib/activity.js';
 import { getUserId, ownsSession, pool } from '../_shared.js';
-import { parseActivityInput, parseSessionInput } from '../_validate.js';
+import { isPracticeSessionId, parseActivityInput, parseSessionInput } from '../_validate.js';
 
 /**
  * `PUT` replaces one session; `PATCH` records that it was opened; `DELETE`
@@ -23,6 +23,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const sessionId = String(req.query.id ?? '');
   if (!sessionId) return res.status(400).json({ error: 'A session id is required.' });
+  // A guide's practice session lives only in the browser and is never stored, so every method
+  // refuses its id before anything is read or written (BR-TG3).
+  if (isPracticeSessionId(sessionId)) {
+    return res.status(400).json({ error: 'Practice sessions are never saved.' });
+  }
 
   if (req.method === 'PUT') {
     const raw = typeof req.body === 'string' ? JSON.parse(req.body || 'null') : req.body;

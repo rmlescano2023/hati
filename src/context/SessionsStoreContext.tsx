@@ -1,5 +1,11 @@
 import { createContext, useCallback, useContext, useMemo, type ReactNode } from 'react';
-import { useServerSessions, type PaymentResult, type SyncStatus } from '../hooks/useServerSessions';
+import {
+  useServerSessions,
+  type PaymentResult,
+  type SessionsBackend,
+  type SyncStatus,
+} from '../hooks/useServerSessions';
+import { useMemorySessions } from '../hooks/useMemorySessions';
 import { compareNames, toTitleCase } from '../lib/format';
 import { purgeMemberFromItem } from '../lib/calculations';
 import { includeMember, type ItemRef } from '../lib/includeMember';
@@ -123,6 +129,27 @@ function mapRecordItem(
 }
 
 export function SessionsStoreProvider({ children }: { children: ReactNode }) {
+  return <SessionsStoreCore backend={useServerSessions()}>{children}</SessionsStoreCore>;
+}
+
+/** A guide's practice store: the same domain logic over memory, with no request ever sent (BR-TG3). */
+export function PracticeSessionsProvider({
+  seed,
+  children,
+}: {
+  seed: Session[];
+  children: ReactNode;
+}) {
+  return <SessionsStoreCore backend={useMemorySessions(seed)}>{children}</SessionsStoreCore>;
+}
+
+function SessionsStoreCore({
+  backend,
+  children,
+}: {
+  backend: SessionsBackend;
+  children: ReactNode;
+}) {
   const {
     sessions,
     mutateSession,
@@ -143,7 +170,7 @@ export function SessionsStoreProvider({ children }: { children: ReactNode }) {
     retry,
     reverted,
     dismissReverted,
-  } = useServerSessions();
+  } = backend;
 
   /**
    * Apply `fn` to one session, leaving every other session untouched. Returning

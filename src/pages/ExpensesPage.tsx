@@ -4,6 +4,7 @@ import { PurchaseItemCard } from '../components/home/PurchaseItemCard';
 import {
   NO_PAID_BY_PICK,
   type PaidByMemory,
+  type PurchaseFormSeed,
   type SavedItemRef,
   type StagedItem,
 } from '../lib/staging';
@@ -23,6 +24,10 @@ type Props = {
   onSavedEditEnd: (removed: boolean) => void;
   /** This session's remembered Paid By pick (app-fixes item 3). */
   paidBy: PaidByMemory;
+  /** A guide's practice: the scene's staged list and form seed, and no reload warning (tab-guides). */
+  practice?: { seed?: PurchaseFormSeed; initialStaged?: StagedItem[] };
+  /** Starts the Expenses guide; Group Members offers it while the session has no members. */
+  onHelp?: () => void;
 };
 
 /**
@@ -35,10 +40,17 @@ function warnAboutStaged(event: BeforeUnloadEvent) {
   event.returnValue = '';
 }
 
-export function ExpensesPage({ onStagedCountChange, savedEdit, onSavedEditEnd, paidBy }: Props) {
+export function ExpensesPage({
+  onStagedCountChange,
+  savedEdit,
+  onSavedEditEnd,
+  paidBy,
+  practice,
+  onHelp,
+}: Props) {
   // Held here rather than in the card so Group Members can see what is staged.
   // Unmounting this page still drops it, which is what leaving the tab means.
-  const [staged, setStaged] = useState<StagedItem[]>([]);
+  const [staged, setStaged] = useState<StagedItem[]>(() => practice?.initialStaged ?? []);
   // Changing the key gives Clear All a fresh Purchase Details: today's date,
   // One Payor with no pick, Equal Split, empty fields and no edit open.
   const [formKey, setFormKey] = useState(0);
@@ -54,7 +66,8 @@ export function ExpensesPage({ onStagedCountChange, savedEdit, onSavedEditEnd, p
 
   // Reloading, closing the tab and the browser's Back button leave the app
   // without going through its own tabs, so the browser asks instead.
-  const hasUnsaved = staged.length > 0 || savedEdit !== null;
+  // Practice is never saved, so a reload has nothing to lose (AC-TG4.7).
+  const hasUnsaved = !practice && (staged.length > 0 || savedEdit !== null);
   useEffect(() => {
     if (!hasUnsaved) return;
     window.addEventListener('beforeunload', warnAboutStaged);
@@ -71,6 +84,7 @@ export function ExpensesPage({ onStagedCountChange, savedEdit, onSavedEditEnd, p
       <MemberList
         staged={staged}
         savedEdit={savedEdit}
+        onHelp={onHelp}
         onClearAll={() => {
           setStaged([]);
           paidBy.write(NO_PAID_BY_PICK);
@@ -84,6 +98,8 @@ export function ExpensesPage({ onStagedCountChange, savedEdit, onSavedEditEnd, p
         savedEdit={savedEdit}
         onSavedEditEnd={onSavedEditEnd}
         paidBy={paidBy}
+        // Clear All remounts the card fresh rather than putting the scene back.
+        seed={formKey === 0 ? practice?.seed : undefined}
       />
     </>
   );

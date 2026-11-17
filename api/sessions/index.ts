@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { ensureUser, getUserId, loadSessions, pool } from '../_shared.js';
-import { parseSessionName } from '../_validate.js';
+import { isPracticeSessionId, parseSessionName } from '../_validate.js';
 
 /** `GET` every session the caller owns; `POST` a new empty draft, optionally named. */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -21,6 +21,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body ?? {});
     const id = typeof body.id === 'string' && body.id ? body.id : null;
     if (!id) return res.status(400).json({ error: 'A session id is required.' });
+    // A guide's practice session lives only in the browser and is never stored (BR-TG3).
+    if (isPracticeSessionId(id)) {
+      return res.status(400).json({ error: 'Practice sessions are never saved.' });
+    }
     const name = parseSessionName(body.name);
 
     await ensureUser(userId);

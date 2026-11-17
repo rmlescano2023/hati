@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  isPracticeSessionId,
   parsePaymentsInput,
   parseProfileInput,
   parseSessionIdQuery,
@@ -196,5 +197,17 @@ describe('parseSessionInput and a Custom item with a bill', () => {
     expect(item?.mode === 'custom' && 'bill' in item).toBe(false);
     expect(item?.mode === 'custom' && item.amounts.Dan).toBe(1);
     expect(parseSessionInput('session_1', session({ ...b, bill: 'nope' }))).not.toBeNull();
+  });
+});
+
+describe('isPracticeSessionId', () => {
+  it('is true for a practice id', () => {
+    expect(isPracticeSessionId('practice_expenses')).toBe(true);
+  });
+
+  it('is false for ordinary ids, a bare prefix word, a different case and nothing', () => {
+    for (const id of ['session_ab12', 'practice', 'Practice_x', '']) {
+      expect(isPracticeSessionId(id)).toBe(false);
+    }
   });
 });

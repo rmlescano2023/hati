@@ -103,12 +103,18 @@ one of them, this is the source of truth.
 - **No new dependency** without the owner's approval.
 - Comments explain *why*, in full sentences. Match the existing code's style.
 
-**Onboarding tour** (`src/components/onboarding/`)
-- Every tour step targets an element on the screen the reader is already on,
-  never one on the next page or one that only appears once there's data.
+**Onboarding tour and guides** (`src/components/onboarding/`)
+- Every step targets an element on the screen the reader is already on, never
+  one on the next page.
+- The first-run tour targets only elements that are there with no data.
+- A guide step may target an element that appears only with data when the
+  guide itself seeds that data in an in-memory practice session that is never
+  saved. The step names the scene that supplies it.
+- A target on a repeated element goes on one instance or on its container.
 - `data-tour` attributes stay on the elements the steps point at. Never move,
-  rename or duplicate a mounted target. Run `steps.test.ts` after touching
-  anything near them.
+  rename or duplicate a mounted target. Run `steps.test.ts`, `targets.test.ts`
+  and `guides/guides.test.ts` after touching anything near them.
+- Static tests only; no jsdom or testing-library.
 
 **Layout**
 - Phone and desktop both keep working. Mobile-only styles go inside

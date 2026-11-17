@@ -33,7 +33,7 @@ export function PayorModeFields({
   const mismatch = itemTotal > 0 && Math.abs(contributed - itemTotal) >= 0.01;
 
   return (
-    <div className={styles.wrap}>
+    <div className={styles.wrap} data-tour="paid-by">
       <div className={styles.head}>
         <span className={styles.label}>Paid By</span>
         <ModeToggle

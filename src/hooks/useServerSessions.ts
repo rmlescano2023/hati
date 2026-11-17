@@ -67,7 +67,8 @@ const refusedWhat = (payments: NewPayment[], title: string): string =>
 const paymentsOf = (sessions: Session[], sessionId: string): Payment[] =>
   sessions.find((s) => s.id === sessionId)?.payments ?? [];
 
-type Result = {
+/** What the sessions store runs on: the server's sessions, or a guide's practice ones in memory. */
+export type SessionsBackend = {
   sessions: Session[];
   /**
    * Apply `fn` to one session and persist just that session. Returning the
@@ -223,7 +224,7 @@ function warnBeforeLeaving(event: BeforeUnloadEvent) {
  * asks first, because a reload cuts the request off and the next load would
  * show the server's older copy.
  */
-export function useServerSessions(): Result {
+export function useServerSessions(): SessionsBackend {
   const { getToken, isLoaded, isSignedIn } = useAuth();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
