@@ -356,7 +356,9 @@ export default function App() {
         </Button>
       </OnboardingDialog>
       <OnboardingTour
-        key={tourKey}
+        // Prefixed because the tour and the practice are siblings, so two counters at the same
+        // number would otherwise give them the same key.
+        key={`tour-${tourKey}`}
         run={phase === 'running'}
         screen={tourScreen}
         onNavigate={tourNavigate}
@@ -509,7 +511,7 @@ export default function App() {
           onUnsavedChange={setUnsavedNote}
         />
       )}
-      {screen.kind === 'practice' && <PracticeExpenses key={guideKey} onEnd={endGuide} />}
+      {screen.kind === 'practice' && <PracticeExpenses key={`guide-${guideKey}`} onEnd={endGuide} />}
     </PageShell>
   );
 }
