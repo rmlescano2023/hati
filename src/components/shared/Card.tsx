@@ -7,13 +7,15 @@ type Props = {
   /** Right-hand side of the card header (buttons, toggles). */
   actions?: ReactNode;
   className?: string;
+  /** The onboarding tour's and the guides' target for this card, as a `data-tour` attribute. */
+  'data-tour'?: string;
   children?: ReactNode;
 };
 
-export function Card({ label, actions, className, children }: Props) {
+export function Card({ label, actions, className, 'data-tour': dataTour, children }: Props) {
   const hasHeader = Boolean(label || actions);
   return (
-    <section className={`${styles.card} ${className ?? ''}`}>
+    <section className={`${styles.card} ${className ?? ''}`} data-tour={dataTour}>
       {hasHeader && (
         <div className={styles.header}>
           <h2 className={styles.label}>{label}</h2>

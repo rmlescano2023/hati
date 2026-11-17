@@ -220,6 +220,24 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   return <ProfileContext.Provider value={value}>{children}</ProfileContext.Provider>;
 }
 
+/** The practice "you" (BR-TG19). Nothing is read from or written to the account. */
+const PRACTICE_PROFILE: ProfileValue = {
+  status: 'ready',
+  displayName: 'Ana',
+  nicknames: [],
+  saveError: null,
+  save: async () => true,
+  remember: async () => {},
+  dismissSaveError: () => {},
+  alreadySettledAnswered: true,
+  answerAlreadySettled: () => {},
+  reload: () => {},
+};
+
+export function PracticeProfileProvider({ children }: { children: ReactNode }) {
+  return <ProfileContext.Provider value={PRACTICE_PROFILE}>{children}</ProfileContext.Provider>;
+}
+
 // eslint-disable-next-line react-refresh/only-export-components
 export function useProfile(): ProfileValue {
   const ctx = useContext(ProfileContext);

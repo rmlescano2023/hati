@@ -149,6 +149,9 @@ export function CustomAmountFields({
   // Each member's share shows beside their name once there is any shared order,
   // discount or charge row (BR-CA31).
   const showShares = hasBillRows(bill);
+  // One block carries the guide's sub-items target. It's the first with two or more sub-items,
+  // so it's one element on screen, and in the practice receipt it's Ben's.
+  const tourBlock = picked.find((m) => linesOf(lines, m).length > 1);
 
   // While the floor hint blocks Add Item, Entered isn't a total yet, so it goes
   // quiet and the hint above is the one warning on the screen.
@@ -169,7 +172,7 @@ export function CustomAmountFields({
   // its own right-aligned line (BR-CA30); otherwise Entered stands alone as before.
   const footer =
     billView.discounts > 0 || billView.charges > 0 ? (
-      <div className={styles.totals}>
+      <div className={styles.totals} data-tour="custom-figures">
         <div className={styles.figure}>
           <span>Subtotal</span>
           <span className={styles.figureValue}>{formatMoney(billView.subtotal)}</span>
@@ -194,7 +197,7 @@ export function CustomAmountFields({
 
   return (
     <div className={styles.wrap}>
-      <div className={styles.totalGroup}>
+      <div className={styles.totalGroup} data-tour="custom-total">
         <div className={styles.topRow}>
           <div className={`${styles.field} ${styles.totalField}`}>
             <label htmlFor="custom-total">Total Amount (₱)</label>
@@ -233,7 +236,7 @@ export function CustomAmountFields({
         )}
       </div>
 
-      <div className={styles.field}>
+      <div className={styles.field} data-tour="who-in-item">
         <label>Who&apos;s in this item</label>
         <OwnerGrid
           members={members}
@@ -248,7 +251,11 @@ export function CustomAmountFields({
         {picked.map((m) => {
           const memberLines = linesOf(lines, m);
           return (
-            <div className={styles.block} key={m}>
+            <div
+              className={styles.block}
+              key={m}
+              data-tour={m === tourBlock ? 'sub-items' : undefined}
+            >
               {showShares ? (
                 <div className={styles.blockHead}>
                   <span className={styles.blockName}>{m}</span>
@@ -332,7 +339,13 @@ export function CustomAmountFields({
         const hint = sectionHint(billView, section);
         const labelId = `custom-${section}-label`;
         return (
-          <div className={styles.billSection} role="group" aria-labelledby={labelId} key={section}>
+          <div
+            className={styles.billSection}
+            role="group"
+            aria-labelledby={labelId}
+            key={section}
+            data-tour={`bill-${section}`}
+          >
             <span id={labelId} className={styles.sectionLabel}>
               {heading}
             </span>

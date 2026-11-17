@@ -37,7 +37,7 @@ export function EqualSplitFields({
       : null;
 
   return (
-    <div className={styles.wrap}>
+    <div className={styles.wrap} data-tour="equal-owners">
       <div className={styles.field}>
         <label>
           Owner(s) — Split Equally Among{' '}

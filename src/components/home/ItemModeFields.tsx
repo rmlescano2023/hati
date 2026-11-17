@@ -85,7 +85,7 @@ export function ItemModeFields({ members, draft, handlers, derived }: Props) {
     <div className={styles.wrap}>
       {/* Equal Split's price sits beside the name: a full-width name box
           and a lone short price box underneath it both read as misfits. */}
-      <div className={styles.nameRow}>
+      <div className={styles.nameRow} data-tour="item-name">
         <div className={`${styles.field} ${styles.nameField}`}>
           <label htmlFor="item-name">Item Name</label>
           <ClearableInput
