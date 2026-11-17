@@ -62,6 +62,26 @@
   padding: 2px 0;
 }
 
+/* The hint's action, inside the sentence like a link. The selector outranks Button's .btn, .sm
+   and .ghost (0,1,0), which would pad it, keep it on one line and give it a border. */
+.hint > .hintLink {
+  display: inline;
+  padding: 0;
+  border: 0;
+  font-size: inherit;
+  line-height: inherit;
+  white-space: normal;
+  text-align: left;
+}
+
+/* On a phone the link keeps flowing inline, wrapping with the sentence like text. The vertical
+   padding of an inline box makes the tap area taller without adding to the line's height. */
+@media (max-width: 640px) {
+  .hint > .hintLink {
+    padding-block: 12px;
+  }
+}
+
 .error {
   font-size: 12px;
   color: var(--danger-text);

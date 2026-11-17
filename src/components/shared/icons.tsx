@@ -7,7 +7,8 @@ type Props = {
 /**
  * Line icons for the tab bars, the New Session button, the rename pencils and
  * the account menu's Profile item, the direction arrows on Collection, the
- * remove control in Profile, the clear button inside the Expenses form's boxes.
+ * remove control in Profile, the clear button inside the Expenses form's boxes,
+ * the "?" button and the Tutorials item.
  * Stroked in currentColor, so each one takes the colour of the text beside it,
  * including a tab's active colour. Decorative: the label next to them, or the
  * button's own aria-label, carries the name.
@@ -97,6 +98,25 @@ export function PlusIcon(props: Props) {
   return (
     <Icon {...props}>
       <path d="M12 5v14M5 12h14" />
+    </Icon>
+  );
+}
+
+export function HelpIcon(props: Props) {
+  return (
+    <Icon {...props}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M9.5 9.25a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6" />
+      <path d="M12 17h.01" />
+    </Icon>
+  );
+}
+
+export function TutorialsIcon(props: Props) {
+  return (
+    <Icon {...props}>
+      <path d="M12 6.5C10.5 5.3 8.5 4.75 4 5v13c4.5-.25 6.5.3 8 1.5 1.5-1.2 3.5-1.75 8-1.5V5c-4.5-.25-6.5.3-8 1.5z" />
+      <path d="M12 6.5v13" />
     </Icon>
   );
 }
