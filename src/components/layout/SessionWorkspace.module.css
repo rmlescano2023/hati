@@ -14,10 +14,14 @@
    session is unnamed, the name when it has one. */
 .titleBlock {
   --first-line: calc(12px * 1.45);
+  /* Shared by the pencil and by the "Need help?" icon, which hangs into the pencil's column, so
+     the two can't drift apart. */
+  --pencil-width: 26px;
+  --title-gap: 4px;
   display: flex;
   align-items: flex-start;
   justify-content: flex-end;
-  gap: 4px;
+  gap: var(--title-gap);
   flex: 1 1 auto;
   min-width: 0;
 }
@@ -118,7 +122,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
+  width: var(--pencil-width);
   height: var(--pencil-height);
   margin-block: calc((var(--first-line) - var(--pencil-height)) / 2);
   padding: 0;
@@ -155,7 +159,7 @@
 .help {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--title-gap);
   margin-top: 2px;
   padding: 2px 0;
   border: 0;
@@ -180,9 +184,22 @@
 }
 
 .helpIcon {
+  box-sizing: content-box;
   width: 14px;
   height: 14px;
   display: block;
+}
+
+/* With a rename pencil beside the titles, the text stays right-aligned with the date and the icon
+   hangs into the pencil's column, centred under the pencil. The negative margin takes back the
+   icon's width and the gap before it, so the text's right edge is the titles' edge. Without a
+   pencil (a finished session) nothing hangs, and text and icon stay together at the right. */
+.titleBlock:has(.rename) .help {
+  margin-right: calc(-1 * (var(--title-gap) + var(--pencil-width)));
+}
+
+.titleBlock:has(.rename) .helpIcon {
+  padding-inline: calc((var(--pencil-width) - 14px) / 2);
 }
 
 @media (max-width: 640px) {
@@ -195,9 +212,12 @@
 
   /* A thumb-sized target, still centred on the first line, whose margins give
      the extra height back so the header row is no taller. */
+  .titleBlock {
+    --pencil-width: 32px;
+  }
+
   .rename {
     --pencil-height: 32px;
-    min-width: 32px;
   }
 
   /* A phone's tabs are the fixed bottom pill, so below the header is the page

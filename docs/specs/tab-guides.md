@@ -1236,3 +1236,25 @@ requirements) and decision D1.
    `MemberList`), so it's hidden whenever "Need help?" is (the first-run tour) and never appears
    in practice, which doesn't pass `onHelp` and always has members. It isn't a `data-tour`
    target. On return from the guide, focus goes to "Need help?" as before.
+
+### Owner feedback, round 2 (2026-11-17)
+The text and the icon of "Need help?" no longer sit together at the right of the title stack:
+
+- **The text** is right-aligned with the date line above it, so its right edge is the stack's
+  right edge.
+- **The icon** hangs into the rename pencil's column and is centred under the pencil. The button
+  stays inside `.titles`. The icon takes a box the pencil's width (`padding-inline` on the
+  content-box SVG), and a negative right margin of the gap plus the pencil's width gives that
+  space back, so the stack's width and the row's height are unchanged.
+- **One source for the numbers.** `.titleBlock` owns `--pencil-width` (26px, and 32px inside
+  `@media (max-width: 640px)`) and `--title-gap` (4px). `.rename` and the help control both read
+  them, so they can't drift. The phone's old `min-width: 32px` on `.rename` became the variable.
+- **No pencil.** Only a draft has a pencil, and a session finished on another device can still be
+  open on its Expenses tab, so the case is reachable. The hanging rules apply only under
+  `.titleBlock:has(.rename)`. Without a pencil, text and icon stay together at the right, as in
+  round 1.
+- **Unchanged:** the rename box still replaces the stack (and so hides the control), the tap
+  target, focus ring and `aria-label`.
+- **Phone (375px).** The icon column is 32px wide, inside the bar, so nothing overflows. On an
+  unnamed session the phone's tall tap target overlaps the pencil's by a few pixels, and the
+  pencil (`z-index: 1`) wins there. The text and the rest of the icon's box still tap "Need help?".
