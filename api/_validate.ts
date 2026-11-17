@@ -1,6 +1,7 @@
 import { parseActivityAt } from '../src/lib/activity.js';
 import { PAYMENTS_PER_REQUEST_MAX } from '../src/lib/collection.js';
 import { NICKNAMES_MAX, normaliseProfileName, type ProfileUpdate } from '../src/lib/profileName.js';
+import { isPracticeId } from '../src/lib/practiceId.js';
 import { normaliseSessionName } from '../src/lib/sessionName.js';
 import { parseSession } from '../src/lib/storage.js';
 import type { NewPayment, Session } from '../src/types';
@@ -20,6 +21,14 @@ export function parseSessionInput(id: string, raw: unknown): Session | null {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null;
   const session = parseSession({ ...(raw as Record<string, unknown>), id });
   return session;
+}
+
+/**
+ * A practice session's id (tab-guides BR-TG3). Practice lives only in the browser, so a write
+ * naming one is a client bug, refused with a 400 before it can reach the database.
+ */
+export function isPracticeSessionId(id: string): boolean {
+  return isPracticeId(id);
 }
 
 /**

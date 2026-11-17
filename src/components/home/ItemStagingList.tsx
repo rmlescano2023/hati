@@ -27,7 +27,7 @@ export function ItemStagingList({ items, editingId, onEdit, onRemove }: Props) {
       </div>
 
       {items.length > 0 && (
-        <div className={styles.list}>
+        <div className={styles.list} data-tour="staged-list">
           <div className={styles.head}>
             <span>Item</span>
             <span className={styles.r}>Price</span>

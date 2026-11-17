@@ -35,7 +35,7 @@ export function PurchaseDetailsFields({
 }: Props) {
   return (
     <div className={styles.grid}>
-      <div className={styles.dateField}>
+      <div className={styles.dateField} data-tour="purchase-date">
         <label htmlFor="purchase-date">Date</label>
         {/* On a phone the native control's own text is hidden and this shows
             instead: a phone's date input picks its own short format and

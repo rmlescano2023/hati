@@ -5,6 +5,7 @@ import {
   contributionsMatch,
   findSavedItem,
   keptPaidBy,
+  leaveMessage,
   NO_PAID_BY_PICK,
   paidByFor,
   paidByMemory,
@@ -918,5 +919,20 @@ describe('the remembered Paid By pick (app-fixes item 3)', () => {
     });
     const multiple = { payorMode: 'multiple', singlePayor: '' } as const;
     expect(paidByFor(multiple, [])).toBe(multiple);
+  });
+});
+
+describe('leaveMessage', () => {
+  it('counts staged items, in the plural', () => {
+    expect(leaveMessage(null, 2)).toBe("You have 2 staged items that aren't saved.");
+  });
+
+  it('counts one staged item, in the singular', () => {
+    expect(leaveMessage(null, 1)).toBe("You have 1 staged item that isn't saved.");
+  });
+
+  it('names the saved item being edited', () => {
+    const ref = { recordId: 'r', itemId: 'i', name: 'Taxi' };
+    expect(leaveMessage(ref, 0)).toBe("Your changes to Taxi aren't saved.");
   });
 });

@@ -50,6 +50,7 @@ import {
   sameStaged,
   stagedFromSaved,
   type PaidByMemory,
+  type PurchaseFormSeed,
   type SavedItemRef,
   type StagedItem,
 } from '../../lib/staging';
@@ -142,6 +143,17 @@ function fieldsFromStaged(row: StagedItem, members: string[]): Fields {
   };
 }
 
+/** What a guide scene opens with: its row as Edit loads it, and Total Amount as the scene typed it. */
+function fieldsFromSeed({ row, totalAmount }: PurchaseFormSeed, members: string[]): Fields {
+  const fields = fieldsFromStaged(row, members);
+  return totalAmount === undefined
+    ? fields
+    : {
+        ...fields,
+        draft: { ...fields.draft, totalAmount: totalAmount.toFixed(2), totalFollows: false },
+      };
+}
+
 /** The fields as a staged item with the given id: its item, date and payors (BR-1). */
 function stampFields(fields: Fields, members: string[], id: string): StagedItem {
   const { date, payorMode, singlePayor, contributions, draft } = fields;
@@ -181,9 +193,18 @@ type Props = {
   onSavedEditEnd: (removed: boolean) => void;
   /** This session's remembered Paid By pick, which the fields start from and keep up to date (app-fixes item 3). */
   paidBy: PaidByMemory;
+  /** A guide scene's fields, read once as the card mounts (tab-guides). */
+  seed?: PurchaseFormSeed;
 };
 
-export function PurchaseItemCard({ staged, setStaged, savedEdit, onSavedEditEnd, paidBy }: Props) {
+export function PurchaseItemCard({
+  staged,
+  setStaged,
+  savedEdit,
+  onSavedEditEnd,
+  paidBy,
+  seed,
+}: Props) {
   const { members, records, addRecords, saveItemEdit } = useAppData();
   const { sync } = useSessionsStore();
 
@@ -198,20 +219,24 @@ export function PurchaseItemCard({ staged, setStaged, savedEdit, onSavedEditEnd,
     return { fields, baseline: stampFields(fields, members, savedEdit.itemId) };
   });
 
-  const [date, setDate] = useState(() => savedBoot?.fields.date ?? todayIso());
+  const [seeded] = useState(() => (seed ? fieldsFromSeed(seed, members) : null));
+
+  const [date, setDate] = useState(() => savedBoot?.fields.date ?? seeded?.date ?? todayIso());
   // A saved-item edit opens on the item's own Paid By. Anything else opens on this session's
   // last pick, less a payor who has left the group since (app-fixes item 3).
   const [remembered] = useState(() => paidByFor(paidBy.read(), members));
   const [payorMode, setPayorMode] = useState<PayorMode>(
-    () => savedBoot?.fields.payorMode ?? remembered.payorMode,
+    () => savedBoot?.fields.payorMode ?? seeded?.payorMode ?? remembered.payorMode,
   );
   const [singlePayor, setSinglePayor] = useState(
-    () => savedBoot?.fields.singlePayor ?? remembered.singlePayor,
+    () => savedBoot?.fields.singlePayor ?? seeded?.singlePayor ?? remembered.singlePayor,
   );
   const [contributions, setContributions] = useState<Record<string, string>>(
-    () => savedBoot?.fields.contributions ?? {},
+    () => savedBoot?.fields.contributions ?? seeded?.contributions ?? {},
   );
-  const [draft, setDraft] = useState<ItemDraft>(() => savedBoot?.fields.draft ?? EMPTY_DRAFT);
+  const [draft, setDraft] = useState<ItemDraft>(
+    () => savedBoot?.fields.draft ?? seeded?.draft ?? EMPTY_DRAFT,
+  );
   /** The row being edited, with what to put back when the edit ends; null when none is. */
   const [editing, setEditing] = useState<{ id: string; restore: EditRestore } | null>(null);
   const [message, dispatch] = useReducer(saveMessageReducer, initialSaveMessage);
@@ -607,7 +632,7 @@ export function PurchaseItemCard({ staged, setStaged, savedEdit, onSavedEditEnd,
           </p>
         )}
 
-        <div className={styles.subhead}>
+        <div className={styles.subhead} data-tour="item-mode">
           <span className={styles.subLabel}>Add Item</span>
           <ModeToggle
             ariaLabel="Item split mode"
@@ -678,7 +703,7 @@ export function PurchaseItemCard({ staged, setStaged, savedEdit, onSavedEditEnd,
               </Button>
             </>
           ) : (
-            <Button onClick={addItem} disabled={!canAddItem}>
+            <Button onClick={addItem} disabled={!canAddItem} data-tour="add-item">
               + Add Item
             </Button>
           )}
@@ -700,7 +725,12 @@ export function PurchaseItemCard({ staged, setStaged, savedEdit, onSavedEditEnd,
         <span className={`${styles.message} ${TONE_CLASS[shown.tone]}`} role="status">
           {shown.text}
         </span>
-        <Button variant="primary" onClick={save} disabled={editing !== null || savedEdit !== null}>
+        <Button
+          variant="primary"
+          onClick={save}
+          disabled={editing !== null || savedEdit !== null}
+          data-tour="save-to-breakdown"
+        >
           Save to Breakdown →
         </Button>
       </div>
