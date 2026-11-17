@@ -511,7 +511,9 @@ export default function App() {
           onUnsavedChange={setUnsavedNote}
         />
       )}
-      {screen.kind === 'practice' && <PracticeExpenses key={`guide-${guideKey}`} onEnd={endGuide} />}
+      {screen.kind === 'practice' && (
+        <PracticeExpenses key={`guide-${guideKey}`} onEnd={endGuide} />
+      )}
     </PageShell>
   );
 }
