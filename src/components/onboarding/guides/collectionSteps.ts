@@ -11,7 +11,7 @@ export const COLLECTION_STEPS: GuideStep<CollectionSceneId>[] = [
     target: 'collection-totals',
     title: 'Who owes what',
     content:
-      "This is a practice with made-up sessions, so tap freely: nothing here is saved. Collection tracks money from finished sessions only. A session lands here when you finish it on its Summary tab. In this practice you're Ana. Owed to you is what others still have to pay you; You owe is what you still have to pay them.",
+      "Collection tracks money from finished sessions only. A session lands here when you finish it on its Summary tab. In this practice you're Ana. Owed to you is what others still have to pay you; You owe is what you still have to pay them.",
     place: 'K1',
   },
   {

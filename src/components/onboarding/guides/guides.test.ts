@@ -181,6 +181,16 @@ describe('each scene shows its targets (AC-TG2.2, BR-TG14)', () => {
   });
 });
 
+describe('the first step of each guide', () => {
+  it('goes straight to the point, with no practice preamble (owner, 2026-11-18)', () => {
+    expect(EXPENSES_STEPS[0].content).toMatch(/^Start by adding everyone/);
+    expect(COLLECTION_STEPS[0].content).toMatch(/^Collection tracks money/);
+    for (const step of [...EXPENSES_STEPS, ...COLLECTION_STEPS]) {
+      expect(step.content).not.toContain('nothing here is saved');
+    }
+  });
+});
+
 describe('the Collection guide steps (AC-TG7.2)', () => {
   const kScenes = collectionScenes(new Date(2026, 10, 17, 9, 0));
   const kIds = Object.keys(kScenes) as CollectionSceneId[];

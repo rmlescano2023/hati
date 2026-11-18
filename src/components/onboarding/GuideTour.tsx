@@ -85,36 +85,31 @@ type Props<P> = {
   /** Where a step's target lands below the top of the screen when the tour scrolls to it. Joyride's 20px when omitted. */
   scrollOffset?: number;
   /**
-   * The screen position (from the top, in pixels) below which every tooltip must stay, read
-   * afresh each time a tooltip is placed. For something sticky above the page, like the
-   * practice banner, whose bottom edge moves with the scroll. The tooltip flips to the side with
-   * room first, and when neither side has room it slides over the target rather than over that
-   * or off the bottom of the screen.
+   * Keeps every tooltip at least this many pixels inside the top and bottom of the screen. It
+   * flips to the side of the target with room first, and when neither side has room it slides
+   * over the target rather than off the screen. Omitted, Joyride places it as it always has.
    */
-  keepBelow?: () => number;
-  /** The fixed stand-in for `keepBelow` when choosing which side of the target the tooltip goes. */
-  flipTop?: number;
+  keepOnScreen?: number;
 };
 
 /** Joyride's own name for what `floatingOptions.middleware` takes. */
 type TooltipMiddleware = NonNullable<NonNullable<Step['floatingOptions']>['middleware']>[number];
 
-/** Slides a tooltip vertically into the band between `top()` and the bottom of the screen. */
-const keepInBand = (top: () => number): TooltipMiddleware => ({
+/** Slides a tooltip vertically so it lies between `margin` from the top and the bottom of the screen. */
+const keepInBand = (margin: number): TooltipMiddleware => ({
   name: 'keepInBand',
   fn: ({ y, rects, elements }) => {
     // Floating UI's y is measured from the tooltip's offset parent. The reference sits at
     // `rects.reference.y` there and at its bounding box on screen, which converts one to the other.
     const toScreen = elements.reference.getBoundingClientRect().top - rects.reference.y;
     const screenTop = y + toScreen;
-    const min = top();
-    // The banner end wins if the band is too short, so End practice is never what's lost.
-    const max = Math.max(min, window.innerHeight - 10 - rects.floating.height);
+    // The top wins if the band is too short, so a tooltip's title is never what's lost.
+    const max = Math.max(margin, window.innerHeight - margin - rects.floating.height);
     // A target the reader's action removed leaves nothing to sit beside. The bottom of the
     // band keeps the tooltip's buttons in reach and the page's own scroll to the result clear.
     const gone = 'isConnected' in elements.reference && !elements.reference.isConnected;
     const wanted = gone ? max : screenTop;
-    return { y: y + (Math.min(Math.max(wanted, min), max) - screenTop) };
+    return { y: y + (Math.min(Math.max(wanted, margin), max) - screenTop) };
   },
 });
 
@@ -148,8 +143,7 @@ export function GuideTour<P>({
   escapeSkips,
   lockTabs,
   scrollOffset,
-  keepBelow,
-  flipTop,
+  keepOnScreen,
 }: Props<P>) {
   const [index, setIndex] = useState(0);
   const done = useRef(false);
@@ -198,19 +192,24 @@ export function GuideTour<P>({
         ...(escapeSkips ? { dismissKeyAction: false as const } : {}),
         ...(scrollOffset !== undefined ? { scrollOffset } : {}),
         ...(s.placement ? { placement: s.placement } : {}),
-        ...(keepBelow
+        ...(keepOnScreen !== undefined
           ? {
               floatingOptions: {
-                // Flip by the room left below the banner, so the side with room is the one picked.
+                // Flip by the room that is really there, so the side with room is the one picked.
                 flipOptions: {
-                  padding: { top: flipTop ?? 20, right: 20, bottom: 10, left: 20 },
+                  padding: {
+                    top: keepOnScreen,
+                    right: 20,
+                    bottom: keepOnScreen,
+                    left: 20,
+                  },
                 },
-                middleware: [keepInBand(keepBelow)],
+                middleware: [keepInBand(keepOnScreen)],
               },
             }
           : {}),
       })),
-    [guideSteps, lastLabel, escapeSkips, scrollOffset, keepBelow, flipTop],
+    [guideSteps, lastLabel, escapeSkips, scrollOffset, keepOnScreen],
   );
 
   // Next does the navigating, so a screen that does not match the current step
@@ -231,7 +230,7 @@ export function GuideTour<P>({
   }, [run, place, index, guideSteps, matches, wentToNextStep]);
 
   // The reader's own action can resize the target, as opening a card or a form does, which may
-  // push it back under the sticky banner or its tooltip off the screen. The tooltip follows the
+  // push it off the top of the screen or its tooltip off the bottom. The tooltip follows the
   // target by itself; the page doesn't, so it is scrolled back to where a step puts its target.
   useEffect(() => {
     if (!run || scrollOffset === undefined || typeof ResizeObserver === 'undefined') return;

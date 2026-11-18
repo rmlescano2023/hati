@@ -4,7 +4,6 @@ import { CollectionPage } from '../../../pages/CollectionPage';
 import { PracticeProfileProvider } from '../../../context/ProfileContext';
 import { PracticeSessionsProvider, useSessionsStore } from '../../../context/SessionsStoreContext';
 import { isFullyPaid } from '../../../lib/collection';
-import { PRACTICE_FLIP_TOP, PRACTICE_SCROLL_OFFSET, PracticeBanner } from './PracticeBanner';
 import {
   PRACTICE_BEACH_ID,
   collectionScenes,
@@ -12,7 +11,7 @@ import {
   type CollectionSceneId,
 } from './collectionScenes';
 import { COLLECTION_STEPS } from './collectionSteps';
-import { practiceBannerBottom, sameScene, targetShown } from './sceneChecks';
+import { GUIDE_SCREEN_MARGIN, GUIDE_SCROLL_OFFSET, sameScene, targetShown } from './sceneChecks';
 
 /** C6: Mark all there does what Next would, so the guide follows the reader on to C7. */
 const MARK_ALL_STEP = COLLECTION_STEPS.findIndex((s) => s.target === 'collection-mark-all');
@@ -57,7 +56,6 @@ export function PracticeCollection({ onEnd }: Props) {
 
   return (
     <>
-      <PracticeBanner onEnd={() => onEnd('origin')} />
       {/* The key remounts the memory store and the page from the scene's seed. */}
       <PracticeCollectionScene
         key={`${scene}:${generation}`}
@@ -75,9 +73,8 @@ export function PracticeCollection({ onEnd }: Props) {
         onDone={() => onEnd('origin')}
         lastLabel="Done"
         escapeSkips
-        scrollOffset={PRACTICE_SCROLL_OFFSET}
-        keepBelow={practiceBannerBottom}
-        flipTop={PRACTICE_FLIP_TOP}
+        scrollOffset={GUIDE_SCROLL_OFFSET}
+        keepOnScreen={GUIDE_SCREEN_MARGIN}
       />
     </>
   );

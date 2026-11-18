@@ -286,7 +286,7 @@ export default function App() {
     );
   };
 
-  /** Skip, Escape, Done and End practice return to the origin; Back to Home goes Home (BR-TG20, BR-TG21). */
+  /** Skip, Escape and Done return to the origin; Back to Home goes Home (BR-TG20, BR-TG21). */
   const endGuide = (to: 'origin' | 'home') => {
     if (screen.kind !== 'practice') return;
     const { back, via } = screen;

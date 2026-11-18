@@ -7,12 +7,8 @@ export function targetShown(target: string): boolean {
   return el !== null && el.getBoundingClientRect().height > 0;
 }
 
-/**
- * Where a guide's tooltip must stay below, from the top of the screen: a gap under the practice
- * banner wherever it is, whether it has stuck to the top as the page scrolled or still sits in its
- * place under the header. Read at the moment a tooltip is placed.
- */
-export const practiceBannerBottom = () => {
-  const banner = document.querySelector('[data-practice-banner]');
-  return (banner ? banner.getBoundingClientRect().bottom : 0) + 8;
-};
+/** Where a guide's step lands its target below the top of the screen: Joyride's own default. */
+export const GUIDE_SCROLL_OFFSET = 20;
+
+/** How far inside the top and bottom of the screen a guide's tooltip stays. */
+export const GUIDE_SCREEN_MARGIN = 10;
