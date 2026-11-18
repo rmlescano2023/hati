@@ -178,8 +178,8 @@ in plain words, so that I understand it without having to fill it in first.
 As a user, I want the practice to be clearly separate from my real sessions, so that I can try
 things without worrying about my group's numbers.
 
-- **AC-TG3.1** Given a guide is running, then a practice banner shows at the top of the practice
-  screen: "Practice session. Nothing here is saved." with an "End practice" button (BR-TG23).
+- **AC-TG3.1** (Removed, owner, 2026-11-18, section 12: there is no practice banner. The practice
+  screens look like the real ones, and the step copy no longer says "practice, nothing is saved".)
 - **AC-TG3.2** Given I run the Expenses guide, add a person, + Add Item and Save to Breakdown in
   practice, then the browser's network log shows no request to `/api/sessions` from the moment
   the guide starts to the moment it ends. In PR 2 the only request is the guide's seen mark to
@@ -209,8 +209,8 @@ in the practice.
   dialog (BR-TG24).
 - **AC-TG4.4** Given the Expenses practice, when I activate "← Back to Home", then the guide ends
   and I land on Home (BR-TG21).
-- **AC-TG4.5** Given the practice banner can be reached (for example, by keyboard, or because a
-  step failed to show), when I activate End practice, then it ends as Skip does.
+- **AC-TG4.5** (Removed, owner, 2026-11-18, section 12: there is no End practice button. Skip,
+  Escape and Done are the ways out, and Back to Home in the Expenses practice.)
 - **AC-TG4.6** Given the Expenses practice, when I tap the Breakdown or Summary tab, then nothing
   changes and the tooltip says "Tap Next to continue". The same goes for keyboard activation.
   Finish Session is never reachable in practice (BR-TG22).
@@ -260,7 +260,7 @@ the choice I made on day one.
   me (primary).
   - When I tap Maybe later, or press Escape, then the dialog closes and I stay on Home.
   - When I tap Show me, then the dialog closes and the Expenses guide starts on the practice
-    screen, with Home as its origin. When it ends (Skip, Escape, Done, End practice or Back to
+    screen, with Home as its origin. When it ends (Skip, Escape, Done or Back to
     Home), I land on Home.
   - Given I skipped the tour or left it by navigating away, then no dialog and no guide follow.
   - The tour's empty draft is still removed, and the guide never shows it.
@@ -389,10 +389,9 @@ me in dialogs.
 - **AC-TG13.2** At 375px and at 1280px, each step's tooltip is fully on screen, and the page
   scrolls so the highlighted element is in view. When the element is taller than the screen,
   its top is in view.
-- **AC-TG13.3** At 375px, the practice banner fits on one or two lines, never covers the
-  highlighted element, and doesn't make the page scroll sideways. (Amended for PR 2, section 12:
-  the banner is sticky; it doesn't cover the highlighted element when a step shows.)
-- **AC-TG13.4** On desktop, the "?" buttons, the Tutorials item and the practice banner keep the
+- **AC-TG13.3** At 375px, a practice screen doesn't make the page scroll sideways. (Amended,
+  owner, 2026-11-18, section 12: there is no practice banner.)
+- **AC-TG13.4** On desktop, the "?" buttons and the Tutorials item keep the
   existing layout: no element moves except to make room for the "?" button.
 
 ### US-TG14: Preview an offer while developing (PR 2, dev only)
@@ -484,7 +483,7 @@ me in dialogs.
 - **BR-TG19** **Practice has fixed identities.** On Collection the practice "you" is Ana. The
   practice never reads or changes the real profile name, nicknames, Paid By picks, "recently
   opened" order or the "Already settled?" answer.
-- **BR-TG20** **Where a guide ends.** Skip, Escape, Done and End practice return to the origin.
+- **BR-TG20** **Where a guide ends.** Skip, Escape and Done return to the origin.
   The origin is:
 
   | Started from | Origin |
@@ -502,14 +501,9 @@ me in dialogs.
   Expenses works. Breakdown and Summary do nothing, apart from the "Tap Next to continue" nudge,
   so Finish Session can't be reached. The practice screens show no Home / Collection / History
   bar and no + New Session.
-- **BR-TG23** **The practice banner** shows at the top of every practice screen, above the
-  workspace bar or the Collection strip:
-  - text: "Practice session. Nothing here is saved.";
-  - an "End practice" button.
-
-  It's announced once to screen readers when the guide starts, and it's the only place
-  End practice lives. It isn't a step target. (Amended for PR 2, section 12: it stays in view
-  while the reader scrolls, and the practice workspace has no rename pencil.)
+- **BR-TG23** (Removed, owner, 2026-11-18, section 12.) There is no practice banner and no End
+  practice button. A guide ends with Skip or Escape on any step, Done on the last, or Back to Home
+  in the Expenses practice. The practice workspace shows no rename pencil.
 - **BR-TG24** **No closing dialog.** A guide ends on its last step's Done. The last step's text
   says the reader is going back to their own sessions. The first-run tour keeps
   "You're all set!".
@@ -577,7 +571,7 @@ row or card goes on exactly one instance or on its container (approved rule).
 
 | # | Scene | Target | Title | Text |
 |---|---|---|---|---|
-| E1 | X1 | Group Members card [`group-members`] | Who's sharing? | This is a practice with made-up people, so tap and type freely: nothing here is saved. Start by adding everyone who's sharing the costs. Type a name and tap + Add. Tap × on a name to remove it. |
+| E1 | X1 | Group Members card [`group-members`] | Who's sharing? | Start by adding everyone who's sharing the costs. Type a name and tap + Add. Tap × on a name to remove it. |
 | E2 | X1 | Date [`purchase-date`] | When was it? | Pick the day of the purchase. It starts on today. |
 | E3 | X1 | Paid By [`paid-by`] | Who paid? | Choose who paid at the counter. Here, Ana paid. |
 | E4 | X2 | Paid By [`paid-by`] | More than one payer? | If several people paid, switch to Multiple Payors and type what each one put in. Ana paid ₱700 and Ben ₱500. Together they have to match the price. |
@@ -649,7 +643,7 @@ setup".
 
 | # | Scene | Target | Title | Text |
 |---|---|---|---|---|
-| C1 | K1 | Summary strip [`collection-totals`] | Who owes what | This is a practice with made-up sessions, so tap freely: nothing here is saved. Collection tracks money from finished sessions only. A session lands here when you finish it on its Summary tab. In this practice you're Ana. Owed to you is what others still have to pay you; You owe is what you still have to pay them. |
+| C1 | K1 | Summary strip [`collection-totals`] | Who owes what | Collection tracks money from finished sessions only. A session lands here when you finish it on its Summary tab. In this practice you're Ana. Owed to you is what others still have to pay you; You owe is what you still have to pay them. |
 | C2 | K1 | Needs setup section [`collection-needs-setup`] | Which one is you? | Hati finds you by the name in your Profile. In Movie night your name was spelled "Anna", so Hati asks. Open the card, pick your name and confirm, and it moves to the right section. |
 | C3 | K2 | Beach trip card [`collection-card`] | Money still to collect | Outstanding sessions still have money to collect or pay. Tap a card to open it. Each line is one person: what they owe, what's been paid and what's left. |
 | C4 | K2 | Record payment on Ben's line [`record-payment`] | Record a payment | When Ben pays you, tap Record payment. It fills in the full amount, so change it if he paid only part. Mark fully paid records the whole amount in one tap. For money you owe, the button says I paid. |
@@ -706,7 +700,7 @@ the reader can tap it to see the form.
 
 **Tutorials dialog:** as in AC-TG5.2, with the title "Tutorials" and a Close button.
 
-**Practice banner:** "Practice session. Nothing here is saved." with [End practice].
+**Practice banner:** none (owner, 2026-11-18, section 12).
 
 ## 7. Edge cases
 
@@ -719,15 +713,15 @@ the reader can tap it to see the form.
 | "?" with a saved-item edit open | The same prompt, with "Your changes to X aren't saved." | BR-TG6 |
 | "?" with typed but unadded fields | No prompt. The fields are gone on return, as with a tab switch today. | BR-TG18 |
 | Tutorials chosen from a session with staged items | The same prompt first. | AC-TG5.5 |
-| Skip, Escape, Done, End practice | The guide ends and the reader returns to the origin. | BR-TG20 |
+| Skip, Escape, Done | The guide ends and the reader returns to the origin. | BR-TG20 |
 | Back to Home in practice | The guide ends and the reader lands on Home. | BR-TG21 |
 | Breakdown or Summary tapped in practice | The nudge only. No navigation, no Finish Session. | BR-TG22 |
 | Escape in a Collection payment amount box | Closes that form only. | AC-TG4.2 |
 | Escape in a practice confirm dialog (Mark all, Undo, Remove member) | Closes that dialog only, as today. | Existing dialogs |
 | Reload mid-guide | Lands on Home. Practice gone, guide not resumed, flag already written, no practice reload prompt. | AC-TG4.7, BR-TG25 |
 | Sign-out in another tab mid-guide | Signed-out screen, as today. Practice gone. | None |
-| Real save failure before or during practice | No banner in practice. Shown on return. | BR-TG25 |
-| A real payment in flight when "?" is tapped on Collection | It finishes in the background. If refused, the banner shows on return, and the typed amount is lost, as with a tab switch today. | BR-TG25 |
+| Real save failure before or during practice | Not shown in practice. Shown on return. | BR-TG25 |
+| A real payment in flight when "?" is tapped on Collection | It finishes in the background. If refused, the sync banner shows on return, and the typed amount is lost, as with a tab switch today. | BR-TG25 |
 | The origin session is deleted on another device during practice | The reader lands on Home. | BR-TG20 |
 | The reader removes every practice member (Clear All) | Allowed. The next step in that scene resets it, and a new scene starts fresh anyway. | BR-TG13, BR-TG14 |
 | The reader types a very long member name in practice | Same limits and wrapping as a real session. | BR-TG17 |
@@ -750,8 +744,8 @@ The architect's "For the business-analyst to settle" list, answered:
 |---|---|---|
 | "Already settled?" against the Collection offer | "Already settled?" first. It changes what the user's real Collection shows, and the practice can't show it anyway. The offer waits for a later visit. | BR-TG9 |
 | What's new and an offer at once | What's new first. The offer never follows another prompt in the same visit. | BR-TG8 |
-| Practice marker banner | A slim strip, "Practice session. Nothing here is saved.", with End practice. It's also the safety exit if a step fails to show. | BR-TG23 |
-| What ends a guide, and where it returns | Skip, Escape, Done and End practice return to the origin. Back to Home goes Home. Tabs are inert. | BR-TG20 to BR-TG22 |
+| Practice marker banner | None (owner, 2026-11-18). Escape is the exit if a step fails to show. | BR-TG23 |
+| What ends a guide, and where it returns | Skip, Escape and Done return to the origin. Back to Home goes Home. Tabs are inert. | BR-TG20 to BR-TG22 |
 | A closing dialog | None. The last step says where the reader is going, and Done takes them there. | BR-TG24 |
 | `SyncBanner` in practice | Hidden. Real failures show on return. | BR-TG25 |
 | Scene boundaries and reset | 4 Expenses scenes and 2 Collection scenes. A new scene starts fresh, and a step whose target is gone resets its scene. | BR-TG13 to BR-TG15 |
@@ -854,7 +848,7 @@ offline use.
    (recommended), or should the app re-check the flag on the server just before each offer?
 9. **OQ-TG9: Copy approval.** Please approve or edit:
    - the step texts in section 6.1 (E1 to E17) and 6.2 (C1 to C7);
-   - the offers, What's new v2, the Tutorials descriptions and the practice banner (section 6.3);
+   - the offers, What's new v2 and the Tutorials descriptions (section 6.3);
    - the example people (Ana, Ben, Carla, Dino, plus "Anna") and sessions (Beach trip, Movie
      night, Karaoke night).
 
@@ -928,3 +922,10 @@ Copy in sections 6.2 and 6.3 is otherwise unchanged.
   stale the moment the reader undoes her payment, and the step invites exactly that. The text is now
   "Each payment is listed with Undo, in case one was recorded by mistake. Try it on Carla's ₱200: her
   line goes back to Unpaid." (section 6.2's C5 row carries it.)
+- **Owner feedback (2026-11-18): no practice banner, no preamble.** The practice banner and its End
+  practice button are gone from both guides, which removes AC-TG3.1, AC-TG4.5, BR-TG23, and the
+  banner in AC-TG13.3, AC-TG13.4 and section 6.3. The ways out are Skip and Escape on every step,
+  Done on the last, and Back to Home in the Expenses practice (BR-TG20, BR-TG21). The first step
+  of each guide drops its opening sentence ("This is a practice with made-up people, so tap and
+  type freely: nothing here is saved." for E1, the same for sessions in C1). The dialogs' "Nothing
+  you do there is saved" is unchanged.

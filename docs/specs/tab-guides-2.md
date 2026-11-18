@@ -1268,3 +1268,21 @@ Made on `tab-guides-2` after the review (SHIP, two Majors) and the QA pass of `1
 - **C5's copy (QA defect 3).** Replaced, in the requirements' 6.2 table and in
   `collectionSteps.ts`: "Each payment is listed with Undo, in case one was recorded by mistake.
   Try it on Carla's ₱200: her line goes back to Unpaid."
+
+## 14. Owner feedback (2026-11-18)
+
+- **No practice banner.** `PracticeBanner` (and its CSS) is deleted, with `PRACTICE_SCROLL_OFFSET`,
+  `PRACTICE_FLIP_TOP`, `practiceBannerBottom`, the `data-practice-banner` attribute and the banner's
+  `scroll-padding-top`. Sections 6.3 (sticky banner, scroll offset) and 13's banner parts no longer
+  apply. The ways out are Skip and Escape on every step, Done on the last step, and Back to Home in
+  the Expenses practice, which return as BR-TG20 and BR-TG21 say. If a step's target fails to show,
+  there is no tooltip and so no Skip, but Escape still ends the guide.
+- **No preamble.** C1 and E1 lose their first sentence. E1 now begins "Start by adding everyone
+  who's sharing the costs." and C1 "Collection tracks money from finished sessions only."
+- **Tooltip band, simplified.** The banner is gone, so there is nothing to read live. `GuideTour`'s
+  `keepBelow` and `flipTop` become one number, `keepOnScreen` (10px, `GUIDE_SCREEN_MARGIN`): every
+  tooltip stays that far inside the top and bottom of the screen, flipping to the side with room
+  first and sliding over the target when neither has. Steps land their target at Joyride's own 20px
+  (`GUIDE_SCROLL_OFFSET`, in `guides/sceneChecks.ts`). The re-scroll after the reader's action stays.
+- **Unchanged.** The tour's "You're all set!", What's new and the offers keep their "Nothing you
+  do there is saved".
