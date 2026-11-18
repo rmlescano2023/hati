@@ -83,7 +83,7 @@ Assumptions, stated openly:
 | File | Change | Reuse |
 |---|---|---|
 | `src/App.tsx` | The `practice` screen takes either guide; `launch` and `startTutorial` take `mark`; the offer state, visit counter and latch; What's new v2; BR-TG28 in "You're all set!"; focus return to Collection's "Need help?"; Collection's new props; Preview offer. | `launch`, `startTutorial`, `endGuide` |
-| `src/pages/CollectionPage.tsx` + `.module.css` | "Need help?", four `data-tour` targets, a wrapper around Needs setup and Outstanding, and `onOfferClear`. | `HelpIcon`, PR 1's `.help` look |
+| `src/pages/CollectionPage.tsx` + `.module.css` | "Need help?", four `data-tour` targets (C2's is the Needs setup section, see section 13), and `onOfferClear`. | `HelpIcon`, PR 1's `.help` look |
 | `src/components/collection/CollectionCard.tsx` | `collection-owed` on the open card's "Owed to you" group, `collection-mark-all` on Mark all. | |
 | `src/components/layout/SessionWorkspace.tsx` | No rename pencil in practice. | |
 | `src/pages/HomePage.tsx`, `src/components/home/DevSessionsBar.tsx` | `onPreviewOffer` and two dev buttons. | the lazy, DEV-gated bar |
@@ -779,13 +779,14 @@ export function PracticeCollectionScene({ scene, onBeachPaid }: SceneProps) {
 ### 6.5 The steps (`guides/collectionSteps.ts`)
 
 `export const COLLECTION_STEPS: GuideStep<CollectionSceneId>[]`, 7 steps. `title` and `content`
-are copied **verbatim** from requirements section 6.2, which is unchanged. Only scenes and
+are copied **verbatim** from requirements section 6.2, which is unchanged except C5's text (see the
+"Review and QA round 1 fixes" note at the end). Only scenes and
 targets differ from the requirements' proposals (section 12).
 
 | # | Scene | Target | Element | Tap or type the copy asks for | In the spotlight? |
 |---|---|---|---|---|---|
 | C1 | K1 | `collection-totals` | Summary `<section>`: heading, strip and note | none ("tap freely" is general) | n/a |
-| C2 | K1 | `collection-unsettled` | a new `<div>` around the Needs setup and Outstanding sections | open Movie night, pick a name, Confirm | Yes: the header, the picker and Confirm are inside, and so is Outstanding, where the confirmed card lands, still open (`openId` is kept). |
+| C2 | K1 | `collection-unsettled` | the Needs setup `<section>` (section 13; it first wrapped Needs setup and Outstanding) | open Movie night, pick a name, Confirm | Yes: the header, the picker and Confirm are inside. Confirm removes the section, and the tooltip stays at the bottom of the screen with its buttons. |
 | C3 | **K1** | `collection-outstanding` | Outstanding's `div.list` | "Tap a card to open it" | Yes: Beach trip is collapsed in K1, and opening it grows the list, which the spotlight follows (`ResizeObserver`). |
 | C4 | K2 | `collection-owed` | the open card's "Owed to you" `section.group` (Ben and Carla) | Record payment, change the amount, Save payment; Mark fully paid | Yes: the button, the form it opens in place of the button, and Mark fully paid are all inside. |
 | C5 | K2 | `collection-owed` | the same | Undo on Carla's payment | Yes. The confirm is a native modal dialog, above the overlay. |
@@ -872,7 +873,7 @@ Summary heading, the page's first section heading.
 **Targets and the wrapper:**
 
 - `<section data-tour="collection-totals">` on the Summary section;
-- `<div data-tour="collection-unsettled">` wrapping the Needs setup section and the Outstanding
+- (Superseded by section 13: the target is the Needs setup section, with no wrapper.) `<div data-tour="collection-unsettled">` wrapping the Needs setup section and the Outstanding
   section, exactly as they are. `main` is a flex column, so margins never collapsed across these
   siblings, and the wrapper changes no spacing;
 - `data-tour="collection-outstanding"` on Outstanding's `<div className={homeStyles.list}>`;
@@ -977,7 +978,7 @@ screen. They follow the approved rule:
 | Target | Element | File | Absent when |
 |---|---|---|---|
 | `collection-totals` | Summary `<section>` | `CollectionPage.tsx` | no finished sessions |
-| `collection-unsettled` | `<div>` around Needs setup and Outstanding | `CollectionPage.tsx` | no finished sessions |
+| `collection-unsettled` | the Needs setup `<section>` | `CollectionPage.tsx` | nothing needs setup (including once Confirm places the card) |
 | `collection-outstanding` | Outstanding's list `<div>` | `CollectionPage.tsx` | nothing outstanding |
 | `collection-owed` | the open card's "Owed to you" `<section>` | `CollectionCard.tsx` | no card open, or nothing owed to the user in it |
 | `collection-mark-all` | `MarkAll`'s row | `CollectionCard.tsx` | no Outstanding card open |
@@ -1230,3 +1231,40 @@ None of these blocks the build: the spec implements the recommendation in each c
     works" (WCAG 2.5.3, as on Expenses).
 
   **Recommendation:** approve.
+
+## 13. Review and QA round 1 fixes (2026-11-18)
+
+Made on `tab-guides-2` after the review (SHIP, two Majors) and the QA pass of `1c43f95`.
+
+- **Expenses offer over a saved-item edit (Major).** Breakdown's Edit confirm sets the edit and
+  switches to Expenses in one batch, and the workspace reports its unsaved note from an effect, so
+  App's `unsavedNote` is still null in the render that makes the offer due. App now also keeps the
+  note in a ref that the report updates before App's own effect runs, and the effect refuses to open
+  the offer while it is set. A visit that had unsaved work at any point stays marked
+  (`unsavedVisit`), so ending the edit doesn't open the offer mid-visit (AC-TG9.5). There is no
+  pure seam to test: `guideOfferDue` already has the `unsaved` row, and the race is in App's timing.
+- **Unrelated reflow (Major).** The Prettier reflow of `buttons:` in `GuideTour.tsx` is reverted.
+- **Tooltips never cover the banner or leave the screen (QA defect 1).**
+  - `GuideTour` takes `keepBelow` (a function giving the screen position the tooltip must stay
+    below) and `flipTop` (a fixed stand-in for choosing the side). A small Floating UI middleware,
+    passed through Joyride's `floatingOptions.middleware`, slides the tooltip into the band between
+    the banner's bottom edge plus 8px and 10px above the bottom of the screen. It reads the
+    banner's position each time, because an unscrolled page has the banner under the header
+    (about 115 to 202px on a phone) and a scrolled one has it stuck at 8 to 95px. The banner end
+    wins if the band is too short, so End practice is what is never lost.
+  - A step may now set `placement`. None needed one: the band and the flip cover every step
+    measured.
+  - Both practices pass `keepBelow` and `flipTop`. The first-run tour passes neither and is
+    unchanged.
+  - The practice banner also sets `scroll-padding-top` on the page while it is mounted, so the
+    page's own scrolls (landing on a card, bringing a confirmed card into view) stop below it.
+- **Drift after the reader's action (QA defect 2).** When the current step's target changes size
+  (opening a card or a form), the page is scrolled so its top is back where a step puts it. If the
+  action removes the target, as C2's Confirm removes Needs setup, the tooltip stays with its buttons
+  and moves to the bottom of the band, clear of the card the page brought into view.
+- **C2's target (QA defect 1).** `collection-unsettled` is now the Needs setup section only, as the
+  reviewer suggested, where it wrapped Needs setup and Outstanding. The extra wrapper `div` is
+  gone. Confirm removes the section, and the tooltip stays (see above) rather than strand.
+- **C5's copy (QA defect 3).** Replaced, in the requirements' 6.2 table and in
+  `collectionSteps.ts`: "Each payment is listed with Undo, in case one was recorded by mistake.
+  Try it on Carla's ₱200: her line goes back to Unpaid."

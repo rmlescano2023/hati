@@ -653,7 +653,7 @@ setup".
 | C2 | K1 | Needs setup section [`collection-needs-setup`] | Which one is you? | Hati finds you by the name in your Profile. In Movie night your name was spelled "Anna", so Hati asks. Open the card, pick your name and confirm, and it moves to the right section. |
 | C3 | K2 | Beach trip card [`collection-card`] | Money still to collect | Outstanding sessions still have money to collect or pay. Tap a card to open it. Each line is one person: what they owe, what's been paid and what's left. |
 | C4 | K2 | Record payment on Ben's line [`record-payment`] | Record a payment | When Ben pays you, tap Record payment. It fills in the full amount, so change it if he paid only part. Mark fully paid records the whole amount in one tap. For money you owe, the button says I paid. |
-| C5 | K2 | Carla's payment list [`payment-history`] | Fix a mistake | Carla has paid ₱200 of ₱430, so her line says Partial. Every payment is listed with Undo, in case one was recorded by mistake. |
+| C5 | K2 | Carla's payment list [`payment-history`] | Fix a mistake | Each payment is listed with Undo, in case one was recorded by mistake. Try it on Carla's ₱200: her line goes back to Unpaid. |
 | C6 | K2 | Mark all as paid [`mark-all`] | Everyone paid at once? | Mark all as paid records what's left on every line in this session. Hati asks you to confirm first, and each payment can still be undone. |
 | C7 | K2 | Settled toggle [`settled-toggle`] | All done | When every line is paid, the session moves to Settled. Tap here to see them. That's it: tap Done to go back to your own Collection. |
 
@@ -924,4 +924,7 @@ Copy in sections 6.2 and 6.3 is otherwise unchanged.
 - **BR-TG23 and AC-TG13.3 (owner, 2026-11-17).** The practice banner is sticky at the top while
   the reader scrolls, above the guide's overlay, with the tooltip on top where they overlap. Each
   step scrolls its target clear of it. The practice workspace shows no rename pencil.
-
+- **Step C5 copy (QA, 2026-11-18).** "Carla has paid ₱200 of ₱430, so her line says Partial" goes
+  stale the moment the reader undoes her payment, and the step invites exactly that. The text is now
+  "Each payment is listed with Undo, in case one was recorded by mistake. Try it on Carla's ₱200: her
+  line goes back to Unpaid." (section 6.2's C5 row carries it.)
