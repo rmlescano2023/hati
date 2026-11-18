@@ -65,6 +65,16 @@ export default function App() {
   const [guideKey, setGuideKey] = useState(0);
   /** What there is to lose on the open session's Expenses tab, reported by the workspace; else null. */
   const [unsavedNote, setUnsavedNote] = useState<string | null>(null);
+  /**
+   * The same note, kept where an effect can read it in the render it was reported in. The
+   * workspace reports it from an effect, so on the render that arrives at Expenses through
+   * Breakdown's Edit the state above is still null, and only this is current.
+   */
+  const unsavedRef = useRef<string | null>(null);
+  const reportUnsaved = useCallback((note: string | null) => {
+    unsavedRef.current = note;
+    setUnsavedNote(note);
+  }, []);
   /** A tutorial waiting on the "Leave without saving?" answer. */
   const [pendingTutorial, setPendingTutorial] = useState<{
     tutorial: Tutorial;
@@ -129,6 +139,13 @@ export default function App() {
   const [promptedVisit, setPromptedVisit] = useState(-1);
   const promptShowing = phase !== 'off' || whatsNewOpen;
   if (promptShowing && promptedVisit !== visit.n) setPromptedVisit(visit.n);
+  /**
+   * The visit that had unsaved work on Expenses at any point, which is how a visit through
+   * Breakdown's Edit looks. It stays set when the edit ends, so saving it doesn't open the offer
+   * mid-visit (AC-TG9.5).
+   */
+  const [unsavedVisit, setUnsavedVisit] = useState(-1);
+  if (unsavedNote !== null && unsavedVisit !== visit.n) setUnsavedVisit(visit.n);
 
   const offerDue = guideOfferDue({
     tab:
@@ -141,15 +158,21 @@ export default function App() {
     prompted: promptShowing || promptedVisit === visit.n,
     dialogOpen:
       profileOpen || tutorialsOpen || naming || pendingTutorial !== null || offer !== null,
-    unsaved: unsavedNote !== null,
+    unsaved: unsavedNote !== null || unsavedVisit === visit.n,
     collectionClear,
   });
   useEffect(() => {
     if (offerDue === null) return;
+    // The workspace's report arrives in a child effect of this same commit, so the note in state
+    // may be a render behind. The ref isn't.
+    if (unsavedRef.current !== null) {
+      setUnsavedVisit(visit.n);
+      return;
+    }
     // A dialog a page opened itself (Remove member, Clear All, Undo) counts as open too (BR-TG8).
     if (document.querySelector('dialog[open]')) return;
     setOffer({ guide: offerDue, preview: false });
-  }, [offerDue]);
+  }, [offerDue, visit.n]);
 
   // The offer opens as soon as we know this is a first login, and only then —
   // the guard keeps a later state change from reopening a finished sequence.
@@ -606,7 +629,7 @@ export default function App() {
             setScreen({ kind: 'collection', openSessionId: screen.sessionId });
           }}
           onHelp={phase === 'running' ? undefined : () => startTutorial('expenses', 'help')}
-          onUnsavedChange={setUnsavedNote}
+          onUnsavedChange={reportUnsaved}
         />
       )}
       {screen.kind === 'practice' &&
