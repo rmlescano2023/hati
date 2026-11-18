@@ -18,10 +18,13 @@ import { ProfileDialog } from './components/profile/ProfileDialog';
 import { OnboardingTour } from './components/onboarding/OnboardingTour';
 import { OnboardingDialog } from './components/onboarding/OnboardingDialog';
 import { TutorialsDialog, type Tutorial } from './components/onboarding/TutorialsDialog';
+import { GuideOfferDialog } from './components/onboarding/GuideOfferDialog';
+import { PracticeCollection } from './components/onboarding/guides/PracticeCollection';
 import { PracticeExpenses } from './components/onboarding/guides/PracticeExpenses';
 import onboardingStyles from './components/onboarding/OnboardingDialog.module.css';
 import type { ScreenShape } from './components/onboarding/steps';
 import { useOnboarding } from './hooks/useOnboarding';
+import { guideOfferDue, type Guide } from './lib/guideOffer';
 import { showsEmptyState } from './lib/writeQueue';
 import type { PaidByPicks } from './lib/staging';
 import styles from './App.module.css';
@@ -44,7 +47,7 @@ type RealScreen =
  * (BR-TG20); `via` is how it started, so focus can go back to "?" (AC-TG4.1).
  */
 type Screen =
-  RealScreen | { kind: 'practice'; guide: 'expenses'; back: RealScreen; via: 'help' | 'menu' };
+  RealScreen | { kind: 'practice'; guide: Guide; back: RealScreen; via: 'help' | 'menu' };
 
 /** The three screens that sit under a top-level tab and keep the tab bar. */
 const TOP_LEVEL = new Set<Screen['kind']>(['home', 'collection', 'history']);
@@ -66,6 +69,7 @@ export default function App() {
   const [pendingTutorial, setPendingTutorial] = useState<{
     tutorial: Tutorial;
     via: 'help' | 'menu';
+    mark: boolean;
   } | null>(null);
   /** Set when a guide that started from "?" ends, so focus goes back to it. */
   const focusHelp = useRef(false);
@@ -76,7 +80,20 @@ export default function App() {
    * mounts.
    */
   const [paidByPicks] = useState<PaidByPicks>(() => new Map());
-  const { shouldRun: firstLogin, markSeen, whatsNewDue, markWhatsNewSeen } = useOnboarding();
+  const {
+    shouldRun: firstLogin,
+    markSeen,
+    whatsNewDue,
+    markWhatsNewSeen,
+    guideSeen,
+    markGuideSeen,
+  } = useOnboarding();
+  /** The once-only offer on screen, or a dev preview of one, which writes nothing (US-TG14). */
+  const [offer, setOffer] = useState<{ guide: Guide; preview: boolean } | null>(null);
+  /** Collection has loaded, and "Already settled?" is neither due nor asked this visit, as the page reports. */
+  const [collectionClear, setCollectionClear] = useState(false);
+  /** Whether the tour that just ended was a replay or a preview, which "You're all set!" must not mark (BR-TG28). */
+  const finishedPreview = useRef(false);
 
   /**
    * Onboarding is a small sequence rather than a flag: the offer, the tour
@@ -93,11 +110,46 @@ export default function App() {
   // waits out the welcome and the tour, which a new account gets instead (BR-W5).
   // A guide is never interrupted (BR-TG10), so a due one opens once the guide has ended.
   const whatsNewOpen =
-    phase === 'off' && screen.kind !== 'practice' && (whatsNewDue || whatsNewPreview);
+    phase === 'off' &&
+    screen.kind !== 'practice' &&
+    offer === null &&
+    (whatsNewDue || whatsNewPreview);
   const closeWhatsNew = () => {
     if (whatsNewPreview) setWhatsNewPreview(false);
     else markWhatsNewSeen();
   };
+
+  // A visit is one arrival on a screen or a session's tab (requirements section 3). It's counted
+  // rather than keyed, so leaving Collection and coming back is a new visit.
+  const visitKey =
+    screen.kind === 'session' ? `session:${screen.sessionId}:${screen.tab}` : screen.kind;
+  const [visit, setVisit] = useState({ key: visitKey, n: 0 });
+  if (visit.key !== visitKey) setVisit({ key: visitKey, n: visit.n + 1 });
+  /** The visit a one-time prompt last showed on: no offer follows one on the same visit (BR-TG8). */
+  const [promptedVisit, setPromptedVisit] = useState(-1);
+  const promptShowing = phase !== 'off' || whatsNewOpen;
+  if (promptShowing && promptedVisit !== visit.n) setPromptedVisit(visit.n);
+
+  const offerDue = guideOfferDue({
+    tab:
+      screen.kind === 'session' && screen.tab === 'expenses'
+        ? 'expenses'
+        : screen.kind === 'collection'
+          ? 'collection'
+          : null,
+    seen: guideSeen,
+    prompted: promptShowing || promptedVisit === visit.n,
+    dialogOpen:
+      profileOpen || tutorialsOpen || naming || pendingTutorial !== null || offer !== null,
+    unsaved: unsavedNote !== null,
+    collectionClear,
+  });
+  useEffect(() => {
+    if (offerDue === null) return;
+    // A dialog a page opened itself (Remove member, Clear All, Undo) counts as open too (BR-TG8).
+    if (document.querySelector('dialog[open]')) return;
+    setOffer({ guide: offerDue, preview: false });
+  }, [offerDue]);
 
   // The offer opens as soon as we know this is a first login, and only then —
   // the guard keeps a later state change from reopening a finished sequence.
@@ -158,6 +210,7 @@ export default function App() {
     (completed: boolean) => {
       const id = tourSession.current;
       tourSession.current = null;
+      finishedPreview.current = previewing.current;
       if (previewing.current) previewing.current = false;
       else markSeen();
 
@@ -175,27 +228,38 @@ export default function App() {
     [markSeen],
   );
 
+  /** Maybe later or Escape: for a new account it declines the Expenses offer; a replay writes nothing. */
+  const laterAfterTour = () => {
+    setPhase('off');
+    if (!finishedPreview.current) markGuideSeen('expenses');
+  };
+
   /**
    * Starts a tutorial from "?" or from the Tutorials dialog. Unsaved work on the Expenses tab
    * asks first, as leaving the tab does (BR-TG6, AC-TG5.5).
    */
-  const startTutorial = (tutorial: Tutorial, via: 'help' | 'menu') => {
-    if (screen.kind === 'session' && unsavedNote !== null) setPendingTutorial({ tutorial, via });
-    else launch(tutorial, via);
+  const startTutorial = (tutorial: Tutorial, via: 'help' | 'menu', mark = true) => {
+    if (screen.kind === 'session' && unsavedNote !== null) {
+      setPendingTutorial({ tutorial, via, mark });
+    } else launch(tutorial, via, mark);
   };
 
-  const launch = (tutorial: Tutorial, via: 'help' | 'menu') => {
+  const launch = (tutorial: Tutorial, via: 'help' | 'menu', mark = true) => {
     // A tutorial chosen during the first-run tour ends it as Skip does (BR-TG27).
     if (phase === 'running') endTour(false);
     if (tutorial === 'overview') {
       previewTour();
       return;
     }
+    // Starting a guide from any way in uses up its once-only offer (BR-TG5). Previews and replays don't.
+    if (mark) markGuideSeen(tutorial);
     window.scrollTo(0, 0);
     setGuideKey((k) => k + 1);
-    // Restarting during a guide keeps the first origin (BR-TG26).
+    // Restarting during a guide keeps the first origin (BR-TG26), and may switch guides.
     setScreen((s) =>
-      s.kind === 'practice' ? { ...s } : { kind: 'practice', guide: 'expenses', back: s, via },
+      s.kind === 'practice'
+        ? { ...s, guide: tutorial }
+        : { kind: 'practice', guide: tutorial, back: s, via },
     );
   };
 
@@ -213,9 +277,16 @@ export default function App() {
   // After returning through "?", focus goes back to it (AC-TG4.1). The workspace has
   // committed by the time this runs, since a child's DOM is in place before its parent's effects.
   useEffect(() => {
-    if (!focusHelp.current || screen.kind !== 'session') return;
+    if (!focusHelp.current) return;
+    const id =
+      screen.kind === 'session'
+        ? 'workspace-help'
+        : screen.kind === 'collection'
+          ? 'collection-help'
+          : null;
+    if (id === null) return;
     focusHelp.current = false;
-    document.getElementById('workspace-help')?.focus();
+    document.getElementById(id)?.focus();
   }, [screen]);
 
   // Keep the tour's session if they actually put something in it — silently
@@ -368,9 +439,9 @@ export default function App() {
         open={phase === 'done'}
         title="You're all set!"
         message="Next, see how to log an expense with a practice group. Nothing you do there is saved."
-        onDismiss={() => setPhase('off')}
+        onDismiss={laterAfterTour}
       >
-        <Button variant="ghost" onClick={() => setPhase('off')}>
+        <Button variant="ghost" onClick={laterAfterTour}>
           Maybe later
         </Button>
         <Button
@@ -379,7 +450,7 @@ export default function App() {
             setPhase('off');
             // The tour's own end has already put the app on Home and scheduled its draft for
             // cleanup, so Home is where the guide starts and where it ends.
-            launch('expenses', 'menu');
+            launch('expenses', 'menu', !finishedPreview.current);
           }}
         >
           Show me
@@ -391,12 +462,13 @@ export default function App() {
         message={
           <span className={onboardingStyles.points}>
             <span>
-              <strong>Collection.</strong> A new tab for finished sessions: see who owes you and who
-              you owe, and record payments as they come in, even part payments.
+              <strong>Receipts, item by item.</strong> In Custom Amounts, type a receipt the way
+              it&apos;s printed: what each person had, dishes people shared, discounts like PWD or
+              senior, and service charges. Hati works out each person&apos;s share.
             </span>
             <span>
-              <strong>Your name.</strong> Set it in Profile, in your account menu, so Hati knows
-              which member is you.
+              <strong>Guides.</strong> Tap “Need help?” on Expenses or Collection for a quick
+              practice run, or open Tutorials in your account menu.
             </span>
           </span>
         }
@@ -408,13 +480,27 @@ export default function App() {
         <Button
           variant="primary"
           onClick={() => {
+            // A previewed What's new writes nothing, so neither does the guide it starts.
+            const mark = !whatsNewPreview;
             closeWhatsNew();
-            setScreen({ kind: 'collection' });
+            startTutorial('expenses', 'menu', mark);
           }}
         >
-          Take me to Collection
+          Show me how
         </Button>
       </OnboardingDialog>
+      {offer && (
+        <GuideOfferDialog
+          guide={offer.guide}
+          onAnswer={(show) => {
+            const { guide, preview } = offer;
+            setOffer(null);
+            // The origin is the screen the offer opened on (BR-TG20).
+            if (show) startTutorial(guide, 'menu', !preview);
+            else if (!preview) markGuideSeen(guide);
+          }}
+        />
+      )}
       {naming && (
         <NewSessionDialog
           onCancel={() => setNaming(false)}
@@ -447,7 +533,7 @@ export default function App() {
           // saved-item edit with the saved item unchanged, as leaving does today.
           const pending = pendingTutorial;
           setPendingTutorial(null);
-          if (pending) launch(pending.tutorial, pending.via);
+          if (pending) launch(pending.tutorial, pending.via, pending.mark);
         }}
       />
       {/* Failures stay in the store, so they show as soon as the guide ends (BR-TG25). */}
@@ -463,6 +549,9 @@ export default function App() {
           onNewSession={newSession}
           onPreviewTour={import.meta.env.DEV ? previewTour : undefined}
           onPreviewWhatsNew={import.meta.env.DEV ? () => setWhatsNewPreview(true) : undefined}
+          onPreviewOffer={
+            import.meta.env.DEV ? (guide) => setOffer({ guide, preview: true }) : undefined
+          }
           onAskAlreadySettled={
             import.meta.env.DEV
               ? () => setScreen({ kind: 'collection', previewSettled: true })
@@ -475,8 +564,17 @@ export default function App() {
           key={screen.openSessionId ?? ''}
           openSessionId={screen.openSessionId}
           // Never over the tour, What's new or another dialog (BR-W10, E-S11).
-          canAsk={phase === 'off' && !whatsNewOpen && !profileOpen && !tutorialsOpen && !naming}
+          canAsk={
+            phase === 'off' &&
+            !whatsNewOpen &&
+            !profileOpen &&
+            !tutorialsOpen &&
+            !naming &&
+            offer === null
+          }
           previewSettled={screen.previewSettled}
+          onHelp={phase === 'running' ? undefined : () => startTutorial('collection', 'help')}
+          onOfferClear={setCollectionClear}
         />
       )}
       {screen.kind === 'history' && (
@@ -511,9 +609,12 @@ export default function App() {
           onUnsavedChange={setUnsavedNote}
         />
       )}
-      {screen.kind === 'practice' && (
-        <PracticeExpenses key={`guide-${guideKey}`} onEnd={endGuide} />
-      )}
+      {screen.kind === 'practice' &&
+        (screen.guide === 'expenses' ? (
+          <PracticeExpenses key={`guide-${guideKey}`} onEnd={endGuide} />
+        ) : (
+          <PracticeCollection key={`guide-${guideKey}`} onEnd={endGuide} />
+        ))}
     </PageShell>
   );
 }

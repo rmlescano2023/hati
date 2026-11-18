@@ -23,7 +23,7 @@ const render = (sessions: Session[], onHelp?: () => void) =>
 const count = (text: string, part: string) => text.split(part).length - 1;
 
 describe('"Need help?" on Collection (AC-TG8.1)', () => {
-  it('sits in the Summary heading\'s row, before the strip, named for the guide', () => {
+  it("sits in the Summary heading's row, before the strip, named for the guide", () => {
     const markup = render(K1.sessions, noop);
     expect(count(markup, 'aria-label="Need help? See how to track payments"')).toBe(1);
     expect(count(markup, 'id="collection-help"')).toBe(1);
