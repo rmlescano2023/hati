@@ -1,8 +1,11 @@
 .banner {
-  /* Above the guide's overlay (z-index 10000), so End practice works by mouse and touch at every
-     step. The tooltip is 10001 too and sits later in the page, so it still wins if they overlap. */
-  position: relative;
+  /* Stays in view while the reader scrolls, so End practice is always reachable (owner, PR 2).
+     Above the guide's overlay (z-index 10000), so it works by mouse and touch at every step. The
+     tooltip is 10001 too and sits later in the page, so it still wins where they overlap. */
+  position: sticky;
+  top: calc(env(safe-area-inset-top) + 8px);
   z-index: 10001;
+  box-shadow: var(--shadow-md);
   display: flex;
   align-items: center;
   flex-wrap: wrap;

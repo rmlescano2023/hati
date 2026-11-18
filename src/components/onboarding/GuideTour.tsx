@@ -79,6 +79,8 @@ type Props<P> = {
   escapeSkips?: boolean;
   /** Every tab but the highlighted one is inert and nudges, keyboard activations included. */
   lockTabs?: boolean;
+  /** Where a step's target lands below the top of the screen when the tour scrolls to it. Joyride's 20px when omitted. */
+  scrollOffset?: number;
 };
 
 /** For a tour that never follows the reader's own navigation along. */
@@ -110,6 +112,7 @@ export function GuideTour<P>({
   lastLabel,
   escapeSkips,
   lockTabs,
+  scrollOffset,
 }: Props<P>) {
   const [index, setIndex] = useState(0);
   const done = useRef(false);
@@ -141,9 +144,7 @@ export function GuideTour<P>({
         // Every step offers Next ('primary' is its name in this library) and,
         // from the second onwards, Back — a tutorial you can only go forwards
         // through punishes anyone who reads a step too quickly.
-        buttons: (i === 0
-          ? ['skip', 'primary']
-          : ['back', 'skip', 'primary']) as ButtonType[],
+        buttons: (i === 0 ? ['skip', 'primary'] : ['back', 'skip', 'primary']) as ButtonType[],
         blockTargetInteraction: false,
         // A stray click on the dimmed area used to end the tour, and left the
         // overlay behind so the page appeared frozen. Leaving is deliberate
@@ -156,8 +157,9 @@ export function GuideTour<P>({
         // Joyride's Escape advances the step. A guide wants it to end instead, which the
         // listener below does, so Joyride's own is switched off.
         ...(escapeSkips ? { dismissKeyAction: false as const } : {}),
+        ...(scrollOffset !== undefined ? { scrollOffset } : {}),
       })),
-    [guideSteps, lastLabel, escapeSkips],
+    [guideSteps, lastLabel, escapeSkips, scrollOffset],
   );
 
   // Next does the navigating, so a screen that does not match the current step

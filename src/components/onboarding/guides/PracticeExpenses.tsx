@@ -5,18 +5,10 @@ import { PracticeProfileProvider } from '../../../context/ProfileContext';
 import { PracticeSessionsProvider, useSessionsStore } from '../../../context/SessionsStoreContext';
 import { todayIso } from '../../../lib/format';
 import type { PaidByPicks } from '../../../lib/staging';
-import { PracticeBanner } from './PracticeBanner';
+import { PRACTICE_SCROLL_OFFSET, PracticeBanner } from './PracticeBanner';
 import { expensesScenes, type ExpensesScene, type ExpensesSceneId } from './expensesScenes';
 import { EXPENSES_STEPS } from './expensesSteps';
-
-/** A step's scene is satisfied only by being in it. A module-level function, so its identity is stable. */
-const sameScene = (a: ExpensesSceneId, b: ExpensesSceneId) => a === b;
-
-/** Whether `target` is on screen with a size, so a step pointing at it has something to highlight. */
-function targetShown(target: string): boolean {
-  const el = document.querySelector(`[data-tour="${target}"]`);
-  return el !== null && el.getBoundingClientRect().height > 0;
-}
+import { sameScene, targetShown } from './sceneChecks';
 
 type Props = {
   /** Ends the guide: where it started, or Home for "← Back to Home" (BR-TG20, BR-TG21). */
@@ -73,6 +65,7 @@ export function PracticeExpenses({ onEnd }: Props) {
         lastLabel="Done"
         escapeSkips
         lockTabs
+        scrollOffset={PRACTICE_SCROLL_OFFSET}
       />
     </>
   );

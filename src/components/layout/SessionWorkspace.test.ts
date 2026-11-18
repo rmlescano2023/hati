@@ -77,6 +77,49 @@ describe('the "Need help?" link (tab-guides AC-TG1.1, AC-TG1.2)', () => {
   });
 });
 
+describe('the rename pencil (tab-guides PR 2)', () => {
+  const draft: Session = {
+    id: 'practice_test',
+    status: 'draft',
+    createdAt: '2026-11-16T12:00:00.000Z',
+    closedAt: null,
+    members: ['Ana'],
+    records: [],
+    name: 'Beach trip',
+    activityAt: null,
+    me: null,
+    finishedWithCollection: false,
+    payments: [],
+  };
+  const noop = () => {};
+
+  const render = (practice?: Record<string, never>) =>
+    renderToStaticMarkup(
+      createElement(PracticeSessionsProvider, {
+        seed: [draft],
+        children: createElement(PracticeProfileProvider, {
+          children: createElement(SessionWorkspace, {
+            sessionId: draft.id,
+            paidByPicks: new Map(),
+            tab: 'expenses',
+            onTabChange: noop,
+            onBack: noop,
+            onClosed: noop,
+            practice,
+          }),
+        }),
+      }),
+    );
+
+  it('shows on a real draft', () => {
+    expect(render()).toContain('aria-label="Rename session"');
+  });
+
+  it('is gone in practice, which is never saved', () => {
+    expect(render({})).not.toContain('aria-label="Rename session"');
+  });
+});
+
 describe('the empty-session hint in Group Members', () => {
   const empty: Session = {
     id: 'practice_empty',

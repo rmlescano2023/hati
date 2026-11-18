@@ -3,6 +3,13 @@ import { Button } from '../../shared/Button';
 import styles from './PracticeBanner.module.css';
 
 /**
+ * Where a guide puts a step's target below the top of the screen when it scrolls to it: clear of
+ * the sticky banner (about 95px on a phone, where it wraps to two lines, with its 8px top), the
+ * spotlight's 10px padding, and a small gap.
+ */
+export const PRACTICE_SCROLL_OFFSET = 120;
+
+/**
  * The strip above a guide's practice screen: what it is, and the way out that doesn't depend on
  * the tooltip (BR-TG23).
  */
