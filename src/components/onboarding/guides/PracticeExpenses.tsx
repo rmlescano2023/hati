@@ -5,10 +5,10 @@ import { PracticeProfileProvider } from '../../../context/ProfileContext';
 import { PracticeSessionsProvider, useSessionsStore } from '../../../context/SessionsStoreContext';
 import { todayIso } from '../../../lib/format';
 import type { PaidByPicks } from '../../../lib/staging';
-import { PRACTICE_SCROLL_OFFSET, PracticeBanner } from './PracticeBanner';
+import { PRACTICE_FLIP_TOP, PRACTICE_SCROLL_OFFSET, PracticeBanner } from './PracticeBanner';
 import { expensesScenes, type ExpensesScene, type ExpensesSceneId } from './expensesScenes';
 import { EXPENSES_STEPS } from './expensesSteps';
-import { sameScene, targetShown } from './sceneChecks';
+import { practiceBannerBottom, sameScene, targetShown } from './sceneChecks';
 
 type Props = {
   /** Ends the guide: where it started, or Home for "← Back to Home" (BR-TG20, BR-TG21). */
@@ -66,6 +66,8 @@ export function PracticeExpenses({ onEnd }: Props) {
         escapeSkips
         lockTabs
         scrollOffset={PRACTICE_SCROLL_OFFSET}
+        keepBelow={practiceBannerBottom}
+        flipTop={PRACTICE_FLIP_TOP}
       />
     </>
   );

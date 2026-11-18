@@ -358,27 +358,25 @@ export function CollectionPage({
             )}
           </section>
 
-          <div data-tour="collection-unsettled">
-            {needsSetup.length > 0 && (
-              <section className={styles.section}>
-                <h2 className={homeStyles.heading}>{`Needs setup (${needsSetup.length})`}</h2>
-                <div className={homeStyles.list}>{needsSetup.map(renderCard)}</div>
-              </section>
-            )}
+          {needsSetup.length > 0 && (
+            <section className={styles.section} data-tour="collection-unsettled">
+              <h2 className={homeStyles.heading}>{`Needs setup (${needsSetup.length})`}</h2>
+              <div className={homeStyles.list}>{needsSetup.map(renderCard)}</div>
+            </section>
+          )}
 
-            {(outstanding.length > 0 || settled.length > 0) && (
-              <section className={styles.section}>
-                <h2 className={homeStyles.heading}>{`Outstanding (${outstanding.length})`}</h2>
-                {outstanding.length > 0 ? (
-                  <div className={homeStyles.list} data-tour="collection-outstanding">
-                    {outstanding.map(renderCard)}
-                  </div>
-                ) : (
-                  <p className={styles.quiet}>Nothing outstanding. Everything is settled.</p>
-                )}
-              </section>
-            )}
-          </div>
+          {(outstanding.length > 0 || settled.length > 0) && (
+            <section className={styles.section}>
+              <h2 className={homeStyles.heading}>{`Outstanding (${outstanding.length})`}</h2>
+              {outstanding.length > 0 ? (
+                <div className={homeStyles.list} data-tour="collection-outstanding">
+                  {outstanding.map(renderCard)}
+                </div>
+              ) : (
+                <p className={styles.quiet}>Nothing outstanding. Everything is settled.</p>
+              )}
+            </section>
+          )}
 
           {settled.length > 0 && (
             <section className={styles.section} data-tour="collection-settled">

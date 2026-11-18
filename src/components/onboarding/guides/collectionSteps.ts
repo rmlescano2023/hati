@@ -39,7 +39,7 @@ export const COLLECTION_STEPS: GuideStep<CollectionSceneId>[] = [
     target: 'collection-owed',
     title: 'Fix a mistake',
     content:
-      'Carla has paid ₱200 of ₱430, so her line says Partial. Every payment is listed with Undo, in case one was recorded by mistake.',
+      "Each payment is listed with Undo, in case one was recorded by mistake. Try it on Carla's ₱200: her line goes back to Unpaid.",
     place: 'K2',
   },
   {
