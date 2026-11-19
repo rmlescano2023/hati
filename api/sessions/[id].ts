@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { clampActivityAt } from '../../src/lib/activity.js';
 import { closedSessionMe } from '../../src/lib/joinedSessions.js';
-import { getUserId, ownsSession, pool } from '../_shared.js';
+import { getUserId, loadSessions, ownsSession, pool } from '../_shared.js';
 import { isPracticeSessionId, parseActivityInput, parseSessionInput } from '../_validate.js';
 
 /**
@@ -42,6 +42,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const activityAt = clampActivityAt(session.activityAt, Date.now());
 
     const client = await pool.connect();
+    // Whether the stored row was finished, so the answer is what is stored rather than the body.
+    let finished = false;
     try {
       await client.sql`begin`;
       // Lock and read the stored row first, as the payments POST does. Ownership is part of the
@@ -85,18 +87,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             me          = ${me}
           where id = ${sessionId} and user_id = ${userId}`;
         await client.sql`commit`;
-        return res.status(200).json(session);
-      }
-
-      // The activity time only moves forward: `greatest` ignores a null, so an
-      // older client's write never wipes it, and a late or retried save never
-      // pulls a session down below a later open or edit (BR-7). A null pick
-      // means this write carries none, so `coalesce` keeps the stored one and
-      // an older client or a draft's save never wipes it. Payments are never
-      // read from the body: they are written only through /api/payments. The
-      // finished-with-Collection mark only ever turns on, so an older client's
-      // save, or a re-save of a finished session, never clears it.
-      await client.sql`
+        finished = true;
+      } else {
+        // The activity time only moves forward: `greatest` ignores a null, so an
+        // older client's write never wipes it, and a late or retried save never
+        // pulls a session down below a later open or edit (BR-7). A null pick
+        // means this write carries none, so `coalesce` keeps the stored one and
+        // an older client or a draft's save never wipes it. Payments are never
+        // read from the body: they are written only through /api/payments. The
+        // finished-with-Collection mark only ever turns on, so an older client's
+        // save, or a re-save of a finished session, never clears it.
+        await client.sql`
         update expense_sessions set
           status      = ${session.status},
           closed_at   = ${session.closedAt},
@@ -108,11 +109,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             coalesce(finished_with_collection, false) or ${session.finishedWithCollection}
         where id = ${sessionId} and user_id = ${userId}`;
 
-      // Replacing this session's records is far smaller than rewriting the
-      // account, and avoids diffing a list the client already rebuilt.
-      await client.sql`delete from purchase_records where session_id = ${sessionId}`;
-      for (const record of session.records) {
-        await client.sql`
+        // Replacing this session's records is far smaller than rewriting the
+        // account, and avoids diffing a list the client already rebuilt.
+        await client.sql`delete from purchase_records where session_id = ${sessionId}`;
+        for (const record of session.records) {
+          await client.sql`
           insert into purchase_records
             (id, session_id, date, payor_mode, payors, items, created_at)
           values (
@@ -121,8 +122,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             ${JSON.stringify(record.items)}::jsonb,
             ${record.createdAt}
           )`;
+        }
+        await client.sql`commit`;
       }
-      await client.sql`commit`;
     } catch (err) {
       await client.sql`rollback`;
       throw err;
@@ -130,6 +132,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       client.release();
     }
 
+    // A finished session ignored the body's members and records, so the answer is what is
+    // stored: a tab that was left open before this rule corrects itself from it.
+    if (finished) {
+      const [stored] = await loadSessions(userId, sessionId);
+      return res.status(200).json(stored ?? session);
+    }
     return res.status(200).json(session);
   }
 

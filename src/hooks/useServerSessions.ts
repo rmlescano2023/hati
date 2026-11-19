@@ -1185,8 +1185,11 @@ export function useServerSessions(): SessionsBackend {
       // Dev-only, so a request per session is fine — there is no bulk
       // endpoint, and adding one for a seeder that never ships would be
       // server surface built for nobody.
-      const prev = sessionsRef.current;
-      commit(next);
+      // Sessions the account joined are never the dev bar's to delete: they are the organizer's, so
+      // they stay on screen and no DELETE is sent for them.
+      const all = sessionsRef.current;
+      const prev = all.filter((s) => !isJoined(s));
+      commit([...next, ...all.filter(isJoined)]);
       // No deadline here: the 30-second limit is for the user's own writes,
       // and a seed of many sessions can rightly take longer.
       const seed = (async () => {

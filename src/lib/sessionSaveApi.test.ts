@@ -17,6 +17,9 @@ const db = vi.hoisted(() => ({
   stored: null as { status: string; members: string[]; me: string | null } | null,
   /** The members other accounts have joined as. */
   claimed: [] as string[],
+  /** What `loadSessions` answers: the stored session. */
+  loaded: [] as unknown[],
+  loadCalls: [] as unknown[][],
   connects: 0,
   statements: [] as Statement[],
 }));
@@ -37,6 +40,10 @@ vi.mock('../../api/_shared.js', () => {
     getUserId: async () => db.userId,
     ensureUser: async () => {},
     ownsSession: async () => false,
+    loadSessions: async (...args: unknown[]) => {
+      db.loadCalls.push(args);
+      return db.loaded;
+    },
     pool: {
       sql,
       connect: async () => {
@@ -112,6 +119,8 @@ beforeEach(() => {
   db.userId = 'user_a';
   db.stored = null;
   db.claimed = [];
+  db.loaded = [];
+  db.loadCalls = [];
   db.connects = 0;
   db.statements = [];
 });
@@ -227,5 +236,21 @@ describe('PUT /api/sessions/:id on a finished session (BR-R1, E1-17)', () => {
     await put(closed);
     expect(sent('delete from purchase_records')).toHaveLength(1);
     expect(sent('select member from session_participants')).toHaveLength(0);
+  });
+
+  it('answers with the stored session, not the body it was sent (B1)', async () => {
+    db.stored = CLOSED;
+    db.loaded = [{ id: 's1', members: ['Ana', 'Ben'], records: [] }];
+    const res = await put({ ...closed, members: ['Zed'], records: [] });
+
+    expect(res.body).toEqual({ id: 's1', members: ['Ana', 'Ben'], records: [] });
+    expect(db.loadCalls).toEqual([['user_a', 's1']]);
+  });
+
+  it('still answers with the parsed draft when the stored row is a draft', async () => {
+    db.stored = DRAFT;
+    const res = await put(closed);
+    expect(res.body).toMatchObject({ id: 's1', members: ['Ana', 'Ben'] });
+    expect(db.loadCalls).toEqual([]);
   });
 });
