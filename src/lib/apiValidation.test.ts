@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   isPracticeSessionId,
+  parseInviteInput,
+  parseJoinedFlag,
+  parseParticipantQuery,
   parsePaymentsInput,
   parseProfileInput,
   parseSessionIdQuery,
@@ -219,6 +222,73 @@ describe('isPracticeSessionId', () => {
   it('is false for ordinary ids, a bare prefix word, a different case and nothing', () => {
     for (const id of ['session_ab12', 'practice', 'Practice_x', '']) {
       expect(isPracticeSessionId(id)).toBe(false);
+    }
+  });
+});
+
+describe('parseInviteInput', () => {
+  const token = 'abcdefghijklmnopqrstuv';
+
+  it('reads the link form, with reset absent meaning false', () => {
+    expect(parseInviteInput({ sessionId: 'session_1' })).toEqual({
+      kind: 'link',
+      sessionId: 'session_1',
+      reset: false,
+    });
+    expect(parseInviteInput({ sessionId: 'session_1', reset: true })).toEqual({
+      kind: 'link',
+      sessionId: 'session_1',
+      reset: true,
+    });
+  });
+
+  it('refuses a reset that is not a boolean', () => {
+    expect(parseInviteInput({ sessionId: 'session_1', reset: 'yes' })).toBeNull();
+  });
+
+  it('reads the preview and the join forms', () => {
+    expect(parseInviteInput({ token })).toEqual({ kind: 'preview', token });
+    expect(parseInviteInput({ token, member: 'Ben' })).toEqual({
+      kind: 'join',
+      token,
+      member: 'Ben',
+    });
+  });
+
+  it('refuses anything that mixes the forms or is malformed', () => {
+    expect(parseInviteInput({ token: 'short' })).toBeNull();
+    expect(parseInviteInput({ sessionId: 'session_1', token })).toBeNull();
+    expect(parseInviteInput({ sessionId: 'session_1', member: 'Ben' })).toBeNull();
+    expect(parseInviteInput({ member: 'Ben' })).toBeNull();
+    expect(parseInviteInput({ token, member: '' })).toBeNull();
+    expect(parseInviteInput({ token, member: 'x'.repeat(201) })).toBeNull();
+    expect(parseInviteInput({ token, reset: true })).toBeNull();
+    expect(parseInviteInput({})).toBeNull();
+    expect(parseInviteInput(null)).toBeNull();
+    expect(parseInviteInput('text')).toBeNull();
+    expect(parseInviteInput([token])).toBeNull();
+  });
+});
+
+describe('parseParticipantQuery', () => {
+  it('needs both a session and a member', () => {
+    expect(parseParticipantQuery('session_1', 'Ben')).toEqual({
+      sessionId: 'session_1',
+      member: 'Ben',
+    });
+    expect(parseParticipantQuery('', 'Ben')).toBeNull();
+    expect(parseParticipantQuery('session_1', '')).toBeNull();
+    expect(parseParticipantQuery(undefined, 'Ben')).toBeNull();
+    expect(parseParticipantQuery(['session_1'], 'Ben')).toBeNull();
+    expect(parseParticipantQuery('session_1', ['Ben', 'Ana'])).toBeNull();
+  });
+});
+
+describe('parseJoinedFlag', () => {
+  it('is true only for the exact value 1', () => {
+    expect(parseJoinedFlag('1')).toBe(true);
+    for (const other of [undefined, '', '0', 'true', 1, ['1']]) {
+      expect(parseJoinedFlag(other)).toBe(false);
     }
   });
 });

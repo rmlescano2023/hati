@@ -1,8 +1,12 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { ensureUser, getUserId, loadSessions, pool } from '../_shared.js';
-import { isPracticeSessionId, parseSessionName } from '../_validate.js';
+import { isPracticeSessionId, parseJoinedFlag, parseSessionName } from '../_validate.js';
 
-/** `GET` every session the caller owns; `POST` a new empty draft, optionally named. */
+/**
+ * `GET` every session the caller owns, and with `?joined=1` the finished sessions they joined as
+ * a member too; `POST` a new empty draft, optionally named. A tab still on an older bundle sends
+ * no flag, so it keeps getting owned sessions only.
+ */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   let userId: string | null;
   try {
@@ -14,7 +18,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!userId) return res.status(401).json({ error: 'Not signed in.' });
 
   if (req.method === 'GET') {
-    return res.status(200).json(await loadSessions(userId));
+    return res
+      .status(200)
+      .json(await loadSessions(userId, null, parseJoinedFlag(req.query.joined)));
   }
 
   if (req.method === 'POST') {

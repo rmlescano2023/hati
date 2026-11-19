@@ -1,7 +1,8 @@
 import type { VercelRequest } from '@vercel/node';
-import { createPool } from '@vercel/postgres';
+import { createPool, type VercelPoolClient } from '@vercel/postgres';
 import { verifyToken } from '@clerk/backend';
-import type { Payment, PurchaseRecord, Session, SessionStatus } from '../src/types';
+import { participantView } from '../src/lib/joinedSessions.js';
+import type { Participant, Payment, PurchaseRecord, Session, SessionStatus } from '../src/types';
 
 /**
  * `POSTGRES_DATABASE_URL` is managed by the Vercel-Neon integration and applies
@@ -77,25 +78,30 @@ type PaymentRow = {
   created_at: Date | string;
 };
 
-const iso = (v: Date | string): string => (v instanceof Date ? v.toISOString() : String(v));
+export const iso = (v: Date | string): string => (v instanceof Date ? v.toISOString() : String(v));
+
+/** A joined session's row: the session as stored, the member the caller joined as, and who organized it. */
+type JoinedRow = Omit<SessionRow, 'me'> & { member: string; organizer_name: string | null };
+
+type ParticipantRow = {
+  session_id: string;
+  member: string;
+  joined_at: Date | string;
+  display_name: string | null;
+};
 
 /**
- * Reassembles the `Session[]` the client has always consumed. The response
- * contract is unchanged even though it now comes from joined tables rather
- * than one column.
- *
- * `only` narrows it to one session, for the payments POST, which checks a
- * payment against that session's settlement lines.
+ * The records, payments and participants of the sessions the two visibility queries in
+ * `loadSessions` returned. It has no user filter of its own, so it is private to this module and
+ * only ever called with ids that came out of those queries in the same call: access to a session
+ * is decided in exactly one place. Participants are loaded for the owned ids only, because only
+ * an organizer is told who joined.
  */
-export async function loadSessions(userId: string, only: string | null = null): Promise<Session[]> {
-  const { rows: sessionRows } = await pool.sql<SessionRow>`
-    select id, status, created_at, closed_at, members, name, activity_at, me,
-           finished_with_collection
-    from expense_sessions
-    where user_id = ${userId} and (${only}::text is null or id = ${only})
-    order by created_at`;
-
-  if (sessionRows.length === 0) return [];
+async function loadContent(ownedIds: string[], joinedIds: string[]) {
+  // The driver sends a JS array as a Postgres array literal, but the template's types only list
+  // primitives, hence the cast on the value. The SQL cast makes an empty array unambiguous.
+  const list = [...ownedIds, ...joinedIds] as unknown as string;
+  const ownedList = ownedIds as unknown as string;
 
   const { rows: recordRows } = await pool.sql<RecordRow>`
     -- The cast to text is deliberate: the driver parses a date column into a
@@ -105,18 +111,27 @@ export async function loadSessions(userId: string, only: string | null = null): 
     select r.id, r.session_id, r.date::text as date, r.payor_mode,
            r.payors, r.items, r.created_at
     from purchase_records r
-    join expense_sessions s on s.id = r.session_id
-    where s.user_id = ${userId} and (${only}::text is null or s.id = ${only})
+    where r.session_id = any(${list}::text[])
     order by r.date, r.created_at`;
 
   const { rows: paymentRows } = await pool.sql<PaymentRow>`
     select p.id, p.session_id, p.debtor, p.creditor, p.amount_cents, p.created_at
     from session_payments p
-    join expense_sessions s on s.id = p.session_id
-    where s.user_id = ${userId} and (${only}::text is null or s.id = ${only})
+    where p.session_id = any(${list}::text[])
     order by p.created_at, p.id`;
 
-  const bySession = new Map<string, PurchaseRecord[]>();
+  const participantRows =
+    ownedIds.length === 0
+      ? []
+      : (
+          await pool.sql<ParticipantRow>`
+            select p.session_id, p.member, p.joined_at, u.display_name
+            from session_participants p join users u on u.id = p.user_id
+            where p.session_id = any(${ownedList}::text[])
+            order by p.joined_at, p.member`
+        ).rows;
+
+  const records = new Map<string, PurchaseRecord[]>();
   for (const row of recordRows) {
     const record: PurchaseRecord = {
       id: row.id,
@@ -126,12 +141,12 @@ export async function loadSessions(userId: string, only: string | null = null): 
       items: row.items,
       createdAt: iso(row.created_at),
     };
-    const bucket = bySession.get(row.session_id);
+    const bucket = records.get(row.session_id);
     if (bucket) bucket.push(record);
-    else bySession.set(row.session_id, [record]);
+    else records.set(row.session_id, [record]);
   }
 
-  const paymentsBySession = new Map<string, Payment[]>();
+  const payments = new Map<string, Payment[]>();
   for (const row of paymentRows) {
     const payment: Payment = {
       id: row.id,
@@ -140,22 +155,123 @@ export async function loadSessions(userId: string, only: string | null = null): 
       amountCents: row.amount_cents,
       createdAt: iso(row.created_at),
     };
-    const bucket = paymentsBySession.get(row.session_id);
+    const bucket = payments.get(row.session_id);
     if (bucket) bucket.push(payment);
-    else paymentsBySession.set(row.session_id, [payment]);
+    else payments.set(row.session_id, [payment]);
   }
 
-  return sessionRows.map((s) => ({
+  const participants = new Map<string, Participant[]>();
+  for (const row of participantRows) {
+    const participant: Participant = {
+      member: row.member,
+      name: row.display_name ?? null,
+      joinedAt: iso(row.joined_at),
+    };
+    const bucket = participants.get(row.session_id);
+    if (bucket) bucket.push(participant);
+    else participants.set(row.session_id, [participant]);
+  }
+
+  return { records, payments, participants };
+}
+
+/**
+ * Reassembles the `Session[]` the client has always consumed. The response
+ * contract is unchanged even though it now comes from joined tables rather
+ * than one column.
+ *
+ * Two queries decide which sessions the caller may see, and they are the only
+ * place access is decided: the sessions the caller owns, and, only when
+ * `joined` is true, the finished sessions the caller joined as a member. A
+ * caller that doesn't ask for joined sessions, such as a tab still on an older
+ * bundle, gets owned sessions only. A joined session goes through
+ * `participantView` before it is returned, so the caller sees only the
+ * payments on their own lines and never the organizer's pick.
+ *
+ * `only` narrows it to one session, for the payments POST, which checks a
+ * payment against that session's settlement lines, and for a join's response.
+ */
+export async function loadSessions(
+  userId: string,
+  only: string | null = null,
+  joined = false,
+): Promise<Session[]> {
+  const { rows: ownedRows } = await pool.sql<SessionRow>`
+    select id, status, created_at, closed_at, members, name, activity_at, me,
+           finished_with_collection
+    from expense_sessions
+    where user_id = ${userId} and (${only}::text is null or id = ${only})
+    order by created_at`;
+
+  // The organizer's own pick (`s.me`) is deliberately not selected: a participant never sees it.
+  const joinedRows = joined
+    ? (
+        await pool.sql<JoinedRow>`
+          select s.id, s.status, s.created_at, s.closed_at, s.members, s.name, s.activity_at,
+                 s.finished_with_collection, p.member, u.display_name as organizer_name
+          from session_participants p
+          join expense_sessions s on s.id = p.session_id
+          join users u on u.id = s.user_id
+          where p.user_id = ${userId} and s.user_id <> ${userId} and s.status = 'closed'
+            and (${only}::text is null or s.id = ${only})
+          order by s.created_at`
+      ).rows
+    : [];
+
+  if (ownedRows.length === 0 && joinedRows.length === 0) return [];
+
+  const content = await loadContent(
+    ownedRows.map((s) => s.id),
+    joinedRows.map((s) => s.id),
+  );
+
+  const base = (s: SessionRow | JoinedRow, me: string | null): Session => ({
     id: s.id,
     status: s.status,
     createdAt: iso(s.created_at),
     closedAt: s.closed_at === null ? null : iso(s.closed_at),
     members: s.members,
-    records: bySession.get(s.id) ?? [],
+    records: content.records.get(s.id) ?? [],
     name: s.name,
     activityAt: s.activity_at === null ? null : iso(s.activity_at),
-    me: s.me,
+    me,
     finishedWithCollection: s.finished_with_collection === true,
-    payments: paymentsBySession.get(s.id) ?? [],
-  }));
+    payments: content.payments.get(s.id) ?? [],
+  });
+
+  return [
+    ...ownedRows.map((s) => ({
+      ...base(s, s.me),
+      role: 'owner' as const,
+      organizerName: null,
+      participants: content.participants.get(s.id) ?? [],
+    })),
+    ...joinedRows.map((s) => participantView(base(s, null), s.member, s.organizer_name ?? null)),
+  ];
+}
+
+export type SessionAccess = { role: 'owner' } | { role: 'participant'; member: string };
+
+/**
+ * Locks a session's row, first and before anything else in the transaction, and says how the
+ * caller relates to it: null for no relation at all, which is a 404 whatever the caller asked for
+ * and never says whether the session exists. Every write that touches participants, claims or
+ * payments takes this lock first, so two writes on one session queue rather than deadlock.
+ * `for update of s` is required: Postgres refuses to lock the nullable side of an outer join.
+ * (`pool.connect` is overloaded, so `ReturnType` can't name the client; the driver's own type does.)
+ */
+export async function lockSessionRole(
+  client: VercelPoolClient,
+  userId: string,
+  sessionId: string,
+): Promise<SessionAccess | null> {
+  const { rows } = await client.sql<{ user_id: string; member: string | null }>`
+    select s.user_id, p.member
+    from expense_sessions s
+    left join session_participants p on p.session_id = s.id and p.user_id = ${userId}
+    where s.id = ${sessionId}
+    for update of s`;
+  if (rows.length === 0) return null;
+  if (rows[0].user_id === userId) return { role: 'owner' };
+  return rows[0].member === null ? null : { role: 'participant', member: rows[0].member };
 }

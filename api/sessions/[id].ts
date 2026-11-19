@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { clampActivityAt } from '../../src/lib/activity.js';
+import { closedSessionMe } from '../../src/lib/joinedSessions.js';
 import { getUserId, ownsSession, pool } from '../_shared.js';
 import { isPracticeSessionId, parseActivityInput, parseSessionInput } from '../_validate.js';
 
@@ -43,13 +44,50 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const client = await pool.connect();
     try {
       await client.sql`begin`;
-      // An update and never an insert: a save from a tab that still shows a
-      // deleted session must not create it again, so only `POST /api/sessions`
-      // creates. Ownership is part of the `where`, so another account's id and
-      // a deleted one are both simply not found. The update also locks the
-      // row, so a concurrent delete either lands first and this is a 404, or
-      // waits for this save and removes the session after it.
-      //
+      // Lock and read the stored row first, as the payments POST does. Ownership is part of the
+      // `where`, so another account's id, a participant's and a deleted session's are all simply
+      // not found. The lock means a concurrent delete either lands first and this is a 404, or
+      // waits for this save and removes the session after it. An update and never an insert: a
+      // save from a tab that still shows a deleted session must not create it again, so only
+      // `POST /api/sessions` creates.
+      const { rows: stored } = await client.sql<{
+        status: string;
+        members: string[];
+        me: string | null;
+      }>`
+        select status, members, me from expense_sessions
+        where id = ${sessionId} and user_id = ${userId}
+        for update`;
+      if (stored.length === 0) {
+        await client.sql`rollback`;
+        return res.status(404).json({ error: 'No such session.' });
+      }
+
+      // The stored status decides, not the body's: Finish (a stored draft saved as closed) still
+      // goes through the draft path below, and nothing can change a finished session's numbers.
+      // A finished session takes only its name, its activity time and the organizer's pick, and
+      // the pick never moves onto a member someone has joined as (BR-R1, D4). Its status, members,
+      // records and closed time stay as stored, whatever the body says, so a tab that was left
+      // open before this rule can't overwrite them either.
+      if (stored[0].status === 'closed') {
+        const { rows: claimedRows } = await client.sql<{ member: string }>`
+          select member from session_participants where session_id = ${sessionId}`;
+        const me = closedSessionMe(
+          stored[0].me,
+          session.me,
+          stored[0].members,
+          claimedRows.map((r) => r.member),
+        );
+        await client.sql`
+          update expense_sessions set
+            name        = ${session.name},
+            activity_at = greatest(activity_at, ${activityAt}::timestamptz),
+            me          = ${me}
+          where id = ${sessionId} and user_id = ${userId}`;
+        await client.sql`commit`;
+        return res.status(200).json(session);
+      }
+
       // The activity time only moves forward: `greatest` ignores a null, so an
       // older client's write never wipes it, and a late or retried save never
       // pulls a session down below a later open or edit (BR-7). A null pick
@@ -58,7 +96,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // read from the body: they are written only through /api/payments. The
       // finished-with-Collection mark only ever turns on, so an older client's
       // save, or a re-save of a finished session, never clears it.
-      const { rowCount } = await client.sql`
+      await client.sql`
         update expense_sessions set
           status      = ${session.status},
           closed_at   = ${session.closedAt},
@@ -69,10 +107,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           finished_with_collection =
             coalesce(finished_with_collection, false) or ${session.finishedWithCollection}
         where id = ${sessionId} and user_id = ${userId}`;
-      if (rowCount === 0) {
-        await client.sql`rollback`;
-        return res.status(404).json({ error: 'No such session.' });
-      }
 
       // Replacing this session's records is far smaller than rewriting the
       // account, and avoids diffing a list the client already rebuilt.

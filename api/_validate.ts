@@ -1,6 +1,7 @@
 import { parseActivityAt } from '../src/lib/activity.js';
 import { PAYMENTS_PER_REQUEST_MAX } from '../src/lib/collection.js';
 import { NICKNAMES_MAX, normaliseProfileName, type ProfileUpdate } from '../src/lib/profileName.js';
+import { isInviteToken } from '../src/lib/joinedSessions.js';
 import { isPracticeId } from '../src/lib/practiceId.js';
 import { normaliseSessionName } from '../src/lib/sessionName.js';
 import { parseSession } from '../src/lib/storage.js';
@@ -155,4 +156,49 @@ export function parseUserMark(
 /** The `sessionId` of a query string: one short string, or null. */
 export function parseSessionIdQuery(raw: unknown): string | null {
   return isShortText(raw) ? raw : null;
+}
+
+/**
+ * Whether a session list asks for the sessions the caller joined too. Only the exact value `1`
+ * does, so a tab still on an older bundle, which sends no flag, keeps getting owned sessions only.
+ */
+export function parseJoinedFlag(raw: unknown): boolean {
+  return raw === '1';
+}
+
+export type InviteInput =
+  | { kind: 'link'; sessionId: string; reset: boolean }
+  | { kind: 'preview'; token: string }
+  | { kind: 'join'; token: string; member: string };
+
+/**
+ * An invite request. The body is the whole action, so each of the three forms is exact and
+ * anything that mixes them is a 400 rather than a guess: a request that names a session and
+ * carries a token could otherwise be read as either, and "get the link" is organizer-only while
+ * "preview" is open to any signed-in account.
+ */
+export function parseInviteInput(raw: unknown): InviteInput | null {
+  if (!isPlainObject(raw)) return null;
+  const { sessionId, reset, token, member } = raw;
+
+  if (sessionId !== undefined) {
+    if (!isShortText(sessionId) || token !== undefined || member !== undefined) return null;
+    if (reset !== undefined && typeof reset !== 'boolean') return null;
+    return { kind: 'link', sessionId, reset: reset === true };
+  }
+
+  if (reset !== undefined || !isInviteToken(token)) return null;
+  if (member === undefined) return { kind: 'preview', token };
+  return isShortText(member) ? { kind: 'join', token, member } : null;
+}
+
+/**
+ * The query of a participant removal: the session and the member, both required. It is the whole
+ * request, so a missing, empty or repeated (array) value is a 400.
+ */
+export function parseParticipantQuery(
+  sessionId: unknown,
+  member: unknown,
+): { sessionId: string; member: string } | null {
+  return isShortText(sessionId) && isShortText(member) ? { sessionId, member } : null;
 }
