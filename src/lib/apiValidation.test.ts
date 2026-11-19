@@ -140,13 +140,24 @@ describe('parseUserMark', () => {
     expect(parseUserMark(null)).toBe('onboarding');
   });
 
-  it('passes the two named marks', () => {
+  it('passes the four named marks', () => {
     expect(parseUserMark({ mark: 'whatsNew' })).toBe('whatsNew');
     expect(parseUserMark({ mark: 'alreadySettled' })).toBe('alreadySettled');
+    expect(parseUserMark({ mark: 'expensesGuide' })).toBe('expensesGuide');
+    expect(parseUserMark({ mark: 'collectionGuide' })).toBe('collectionGuide');
   });
 
   it('rejects anything else', () => {
-    for (const bad of [{}, { mark: 'x' }, { mark: 'onboarding' }, 'whatsNew', [], 5]) {
+    for (const bad of [
+      {},
+      { mark: 'x' },
+      { mark: 'onboarding' },
+      { mark: 'expenses' },
+      { mark: 'guide' },
+      'whatsNew',
+      [],
+      5,
+    ]) {
       expect(parseUserMark(bad)).toBeNull();
     }
   });

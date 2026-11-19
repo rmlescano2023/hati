@@ -5,6 +5,7 @@ import { ConfirmDialog } from '../components/shared/ConfirmDialog';
 import { EmptyState } from '../components/shared/EmptyState';
 import { useSessionsStore } from '../context/SessionsStoreContext';
 import { compareByRecentActivity } from '../lib/activity';
+import type { Guide } from '../lib/guideOffer';
 import { deleteSessionMessage } from '../lib/sessionLabel';
 import { showsEmptyState } from '../lib/writeQueue';
 import styles from './HomePage.module.css';
@@ -24,6 +25,7 @@ type Props = {
   /** Dev-only: starts the onboarding tour without touching the account flag. */
   onPreviewTour?: () => void;
   onPreviewWhatsNew?: () => void;
+  onPreviewOffer?: (guide: Guide) => void;
   onAskAlreadySettled?: () => void;
 };
 
@@ -37,6 +39,7 @@ export function HomePage({
   onNewSession,
   onPreviewTour,
   onPreviewWhatsNew,
+  onPreviewOffer,
   onAskAlreadySettled,
 }: Props) {
   const { sessions, deleteSession, sync } = useSessionsStore();
@@ -59,6 +62,7 @@ export function HomePage({
       <DevSessionsBar
         onPreviewTour={onPreviewTour}
         onPreviewWhatsNew={onPreviewWhatsNew}
+        onPreviewOffer={onPreviewOffer}
         onAskAlreadySettled={onAskAlreadySettled}
       />
     </Suspense>

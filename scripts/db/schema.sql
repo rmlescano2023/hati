@@ -33,6 +33,14 @@ alter table users add column if not exists whats_new_version integer;
 -- question. Null means it hasn't been answered yet.
 alter table users add column if not exists already_settled_answered_at timestamptz;
 
+-- When the account first started the Expenses guide ("Logging expenses") from any
+-- way in, or declined its once-only offer. Null means neither yet, so the offer is
+-- still due. The onboarding PUT with no body never sets it.
+alter table users add column if not exists expenses_guide_seen_at timestamptz;
+
+-- The same for the Collection guide ("Tracking payments").
+alter table users add column if not exists collection_guide_seen_at timestamptz;
+
 create table if not exists expense_sessions (
   id         text primary key,          -- keeps the existing "session_xxx" ids
   user_id    text not null references users (id) on delete cascade,
