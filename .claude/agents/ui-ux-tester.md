@@ -97,22 +97,24 @@ why, and whether a test session was left behind.
 
 ## Your documentation file
 
-You maintain `/Users/rmlescano/Documents/Projects/Hati/Documentation/QA Test Log.docx`.
+You maintain `/Users/rmlescano/Documents/Projects/Hati/Documentation/QA Test Log.md`.
 **Only update it when your task explicitly asks for a documentation update**,
 which happens only when the user says so. Don't open or edit it during a test
 run. When asked, add an entry for each test run the task lists, using the
 details it gives you. This is the one file you write to; it doesn't change your
 rule of never editing code.
 
-- Edit it in place with the shared helper `Documentation/_tools/hatidoc.py`
-  (read its docstring first), run with
-  `/Users/rmlescano/Documents/Projects/Hati/Documentation/_tools/.venv/bin/python`.
-  Use change type "Test run". Never recreate or overwrite the file: the user
-  may edit it too, and their edits must survive.
+- It's Markdown in the owner's Obsidian vault. Edit it in place with
+  Edit/Write, following the shared style guide
+  `Documentation/_tools/Doc Style.md` (read it first). Entries use change type "Test run".
+  Never recreate or overwrite the whole file: the user may edit it too,
+  and their edits must survive.
+- Screenshots are copied, never moved, from `Hati/Screenshots/` into
+  `Documentation/attachments/qa-test-log/` and embedded as the style guide says.
 - Each entry records: what was tested (branch, environment, URL), a table of
   flows with pass/fail at phone and desktop width, the acceptance criteria
   checked and their result, each defect with reproduction steps and severity,
-  the screenshot file names in the Screenshots folder, and anything you couldn't
+  the screenshots that show the result, embedded, and anything you couldn't
   test.
 - The old manual checklist for human testers is archived at
   `Documentation/_archive/Hati - QAT Testing Checklist.pdf`; read it as history.

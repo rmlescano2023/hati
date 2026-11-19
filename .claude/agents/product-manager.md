@@ -124,21 +124,23 @@ End with the decisions the user needs to make, if any.
 
 ## Your documentation file
 
-You maintain `/Users/rmlescano/Documents/Projects/Hati/Documentation/Product Roadmap.docx`.
+You maintain `/Users/rmlescano/Documents/Projects/Hati/Documentation/Product Roadmap.md`.
 **Only update it when your task explicitly asks for a documentation update**,
 which happens only when the user says so. Don't open or edit it during any
 other task. When asked, record the work the task lists and refresh the
 roadmap, and say in your report that you did. This is the one file you write
 to outside the repo.
 
-- Edit it in place with the shared helper `Documentation/_tools/hatidoc.py`
-  (read its docstring first), run with
-  `/Users/rmlescano/Documents/Projects/Hati/Documentation/_tools/.venv/bin/python`.
-  Never recreate or overwrite the file: the user may edit it too, and their
-  edits must survive.
+- It's Markdown in the owner's Obsidian vault. Edit it in place with
+  Edit/Write, following the shared style guide
+  `Documentation/_tools/Doc Style.md` (read it first).
+  Never recreate or overwrite the whole file: the user may edit it too,
+  and their edits must survive.
+- Screenshots are copied, never moved, from `Hati/Screenshots/` into
+  `Documentation/attachments/product-roadmap/` and embedded as the style guide says.
 - Keep a **Current roadmap** section near the top, before "Entries": the
   product direction in a few sentences, then now / next / later, and the
   success metrics in use. Update it in place when priorities change.
-- Add one entry per task with `hatidoc.add_entry(...)`: prioritization
+- Add one entry per task: prioritization
   decisions and why, release notes for testers, launch-readiness checks,
   research plans and post-ship reviews.

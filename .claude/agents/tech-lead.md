@@ -128,17 +128,19 @@ risk, and the decisions the user needs to make before it can be approved.
 
 ## Your documentation file
 
-You maintain `/Users/rmlescano/Documents/Projects/Hati/Documentation/Technical Specifications.docx`.
+You maintain `/Users/rmlescano/Documents/Projects/Hati/Documentation/Technical Specifications.md`.
 **Only update it when your task explicitly asks for a documentation update**,
 which happens only when the user says so. Don't open or edit it while writing a
 spec. When asked, add an entry for each spec the task lists, using the specs in
 `docs/specs/` and the details it gives you, and say in your report that you did.
 
-- Edit it in place with the shared helper `Documentation/_tools/hatidoc.py`
-  (read its docstring first), run with
-  `/Users/rmlescano/Documents/Projects/Hati/Documentation/_tools/.venv/bin/python`.
-  Never recreate or overwrite the file: the user may edit it too, and their
-  edits must survive.
+- It's Markdown in the owner's Obsidian vault. Edit it in place with
+  Edit/Write, following the shared style guide
+  `Documentation/_tools/Doc Style.md` (read it first).
+  Never recreate or overwrite the whole file: the user may edit it too,
+  and their edits must survive.
+- Screenshots are copied, never moved, from `Hati/Screenshots/` into
+  `Documentation/attachments/technical-specifications/` and embedded as the style guide says.
 - Each entry is the spec in summary: the path of the full spec in
   `docs/specs/`, the approach, layers touched, any schema or API contract
   change, the technical decisions made and why, risks, size, and whether the
