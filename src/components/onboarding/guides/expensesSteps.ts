@@ -11,7 +11,7 @@ export const EXPENSES_STEPS: GuideStep<ExpensesSceneId>[] = [
     target: 'group-members',
     title: "Who's sharing?",
     content:
-      "This is a practice with made-up people, so tap and type freely: nothing here is saved. Start by adding everyone who's sharing the costs. Type a name and tap + Add. Tap × on a name to remove it.",
+      "Start by adding everyone who's sharing the costs. Type a name and tap + Add. Tap × on a name to remove it.",
     place: 'X1',
   },
   {

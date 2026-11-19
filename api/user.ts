@@ -6,8 +6,10 @@ import { NICKNAMES_MAX, applyProfileUpdate } from '../src/lib/profileName.js';
 
 /**
  * The account's own record: whether onboarding is done, and the profile name
- * and other names Collection matches against each session's members, and the
- * two one-time questions (What's new, and Already settled) it has answered.
+ * and other names Collection matches against each session's members, the
+ * two one-time questions (What's new, and Already settled) it has answered, and
+ * whether it has started or declined each guide (the Expenses and Collection
+ * flags that keep a guide's once-only offer from opening twice).
  *
  * `GET` is the first call the app makes after sign-in, and it upserts the
  * `users` row — until now nothing guaranteed one existed before a session was
@@ -26,16 +28,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'GET') {
     await ensureUser(userId);
     const { rows } = await pool.sql`
-      select onboarded_at, display_name, nicknames, whats_new_version, already_settled_answered_at
+      select onboarded_at, display_name, nicknames, whats_new_version, already_settled_answered_at,
+             expenses_guide_seen_at, collection_guide_seen_at
       from users where id = ${userId}`;
     const onboardedAt = rows[0]?.onboarded_at ?? null;
     const answeredAt = rows[0]?.already_settled_answered_at ?? null;
+    const expensesSeenAt = rows[0]?.expenses_guide_seen_at ?? null;
+    const collectionSeenAt = rows[0]?.collection_guide_seen_at ?? null;
     return res.status(200).json({
       onboardedAt: onboardedAt === null ? null : new Date(onboardedAt).toISOString(),
       displayName: rows[0]?.display_name ?? null,
       nicknames: rows[0]?.nicknames ?? [],
       whatsNewVersion: rows[0]?.whats_new_version ?? null,
       alreadySettledAnsweredAt: answeredAt === null ? null : new Date(answeredAt).toISOString(),
+      expensesGuideSeenAt: expensesSeenAt === null ? null : new Date(expensesSeenAt).toISOString(),
+      collectionGuideSeenAt:
+        collectionSeenAt === null ? null : new Date(collectionSeenAt).toISOString(),
     });
   }
 
@@ -56,6 +64,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       await pool.sql`
         update users
         set already_settled_answered_at = coalesce(already_settled_answered_at, now())
+        where id = ${userId}`;
+      return res.status(204).end();
+    }
+    // The column names are literal SQL, so each guide has its own statement rather than one
+    // with an interpolated name. The first time is kept, so a replay writes nothing new.
+    if (mark === 'expensesGuide') {
+      await pool.sql`
+        update users set expenses_guide_seen_at = coalesce(expenses_guide_seen_at, now())
+        where id = ${userId}`;
+      return res.status(204).end();
+    }
+    if (mark === 'collectionGuide') {
+      await pool.sql`
+        update users set collection_guide_seen_at = coalesce(collection_guide_seen_at, now())
         where id = ${userId}`;
       return res.status(204).end();
     }

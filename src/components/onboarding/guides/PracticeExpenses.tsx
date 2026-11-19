@@ -5,18 +5,9 @@ import { PracticeProfileProvider } from '../../../context/ProfileContext';
 import { PracticeSessionsProvider, useSessionsStore } from '../../../context/SessionsStoreContext';
 import { todayIso } from '../../../lib/format';
 import type { PaidByPicks } from '../../../lib/staging';
-import { PracticeBanner } from './PracticeBanner';
 import { expensesScenes, type ExpensesScene, type ExpensesSceneId } from './expensesScenes';
 import { EXPENSES_STEPS } from './expensesSteps';
-
-/** A step's scene is satisfied only by being in it. A module-level function, so its identity is stable. */
-const sameScene = (a: ExpensesSceneId, b: ExpensesSceneId) => a === b;
-
-/** Whether `target` is on screen with a size, so a step pointing at it has something to highlight. */
-function targetShown(target: string): boolean {
-  const el = document.querySelector(`[data-tour="${target}"]`);
-  return el !== null && el.getBoundingClientRect().height > 0;
-}
+import { GUIDE_SCREEN_MARGIN, GUIDE_SCROLL_OFFSET, sameScene, targetShown } from './sceneChecks';
 
 type Props = {
   /** Ends the guide: where it started, or Home for "← Back to Home" (BR-TG20, BR-TG21). */
@@ -54,7 +45,6 @@ export function PracticeExpenses({ onEnd }: Props) {
 
   return (
     <>
-      <PracticeBanner onEnd={() => onEnd('origin')} />
       {/* The key remounts the memory store, the form and the staged list from the scene's seed. */}
       <PracticeScene
         key={`${scene}:${generation}`}
@@ -73,6 +63,8 @@ export function PracticeExpenses({ onEnd }: Props) {
         lastLabel="Done"
         escapeSkips
         lockTabs
+        scrollOffset={GUIDE_SCROLL_OFFSET}
+        keepOnScreen={GUIDE_SCREEN_MARGIN}
       />
     </>
   );
