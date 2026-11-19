@@ -125,8 +125,11 @@ one of them, this is the source of truth.
 
 **API and data**
 - Every handler authenticates with `getUserId` (401 without a user), checks
-  ownership explicitly (another account's id is a 404), validates input in
-  `api/_validate.ts`, and uses the `pool.sql` template, never string-built SQL.
+  access explicitly, validates input in `api/_validate.ts`, and uses the
+  `pool.sql` template, never string-built SQL. Access means the session's
+  owner, or a participant (an account that joined it) with role-scoped access:
+  an account with no relation to the session gets a 404, and a participant
+  asking for something its role doesn't allow gets a 403 with a `code`.
 - The Neon `main` branch holds **real user data** and is shared by local
   development, sit, qat and uat. Never reset, truncate or delete data there.
 - Schema changes in `scripts/db/schema.sql` stay idempotent and
@@ -147,6 +150,5 @@ one of them, this is the source of truth.
   check is required on `main` only, deliberately.
 - `sit` and `qat` stay private; `uat` is the one public stage for testers.
 
-**Deliberately absent:** an in-app calculator, sharing sessions between
-accounts, currency selection, offline use. Don't add them without the owner
-asking.
+**Deliberately absent:** an in-app calculator, currency selection, offline
+use. Don't add them without the owner asking.
