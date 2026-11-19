@@ -174,7 +174,8 @@ export function SessionWorkspace({
                 )}
               </span>
             )}
-            {session.status === 'draft' && !renaming && (
+            {/* Practice is never saved, so there's nothing to rename (owner, PR 2). */}
+            {session.status === 'draft' && !renaming && !practice && (
               <button
                 type="button"
                 ref={pencilRef}

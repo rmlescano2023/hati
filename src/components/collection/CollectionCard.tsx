@@ -256,7 +256,11 @@ export function CollectionCard({
           {groups
             .filter((g) => g.lines.length > 0)
             .map((group) => (
-              <section key={group.direction} className={styles.group}>
+              <section
+                key={group.direction}
+                className={styles.group}
+                data-tour={group.direction === 'owedToYou' ? 'collection-owed' : undefined}
+              >
                 <h4 className={styles.groupHeading}>
                   <DirectionLabel direction={group.direction} />
                 </h4>
@@ -427,7 +431,7 @@ function MarkAll({
   const [confirming, setConfirming] = useState(false);
   const row = useRef<HTMLDivElement>(null);
   return (
-    <div ref={row} className={styles.markAll}>
+    <div ref={row} className={styles.markAll} data-tour="collection-mark-all">
       <Button aria-label={`Mark all as paid in ${title}`} onClick={() => setConfirming(true)}>
         Mark all as paid
       </Button>

@@ -15,6 +15,7 @@ import {
   defaultLocale,
   type ButtonType,
   type EventData,
+  type Placement,
   type Step,
 } from 'react-joyride';
 import styles from './GuideTour.module.css';
@@ -51,6 +52,8 @@ export type GuideStep<P> = {
   target: string;
   title: string;
   content: string;
+  /** Where the tooltip sits against the target. Omitted, Joyride's bottom, flipping to the side with room. */
+  placement?: Placement;
   /** Where the target lives: a screen for the first-run tour, a scene for a guide. */
   place: P;
 };
@@ -79,7 +82,36 @@ type Props<P> = {
   escapeSkips?: boolean;
   /** Every tab but the highlighted one is inert and nudges, keyboard activations included. */
   lockTabs?: boolean;
+  /** Where a step's target lands below the top of the screen when the tour scrolls to it. Joyride's 20px when omitted. */
+  scrollOffset?: number;
+  /**
+   * Keeps every tooltip at least this many pixels inside the top and bottom of the screen. It
+   * flips to the side of the target with room first, and when neither side has room it slides
+   * over the target rather than off the screen. Omitted, Joyride places it as it always has.
+   */
+  keepOnScreen?: number;
 };
+
+/** Joyride's own name for what `floatingOptions.middleware` takes. */
+type TooltipMiddleware = NonNullable<NonNullable<Step['floatingOptions']>['middleware']>[number];
+
+/** Slides a tooltip vertically so it lies between `margin` from the top and the bottom of the screen. */
+const keepInBand = (margin: number): TooltipMiddleware => ({
+  name: 'keepInBand',
+  fn: ({ y, rects, elements }) => {
+    // Floating UI's y is measured from the tooltip's offset parent. The reference sits at
+    // `rects.reference.y` there and at its bounding box on screen, which converts one to the other.
+    const toScreen = elements.reference.getBoundingClientRect().top - rects.reference.y;
+    const screenTop = y + toScreen;
+    // The top wins if the band is too short, so a tooltip's title is never what's lost.
+    const max = Math.max(margin, window.innerHeight - margin - rects.floating.height);
+    // A target the reader's action removed leaves nothing to sit beside. The bottom of the
+    // band keeps the tooltip's buttons in reach and the page's own scroll to the result clear.
+    const gone = 'isConnected' in elements.reference && !elements.reference.isConnected;
+    const wanted = gone ? max : screenTop;
+    return { y: y + (Math.min(Math.max(wanted, margin), max) - screenTop) };
+  },
+});
 
 /** For a tour that never follows the reader's own navigation along. */
 const never = () => false;
@@ -110,6 +142,8 @@ export function GuideTour<P>({
   lastLabel,
   escapeSkips,
   lockTabs,
+  scrollOffset,
+  keepOnScreen,
 }: Props<P>) {
   const [index, setIndex] = useState(0);
   const done = useRef(false);
@@ -156,8 +190,26 @@ export function GuideTour<P>({
         // Joyride's Escape advances the step. A guide wants it to end instead, which the
         // listener below does, so Joyride's own is switched off.
         ...(escapeSkips ? { dismissKeyAction: false as const } : {}),
+        ...(scrollOffset !== undefined ? { scrollOffset } : {}),
+        ...(s.placement ? { placement: s.placement } : {}),
+        ...(keepOnScreen !== undefined
+          ? {
+              floatingOptions: {
+                // Flip by the room that is really there, so the side with room is the one picked.
+                flipOptions: {
+                  padding: {
+                    top: keepOnScreen,
+                    right: 20,
+                    bottom: keepOnScreen,
+                    left: 20,
+                  },
+                },
+                middleware: [keepInBand(keepOnScreen)],
+              },
+            }
+          : {}),
       })),
-    [guideSteps, lastLabel, escapeSkips],
+    [guideSteps, lastLabel, escapeSkips, scrollOffset, keepOnScreen],
   );
 
   // Next does the navigating, so a screen that does not match the current step
@@ -176,6 +228,28 @@ export function GuideTour<P>({
     done.current = true;
     finish.current(false);
   }, [run, place, index, guideSteps, matches, wentToNextStep]);
+
+  // The reader's own action can resize the target, as opening a card or a form does, which may
+  // push it off the top of the screen or its tooltip off the bottom. The tooltip follows the
+  // target by itself; the page doesn't, so it is scrolled back to where a step puts its target.
+  useEffect(() => {
+    if (!run || scrollOffset === undefined || typeof ResizeObserver === 'undefined') return;
+    const target = document.querySelector(`[data-tour="${guideSteps[index].target}"]`);
+    if (!target) return;
+    let height = target.getBoundingClientRect().height;
+    const observer = new ResizeObserver(() => {
+      // A removed target reports no size, and there is nothing left to scroll to.
+      if (!target.isConnected) return;
+      const rect = target.getBoundingClientRect();
+      if (Math.abs(rect.height - height) < 2) return;
+      height = rect.height;
+      // Joyride leaves the target's top a spotlight padding (10px) below the offset.
+      const delta = rect.top - (scrollOffset + 10);
+      if (Math.abs(delta) > 2) window.scrollBy({ top: delta });
+    });
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [run, index, guideSteps, scrollOffset]);
 
   // A step whose target is not mounted shows nothing at all, which reads as a
   // dead tour rather than as a bug — that is exactly how the Summary step

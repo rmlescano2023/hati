@@ -6,6 +6,7 @@ import type { FailedPayment } from '../components/collection/LineRow';
 import { ProfileBanner } from '../components/profile/ProfileBanner';
 import { Button } from '../components/shared/Button';
 import { EmptyState } from '../components/shared/EmptyState';
+import { HelpIcon } from '../components/shared/icons';
 import { useProfile } from '../context/ProfileContext';
 import { useSessionsStore } from '../context/SessionsStoreContext';
 import {
@@ -27,6 +28,13 @@ type Props = {
   canAsk: boolean;
   /** Dev-only: ask "Already settled?" even if it was answered, and store no answer. */
   previewSettled?: boolean;
+  /** Starts the Collection guide. "Need help?" shows only while this is given (AC-TG8.1). */
+  onHelp?: () => void;
+  /**
+   * Told whether the once-only guide offer may open: the profile has loaded, and "Already settled?"
+   * is neither due nor asked this visit (BR-TG8, BR-TG9). False again on unmount.
+   */
+  onOfferClear?: (clear: boolean) => void;
 };
 
 /**
@@ -34,7 +42,13 @@ type Props = {
  * place come first, so they get set up; then what is still outstanding, with
  * its totals; then what is settled, collapsed out of the way.
  */
-export function CollectionPage({ openSessionId, canAsk, previewSettled = false }: Props) {
+export function CollectionPage({
+  openSessionId,
+  canAsk,
+  previewSettled = false,
+  onHelp,
+  onOfferClear,
+}: Props) {
   const { sessions, settleSessions, isPaying, sync } = useSessionsStore();
   const profile = useProfile();
   const collection = useMemo(
@@ -180,6 +194,19 @@ export function CollectionPage({ openSessionId, canAsk, previewSettled = false }
   // The one-time "Already settled?" question. It's asked about the sessions
   // finished before Collection, live, so the count is true when it opens.
   const [previewDone, setPreviewDone] = useState(false);
+  const settledDue =
+    profile.status === 'ready' &&
+    (previewSettled ? !previewDone : !profile.alreadySettledAnswered) &&
+    collection.alreadySettledOffers.length > 0;
+  // A page mount is one visit, so this remembers that the question showed on it. The guide offer
+  // then waits for the next visit rather than opening the moment the question is answered.
+  const [asked, setAsked] = useState(false);
+  if (canAsk && settledDue && !asked) setAsked(true);
+  const offerClear = profile.status === 'ready' && !settledDue && !asked;
+  useEffect(() => {
+    onOfferClear?.(offerClear);
+  }, [onOfferClear, offerClear]);
+  useEffect(() => () => onOfferClear?.(false), [onOfferClear]);
 
   if (profile.status === 'loading') {
     return (
@@ -190,23 +217,37 @@ export function CollectionPage({ openSessionId, canAsk, previewSettled = false }
     );
   }
 
+  // Beside the page's first heading, as on Expenses (OQ-TG2). The accessible name contains the
+  // visible text, so a voice user saying "click Need help" finds it.
+  const help = onHelp && (
+    <button
+      type="button"
+      id="collection-help"
+      className={styles.help}
+      aria-label="Need help? See how to track payments"
+      onClick={onHelp}
+    >
+      Need help?
+      <HelpIcon className={styles.helpIcon} />
+    </button>
+  );
+
   // Guessing without the profile would put every matched session under Needs
   // setup, so nothing is shown until it loads (A6).
   if (profile.status === 'error') {
     return (
-      <div className={styles.loadError} role="alert">
-        <p>Couldn&apos;t load your profile.</p>
-        <Button onClick={profile.reload}>Try again</Button>
-      </div>
+      <>
+        <div className={styles.helpRow}>{help}</div>
+        <div className={styles.loadError} role="alert">
+          <p>Couldn&apos;t load your profile.</p>
+          <Button onClick={profile.reload}>Try again</Button>
+        </div>
+      </>
     );
   }
 
   const { needsSetup, outstanding, settled } = collection;
-  const askOpen =
-    canAsk &&
-    profile.status === 'ready' &&
-    (previewSettled ? !previewDone : !profile.alreadySettledAnswered) &&
-    collection.alreadySettledOffers.length > 0;
+  const askOpen = canAsk && settledDue;
   // Marks sessions as already settled, then announces and moves focus only for
   // the ones that really ended up Settled once the server answered. A mark that
   // failed puts its card back, and one another device only part paid stays where
@@ -279,19 +320,25 @@ export function CollectionPage({ openSessionId, canAsk, previewSettled = false }
   return (
     <>
       {total === 0 ? (
-        // After a failed load the banner speaks instead of an empty state.
-        showsEmptyState(sync.loaded, total) && (
-          <EmptyState
-            title="Nothing to collect yet"
-            description="Finish a session and it will show up here."
-          />
-        )
+        <>
+          <div className={styles.helpRow}>{help}</div>
+          {/* After a failed load the banner speaks instead of an empty state. */}
+          {showsEmptyState(sync.loaded, total) && (
+            <EmptyState
+              title="Nothing to collect yet"
+              description="Finish a session and it will show up here."
+            />
+          )}
+        </>
       ) : (
         <>
           {profile.displayName === null && <ProfileBanner />}
 
-          <section>
-            <h2 className={homeStyles.heading}>Summary</h2>
+          <section data-tour="collection-totals">
+            <div className={styles.headRow}>
+              <h2 className={homeStyles.heading}>Summary</h2>
+              {help}
+            </div>
             <div className={styles.strip}>
               <div className={styles.tile}>
                 <DirectionLabel direction="owedToYou" hint className={styles.tileLabel} />
@@ -312,7 +359,7 @@ export function CollectionPage({ openSessionId, canAsk, previewSettled = false }
           </section>
 
           {needsSetup.length > 0 && (
-            <section className={styles.section}>
+            <section className={styles.section} data-tour="collection-unsettled">
               <h2 className={homeStyles.heading}>{`Needs setup (${needsSetup.length})`}</h2>
               <div className={homeStyles.list}>{needsSetup.map(renderCard)}</div>
             </section>
@@ -322,7 +369,9 @@ export function CollectionPage({ openSessionId, canAsk, previewSettled = false }
             <section className={styles.section}>
               <h2 className={homeStyles.heading}>{`Outstanding (${outstanding.length})`}</h2>
               {outstanding.length > 0 ? (
-                <div className={homeStyles.list}>{outstanding.map(renderCard)}</div>
+                <div className={homeStyles.list} data-tour="collection-outstanding">
+                  {outstanding.map(renderCard)}
+                </div>
               ) : (
                 <p className={styles.quiet}>Nothing outstanding. Everything is settled.</p>
               )}
@@ -330,7 +379,7 @@ export function CollectionPage({ openSessionId, canAsk, previewSettled = false }
           )}
 
           {settled.length > 0 && (
-            <section className={styles.section}>
+            <section className={styles.section} data-tour="collection-settled">
               <h2 className={`${homeStyles.heading} ${styles.settledHeading}`}>
                 <button
                   ref={settledToggle}

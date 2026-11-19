@@ -1,9 +1,10 @@
 import { Button } from '../shared/Button';
+import type { Guide } from '../../lib/guideOffer';
 import { OnboardingDialog } from './OnboardingDialog';
 import styles from './TutorialsDialog.module.css';
 
 /** The tutorials the account menu offers, each one a replay or a guide. */
-export type Tutorial = 'overview' | 'expenses';
+export type Tutorial = 'overview' | Guide;
 
 const TUTORIALS: { id: Tutorial; label: string; description: string }[] = [
   { id: 'overview', label: 'App overview', description: "A one-minute tour of Hati's screens." },
@@ -12,6 +13,11 @@ const TUTORIALS: { id: Tutorial; label: string; description: string }[] = [
     label: 'Logging expenses',
     description:
       'Adding people and purchases, including receipts with shared dishes and discounts.',
+  },
+  {
+    id: 'collection',
+    label: 'Tracking payments',
+    description: "Recording who has paid you, and what you've paid.",
   },
 ];
 
