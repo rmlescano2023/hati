@@ -90,16 +90,32 @@ export type Me =
   | { kind: 'unknown'; suggested: string | null }
   | { kind: 'notInSession' };
 
+/** Whether the account joined this session rather than owning it. Never test `role === 'owner'`: an absent role is an owner. */
+export const isJoined = (session: Pick<Session, 'role'>): boolean => session.role === 'participant';
+
+/** The members an account has joined the session as. Only an owned session lists any. */
+export const claimedMembers = (session: Pick<Session, 'participants'>): string[] =>
+  (session.participants ?? []).map((p) => p.member);
+
 /**
  * BR-N4: an explicit pick, then a profile-name match, then unknown (Needs
- * setup), with a nickname match as the suggestion.
+ * setup), with a nickname match as the suggestion. The match skips members
+ * someone has joined as, so the organizer and a participant are never both
+ * the same person while the pick is unset (AC-14.2).
  */
-export function resolveMe(session: Pick<Session, 'me' | 'members'>, names: KnownNames): Me {
+export function resolveMe(
+  session: Pick<Session, 'me' | 'members' | 'participants'>,
+  names: KnownNames,
+): Me {
   if (session.me === NOT_IN_SESSION) return { kind: 'notInSession' };
   if (session.me !== null && session.members.includes(session.me)) {
     return { kind: 'member', name: session.me, picked: true };
   }
-  const match = matchMember(session.members, names);
+  const claimed = claimedMembers(session);
+  const match = matchMember(
+    session.members.filter((m) => !claimed.includes(m)),
+    names,
+  );
   if (match === null) return { kind: 'unknown', suggested: null };
   return match.via === 'profile'
     ? { kind: 'member', name: match.member, picked: false }
@@ -187,7 +203,10 @@ export type CollectionCard = {
   settledAt: string;
   /** How many settlement pairs the session has, the user's or not. */
   pairCount: number;
-  /** Every pair is fully paid. True when there are none. */
+  /**
+   * Every pair is fully paid. True when there are none. False on a joined session, which is only
+   * sent the payments on its own lines, so it can't know about the others (D1).
+   */
   allPairsPaid: boolean;
   /**
    * Finished before Collection, with at least one pair, and every pair paid:
@@ -233,8 +252,12 @@ const sumRemaining = (lines: CollectionLine[]) =>
   lines.reduce((sum, l) => sum + l.remainingCents, 0);
 const sumPaid = (lines: CollectionLine[]) => lines.reduce((sum, l) => sum + l.paidCents, 0);
 
+/** A joined session's `me` is the member it joined as, so the user's own names are never consulted (BR-V2). */
+const NO_NAMES: KnownNames = { displayName: null, nicknames: [] };
+
 export function buildCard(session: Session, names: KnownNames): CollectionCard {
-  const me = resolveMe(session, names);
+  const joined = isJoined(session);
+  const me = resolveMe(session, joined ? NO_NAMES : names);
   const finishedAt = session.closedAt ?? session.createdAt;
   const owedToYou: CollectionLine[] = [];
   const youOwe: CollectionLine[] = [];
@@ -265,17 +288,22 @@ export function buildCard(session: Session, names: KnownNames): CollectionCard {
     session.payments
       .filter((p) => p.debtor === pair.debtor && p.creditor === pair.creditor)
       .reduce((sum, p) => sum + p.amountCents, 0);
-  const allPairsPaid = pairs.every((p) => paidOn(p) >= p.amountCents);
+  const allPairsPaid = !joined && pairs.every((p) => paidOn(p) >= p.amountCents);
 
   // Every pair paid means nothing is left to collect from anyone, so there is
-  // no reason to ask who the user is (BR-S3).
-  const bucket: Bucket = allPairsPaid
-    ? 'settled'
-    : me.kind === 'unknown'
-      ? 'needsSetup'
-      : settledLineCount === lines.length
-        ? 'settled'
-        : 'outstanding';
+  // no reason to ask who the user is (BR-S3). A joined session already knows
+  // who the user is, so it is bucketed from the user's own lines alone (BR-V3).
+  const bucket: Bucket = joined
+    ? settledLineCount === lines.length
+      ? 'settled'
+      : 'outstanding'
+    : allPairsPaid
+      ? 'settled'
+      : me.kind === 'unknown'
+        ? 'needsSetup'
+        : settledLineCount === lines.length
+          ? 'settled'
+          : 'outstanding';
 
   return {
     session,
@@ -292,8 +320,9 @@ export function buildCard(session: Session, names: KnownNames): CollectionCard {
     settledAt: latest?.createdAt ?? finishedAt,
     pairCount: pairs.length,
     allPairsPaid,
-    presettled: !session.finishedWithCollection && pairs.length > 0 && allPairsPaid,
+    presettled: !joined && !session.finishedWithCollection && pairs.length > 0 && allPairsPaid,
     offersAlreadySettled:
+      !joined &&
       !session.finishedWithCollection &&
       session.payments.length === 0 &&
       pairs.length > 0 &&

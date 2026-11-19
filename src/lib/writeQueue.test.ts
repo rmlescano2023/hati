@@ -21,6 +21,7 @@ import {
   isDeletedElsewhere,
   lineKey,
   recordFailedMessage,
+  reloadsOnReturn,
   resolveSuperseded,
   keepLocalPayments,
   mergeLoaded,
@@ -1249,5 +1250,16 @@ describe('restoreAt (a card whose delete failed comes back where it was)', () =>
     });
     expect(resolveFailure(list, 'delete', 'A')).toBe(list);
     expect(resolveFailure(list, 'delete', 'B')).toEqual([]);
+  });
+});
+
+describe('reloadsOnReturn (AC-15.1, AC-15.2)', () => {
+  it('never reloads before there has been a load', () => {
+    expect(reloadsOnReturn(null, 1_000_000)).toBe(false);
+  });
+
+  it('reloads only once 30 seconds have passed since the last load started', () => {
+    expect(reloadsOnReturn(1_000, 30_999)).toBe(false);
+    expect(reloadsOnReturn(1_000, 31_000)).toBe(true);
   });
 });

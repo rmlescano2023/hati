@@ -180,6 +180,21 @@ export function restoreAt<S extends { id: string }>(list: S[], session: S, index
 }
 
 /**
+ * How long the app waits after one load before it quietly reloads on the tab coming back into
+ * view. A member's lines change when the organizer records a payment, and a tab left open
+ * would otherwise show them stale until a manual refresh (D2).
+ */
+export const RELOAD_ON_RETURN_MS = 30_000;
+
+/**
+ * Whether coming back to the tab should reload. The wait counts from the start of the last load of
+ * any kind, so two returns inside the window reload at most once (AC-15.2). Null means nothing
+ * has loaded yet, so the first load is still the one in charge.
+ */
+export const reloadsOnReturn = (lastLoadAt: number | null, now: number): boolean =>
+  lastLoadAt !== null && now - lastLoadAt >= RELOAD_ON_RETURN_MS;
+
+/**
  * Whether a screen with nothing to list may say so. An empty list is only the
  * truth after a load that succeeded: while the first load has failed the list
  * is empty because nothing arrived, and "No sessions" would read as lost data.

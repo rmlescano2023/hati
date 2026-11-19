@@ -4,6 +4,8 @@ import {
   announcesSettled,
   buildCard,
   buildCollection,
+  claimedMembers,
+  isJoined,
   isKnownName,
   markAllMessage,
   matchMember,
@@ -879,5 +881,95 @@ describe('pairPaymentIds', () => {
     const before = pairPaymentIds([a], 'Ana', 'Renmar');
     expect(pairPaymentIds([a, b], 'Ana', 'Renmar')).not.toBe(before);
     expect(pairPaymentIds([a, other], 'Ana', 'Renmar')).toBe(before);
+  });
+});
+
+describe('a joined session (AC-10.1, BR-V2, BR-V3, BR-V6)', () => {
+  const joinedAs = (me: string, over: Partial<Session> = {}) =>
+    tripA({ role: 'participant', organizerName: 'Renmar', me, participants: [], ...over });
+
+  it('is Outstanding while a line has something left, Settled once every line is paid', () => {
+    const open = buildCard(joinedAs('Ben'), names(null));
+    expect(open.bucket).toBe('outstanding');
+    expect(open.owedToYou.map((l) => [l.other, l.amountCents])).toEqual([['Renmar', 10000]]);
+
+    const paid = buildCard(
+      joinedAs('Ben', { payments: [pay('pay_1', 'Renmar', 'Ben', 10000)] }),
+      names(null),
+    );
+    expect(paid.bucket).toBe('settled');
+  });
+
+  it('is never Needs setup, even with no profile name', () => {
+    expect(buildCard(joinedAs('Ana'), names(null)).bucket).not.toBe('needsSetup');
+  });
+
+  it('is Settled with no lines when the member is even', () => {
+    // Ana paid for herself alone, so nobody owes anybody.
+    const even = finished('session_e', ['Ana', 'Ben'], [purchase('r1', 'Ana', 100, ['Ana'])], {
+      role: 'participant',
+      me: 'Ben',
+    });
+    const card = buildCard(even, names(null));
+    expect(card.lineCount).toBe(0);
+    expect(card.bucket).toBe('settled');
+  });
+
+  it('ignores the names the user has saved', () => {
+    const card = buildCard(joinedAs('Ben'), names('Renmar'));
+    expect(card.me).toEqual({ kind: 'member', name: 'Ben', picked: true });
+  });
+
+  it('is never offered Already settled and never reads as settled before Collection', () => {
+    const card = buildCard(joinedAs('Ben', { finishedWithCollection: false }), names(null));
+    expect(card.allPairsPaid).toBe(false);
+    expect(card.presettled).toBe(false);
+    expect(card.offersAlreadySettled).toBe(false);
+  });
+
+  it('counts in the totals when Outstanding', () => {
+    const collection = buildCollection([joinedAs('Ben')], names(null));
+    expect(collection.owedToYouCents).toBe(10000);
+    expect(collection.youOweCents).toBe(0);
+    expect(collection.alreadySettledOffers).toEqual([]);
+  });
+});
+
+describe('resolveMe with claimed members (AC-14.2, E1-3)', () => {
+  const members = ['Ana', 'Ben'];
+  const participants = [{ member: 'Ben', name: null, joinedAt: '2026-11-05T00:00:00.000Z' }];
+
+  it('does not match the profile name to a member someone has joined as', () => {
+    expect(resolveMe({ me: null, members, participants }, names('Ben'))).toEqual({
+      kind: 'unknown',
+      suggested: null,
+    });
+  });
+
+  it('falls to a nickname suggestion when the profile name is on a claimed member', () => {
+    expect(resolveMe({ me: null, members, participants }, names('Ben', 'Ana'))).toEqual({
+      kind: 'unknown',
+      suggested: 'Ana',
+    });
+  });
+
+  it('leaves an explicit pick alone', () => {
+    expect(resolveMe({ me: 'Ben', members, participants }, names('Ben'))).toEqual({
+      kind: 'member',
+      name: 'Ben',
+      picked: true,
+    });
+  });
+});
+
+describe('isJoined and claimedMembers', () => {
+  it('reads the role and the participants', () => {
+    expect(isJoined(tripA())).toBe(false);
+    expect(isJoined(tripA({ role: 'owner' }))).toBe(false);
+    expect(isJoined(tripA({ role: 'participant' }))).toBe(true);
+    expect(claimedMembers(tripA())).toEqual([]);
+    expect(
+      claimedMembers(tripA({ participants: [{ member: 'Ben', name: null, joinedAt: 'x' }] })),
+    ).toEqual(['Ben']);
   });
 });

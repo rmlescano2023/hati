@@ -90,6 +90,18 @@ export type PurchaseRecord = {
 
 export type SessionStatus = 'draft' | 'closed';
 
+/** How the signed-in account relates to a session: it owns it, or it joined it as a member. */
+export type SessionRole = 'owner' | 'participant';
+
+/** An account that joined a finished session as one of its members, as the organizer sees it. */
+export type Participant = {
+  member: string;
+  /** The joiner's Hati profile name, or null when they haven't set one. Never an email (D3). */
+  name: string | null;
+  /** ISO time they joined. */
+  joinedAt: string;
+};
+
 /**
  * One batch of expenses — a trip, a hangout, a night out. A session is a
  * `draft` while you are still adding to it and `closed` once it has been
@@ -126,6 +138,15 @@ export type Session = {
   finishedWithCollection: boolean;
   /** Recorded payments, oldest first. Read-only on the session; written through `/api/payments`. */
   payments: Payment[];
+  /**
+   * 'participant' when the account joined this session rather than owning it; absent or 'owner'
+   * otherwise. Test it as `role === 'participant'` (`isJoined`), never as `=== 'owner'`.
+   */
+  role?: SessionRole;
+  /** The organizer's Hati profile name, on a joined session only; null when unset. */
+  organizerName?: string | null;
+  /** Who joined, for the organizer only (BR-O3); always empty on a joined session. */
+  participants?: Participant[];
 };
 
 /** One payment against a finished session's settlement line. Never edited; undo deletes it. */
@@ -142,6 +163,31 @@ export type Payment = {
 
 /** What the client sends to record a payment; the server stamps the time. */
 export type NewPayment = Omit<Payment, 'createdAt'>;
+
+/** What a token holder sees before joining (I-4, AC-6.2). */
+export type InvitePreview = {
+  sessionId: string;
+  title: string;
+  closedAt: string;
+  members: string[];
+  /** Members already on Hati: claimed by an account, or the organizer's own pick. */
+  onHati: string[];
+  organizerName: string | null;
+};
+
+/** The 200 and 201 bodies of a preview or a join. */
+export type InviteAnswer =
+  | { outcome: 'own'; sessionId: string; title: string }
+  | { outcome: 'already'; sessionId: string; title: string; member: string }
+  | { outcome: 'open'; preview: InvitePreview }
+  | { outcome: 'joined'; session: Session };
+
+/** How a preview or join ended, as the app sees it: the answer, a refusal, or no answer. */
+export type JoinAnswer =
+  | InviteAnswer
+  | { outcome: 'taken'; preview: InvitePreview }
+  | { outcome: 'dead' }
+  | { outcome: 'failed' };
 
 export type AppData = {
   schemaVersion: number;
