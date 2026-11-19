@@ -92,7 +92,12 @@ export function HistoryDetailPage({ sessionId, onBack, onLeft = noop }: Props) {
       {inviting && <InviteMembersDialog session={session} onClose={() => setInviting(false)} />}
 
       {groupRecordsForBreakdown(session.records, sortNames(session.members)).map((group) => (
-        <BreakdownGroup key={group.key} group={group} members={members} editable={false} />
+        <BreakdownGroup
+          key={group.key}
+          group={group}
+          members={members}
+          editable={false}
+        />
       ))}
     </>
   );

@@ -1031,9 +1031,9 @@ On mount, `getLink(session.id, false)` sets `link = inviteUrl(window.location.or
 
 **Reset:**
 - A `ConfirmDialog`, destructive, titled "Reset the invite link?". The message is "The current
-  link, and the QR on any statement you've already shared, will stop working. Members who already
-  joined keep tracking. You'll get a new link to share." The buttons are "Cancel" and "Reset link"
-  (AC-3.1).
+  link will stop working. Members who already joined keep tracking. You'll get a new link to
+  share." The buttons are "Cancel" and "Reset link" (AC-3.1). PR 1 ships without the clause "and
+  the QR on any statement you've already shared"; PR 3 restores it.
 - On confirm, `getLink(session.id, true)`:
   - success: the new link and `note = 'Invite link reset.'` (AC-3.2);
   - failure: the error "Couldn't reset the link. Try again." and the old link stays (AC-3.4).

@@ -211,7 +211,7 @@ export function InviteMembersDialog({ session, onClose }: Props) {
       <ConfirmDialog
         open={resetting}
         title="Reset the invite link?"
-        message="The current link, and the QR on any statement you've already shared, will stop working. Members who already joined keep tracking. You'll get a new link to share."
+        message="The current link will stop working. Members who already joined keep tracking. You'll get a new link to share."
         confirmLabel="Reset link"
         destructive
         onCancel={() => setResetting(false)}
