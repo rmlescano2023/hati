@@ -136,13 +136,20 @@ export function parseProfileInput(raw: unknown): ProfileUpdate | null {
 
 /**
  * What a `PUT /api/user` is for. No body is the onboarding mark, which is what
- * the tour and every older client send; the other two name themselves. Anything
+ * the tour and every older client send; the others name themselves. Anything
  * else is a 400, so a typo can never be read as "onboarded".
  */
-export function parseUserMark(raw: unknown): 'onboarding' | 'whatsNew' | 'alreadySettled' | null {
+export function parseUserMark(
+  raw: unknown,
+): 'onboarding' | 'whatsNew' | 'alreadySettled' | 'expensesGuide' | 'collectionGuide' | null {
   if (raw === undefined || raw === null) return 'onboarding';
   if (!isPlainObject(raw)) return null;
-  return raw.mark === 'whatsNew' || raw.mark === 'alreadySettled' ? raw.mark : null;
+  return raw.mark === 'whatsNew' ||
+    raw.mark === 'alreadySettled' ||
+    raw.mark === 'expensesGuide' ||
+    raw.mark === 'collectionGuide'
+    ? raw.mark
+    : null;
 }
 
 /** The `sessionId` of a query string: one short string, or null. */

@@ -3,6 +3,9 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { TOUR_STEPS } from './steps';
 import { EXPENSES_STEPS } from './guides/expensesSteps';
+import { COLLECTION_STEPS } from './guides/collectionSteps';
+
+const GUIDE_STEPS = [...EXPENSES_STEPS, ...COLLECTION_STEPS];
 
 /**
  * The tour finds its targets by `data-tour` attribute. Renaming one in the UI
@@ -56,7 +59,7 @@ describe('tour targets', () => {
 describe('guide targets', () => {
   const declared = declaredTargets();
 
-  it.each(EXPENSES_STEPS.map((s) => s.target))('has an element for "%s"', (target) => {
+  it.each(GUIDE_STEPS.map((s) => s.target))('has an element for "%s"', (target) => {
     const prefixed = [...declared].some(
       (d) => d.endsWith('-*') && target.startsWith(d.slice(0, -1)),
     );
@@ -77,7 +80,7 @@ describe('guide targets', () => {
     return count;
   }
 
-  it.each([...new Set(EXPENSES_STEPS.map((s) => s.target))])(
+  it.each([...new Set(GUIDE_STEPS.map((s) => s.target))])(
     'declares "%s" in exactly one source location',
     (target) => {
       expect(declarations(target)).toBe(1);

@@ -9,6 +9,53 @@
   text-align: center;
 }
 
+/* The Summary heading, with "Need help?" at the right of its row (OQ-TG2). */
+.headRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* With no heading on the page (empty, or the profile failed), "Need help?" sits alone at the right. */
+.helpRow {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* The same small accent-green text link as Expenses' (SessionWorkspace.module.css): a real button. */
+.help {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--accent-text);
+  cursor: pointer;
+}
+
+.help:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* A ring the page's faint default for buttons doesn't give a text link. */
+.help:focus-visible {
+  outline: none;
+  border-radius: var(--radius-sm);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.helpIcon {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+
 /* Two tiles side by side at every width: they are the page's headline. */
 .strip {
   display: grid;
@@ -99,6 +146,12 @@
 }
 
 @media (max-width: 640px) {
+  /* A thumb-sized target whose margins give the height back, so the heading row is no taller. */
+  .help {
+    padding-block: 12px;
+    margin-block: -10px;
+  }
+
   .tile {
     padding: 12px;
   }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { whatsNewDue } from './whatsNew';
+import { WHATS_NEW_VERSION, whatsNewDue } from './whatsNew';
 
 describe('whatsNewDue', () => {
   const onboarded = '2026-11-01T00:00:00.000Z';
@@ -14,9 +14,17 @@ describe('whatsNewDue', () => {
     expect(whatsNewDue(onboarded, 0)).toBe(true);
   });
 
+  it('is on release 2', () => {
+    expect(WHATS_NEW_VERSION).toBe(2);
+  });
+
   it('is not due once the current release has been seen', () => {
-    expect(whatsNewDue(onboarded, 1)).toBe(false);
     expect(whatsNewDue(onboarded, 2)).toBe(false);
+    expect(whatsNewDue(onboarded, 3)).toBe(false);
+  });
+
+  it('is due to an account that saw version 1 (AC-TG11.5)', () => {
+    expect(whatsNewDue(onboarded, 1)).toBe(true);
   });
 
   it('counts an unreadable version as unseen', () => {
