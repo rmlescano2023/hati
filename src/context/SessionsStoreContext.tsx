@@ -11,6 +11,7 @@ import { purgeMemberFromItem } from '../lib/calculations';
 import { includeMember, type ItemRef } from '../lib/includeMember';
 import { createId } from '../lib/id';
 import { applyItemEdit, type StagedItem } from '../lib/staging';
+import { isJoined } from '../lib/collection';
 import { applySessionName, normaliseSessionName } from '../lib/sessionName';
 import type {
   NewPayment,
@@ -58,8 +59,14 @@ type SessionsStoreValue = {
     paymentId: string,
     onSettled?: (result: PaymentResult) => void,
   ) => void;
-  /** Removes a session outright. Unlike closing, nothing is kept. */
+  /** Removes a session outright. Unlike closing, nothing is kept. A joined session is never deleted: leave it instead. */
   deleteSession: (sessionId: string) => void;
+  /** Puts a session the account has just joined on screen; see `useServerSessions`. */
+  addJoinedSession: (session: Session) => void;
+  /** Stops tracking a joined session; see `useServerSessions`. */
+  leaveSession: (sessionId: string) => void;
+  /** The organizer removes a joined account; see `useServerSessions`. */
+  removeParticipant: (sessionId: string, member: string) => Promise<boolean>;
   /** Moves a draft to the top of Home because the user opened it. Silent; see BR-8. */
   recordOpen: (sessionId: string) => void;
   /**
@@ -163,6 +170,9 @@ function SessionsStoreCore({
     isPaying,
     replaceAll,
     appendAll,
+    addJoinedSession,
+    leaveSession,
+    removeParticipant,
     status,
     loaded,
     error,
@@ -188,7 +198,10 @@ function SessionsStoreCore({
       fn: (session: Session) => Session,
       onSettled?: (saved: boolean) => void,
     ) => {
-      mutateSession(sessionId, fn, onSettled);
+      // A joined session is read-only. No screen offers an edit on one, and the server refuses a
+      // save of a finished session's content anyway; this is the backstop, so a stray call is a
+      // no-op that sends nothing.
+      mutateSession(sessionId, (session) => (isJoined(session) ? session : fn(session)), onSettled);
     },
     [mutateSession],
   );
@@ -273,9 +286,12 @@ function SessionsStoreCore({
 
   const deleteSession = useCallback(
     (sessionId: string) => {
+      // A participant can't delete the organizer's session. The server would answer 404 and the
+      // card would come back, so it never leaves the screen at all.
+      if (sessions.some((s) => s.id === sessionId && isJoined(s))) return;
       removeSession(sessionId);
     },
-    [removeSession],
+    [removeSession, sessions],
   );
 
   const addMember = useCallback(
@@ -409,6 +425,9 @@ function SessionsStoreCore({
       removePayment,
       isPaying,
       deleteSession,
+      addJoinedSession,
+      leaveSession,
+      removeParticipant,
       recordOpen,
       addMember,
       removeMember,
@@ -441,6 +460,9 @@ function SessionsStoreCore({
       removePayment,
       isPaying,
       deleteSession,
+      addJoinedSession,
+      leaveSession,
+      removeParticipant,
       recordOpen,
       addMember,
       removeMember,

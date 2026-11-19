@@ -3,7 +3,13 @@ import { useAuth } from '@clerk/clerk-react';
 import type { NewPayment, Payment, Session } from '../types';
 import { keepOpenedActivity } from '../lib/activity';
 import { sessionDisplayTitle } from '../lib/sessionLabel';
-import { isFullyPaid, mergeServerPayments, newPayments, settlePayments } from '../lib/collection';
+import {
+  isFullyPaid,
+  isJoined,
+  mergeServerPayments,
+  newPayments,
+  settlePayments,
+} from '../lib/collection';
 import { createId } from '../lib/id';
 import {
   DELETED_ELSEWHERE,
@@ -29,6 +35,7 @@ import {
   messageOf,
   needsRefresh,
   recordFailedMessage,
+  reloadsOnReturn,
   resolveAlreadySettled,
   resolveFailure,
   resolveSuperseded,
@@ -145,6 +152,22 @@ export type SessionsBackend = {
   ) => void;
   /** Dev-only seeding: swap the whole list, session by session. */
   replaceAll: (next: Session[]) => void;
+  /**
+   * Puts a session the server has just joined this account to on screen, and keeps it there
+   * against a load that read the list before the join landed.
+   */
+  addJoinedSession: (session: Session) => void;
+  /**
+   * Stops tracking a joined session: gone from the screen at once, and on the server in the
+   * background. A failure brings it back and is reported in the banner.
+   */
+  leaveSession: (sessionId: string) => void;
+  /**
+   * The organizer takes a joined account out of their session. Resolves true once the server has
+   * removed it, and the on-screen list of who joined follows; false on any failure, which the
+   * dialog reports itself.
+   */
+  removeParticipant: (sessionId: string, member: string) => Promise<boolean>;
   status: SyncStatus;
   /**
    * True once a load has succeeded, and from then on. Until then an empty list
@@ -162,6 +185,11 @@ export type SessionsBackend = {
 };
 
 const ENDPOINT = '/api/sessions';
+
+/** Sessions the account joined are asked for explicitly, so a tab on an older bundle is never sent them. */
+const LOAD_ENDPOINT = `${ENDPOINT}?joined=1`;
+
+const PARTICIPANTS_ENDPOINT = '/api/participants';
 
 const SAVE_TIMEOUT = 'Saving is taking too long. Check your connection, then try again.';
 const CREATE_TIMEOUT =
@@ -237,6 +265,18 @@ export function useServerSessions(): SessionsBackend {
   const [failures, setFailures] = useState<readonly Failure[]>([]);
   const [reverted, setReverted] = useState(false);
   const [reloads, setReloads] = useState(0);
+
+  /**
+   * When the last load of any kind started, so a return to the tab inside the window doesn't
+   * reload again (see `reloadsOnReturn`). Null until the first load.
+   */
+  const lastLoadAt = useRef<number | null>(null);
+  /**
+   * Set by the return-to-tab reload for the load it starts. A quiet load never shows the loading
+   * state and says nothing when it fails: nothing the user did has failed, and the next return
+   * tries again (A4).
+   */
+  const quietLoad = useRef(false);
 
   /**
    * Sessions whose write had failed when "Try again" was pressed, checked
@@ -350,13 +390,17 @@ export function useServerSessions(): SessionsBackend {
     if (!isLoaded || !isSignedIn) return;
     let cancelled = false;
 
+    const quiet = quietLoad.current;
+    quietLoad.current = false;
+
     (async () => {
-      setLoading(true);
+      if (!quiet) setLoading(true);
+      lastLoadAt.current = Date.now();
       settledDuringLoad.current.clear();
       try {
         // The deadline covers the body too, so a late result is never applied.
         const body = await withDeadline(WRITE_TIMEOUT_MS, async (signal) => {
-          const res = await authedFetch(ENDPOINT, { method: 'GET' }, signal);
+          const res = await authedFetch(LOAD_ENDPOINT, { method: 'GET' }, signal);
           if (!res.ok) throw new FriendlyError(failedMessage('load your data', res.status));
           return (await readJson(res)) as Session[];
         });
@@ -396,6 +440,8 @@ export function useServerSessions(): SessionsBackend {
         setLoading(false);
       } catch (err) {
         if (cancelled) return;
+        // The screen keeps its last good copy either way, and a quiet load adds nothing to it.
+        if (quiet) return;
         // The sessions on screen stay as they are: empty after a failed first
         // load, and the last good copy after a failed retry.
         fail({
@@ -414,6 +460,23 @@ export function useServerSessions(): SessionsBackend {
       cancelled = true;
     };
   }, [authedFetch, commit, fail, isLoaded, isSignedIn, queue, reloads]);
+
+  // Coming back to the tab after a while reloads quietly, so a joined member sees the payments the
+  // organizer has recorded since (D2). It waits for a settled screen: while the first load or a
+  // retry is running, or a failure is on the banner, the reload would cancel the one in flight or
+  // silently replace an edit the user was told did not save, and "Try again" is for that.
+  const canReloadQuietly = loaded && !loading && failures.length === 0;
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn || !canReloadQuietly) return;
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (!reloadsOnReturn(lastLoadAt.current, Date.now())) return;
+      quietLoad.current = true;
+      setReloads((n) => n + 1);
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [isLoaded, isSignedIn, canReloadQuietly]);
 
   /**
    * Sends one save, and never rejects because it reports its own errors. A
@@ -1176,6 +1239,85 @@ export function useServerSessions(): SessionsBackend {
     [commit, fail, pending, seedOne],
   );
 
+  const addJoinedSession = useCallback(
+    (session: Session) => {
+      commit([...sessionsRef.current.filter((s) => s.id !== session.id), session]);
+      // A load that read the list before the join landed would drop it again. Like a payment, it
+      // is on screen already and the server has it, so the load keeps this copy.
+      settledDuringLoad.current.add(session.id);
+    },
+    [commit],
+  );
+
+  const leaveSession = useCallback(
+    (sessionId: string) => {
+      const index = sessionsRef.current.findIndex((s) => s.id === sessionId);
+      const left = sessionsRef.current[index];
+      // Nothing to leave if it isn't there, or isn't one the account joined: a member's own
+      // member is named by the session, and an owner has no place to leave.
+      if (!left || !isJoined(left) || left.me === null) return;
+      const member = left.me;
+      const title = sessionDisplayTitle(left);
+      commit(sessionsRef.current.filter((s) => s.id !== sessionId));
+      deleting.current.add(sessionId);
+      const leave = (async () => {
+        try {
+          await withDeadline(WRITE_TIMEOUT_MS, async (signal) => {
+            const res = await authedFetch(
+              `${PARTICIPANTS_ENDPOINT}?sessionId=${encodeURIComponent(sessionId)}&member=${encodeURIComponent(member)}`,
+              { method: 'DELETE' },
+              signal,
+            );
+            // A 404 means the session or the place in it has already gone, which is what was asked.
+            if (!res.ok && res.status !== 404) throw new Error('The server refused it.');
+          });
+          setFailures((f) => resolveFailure(f, 'delete', sessionId));
+        } catch {
+          // Still tracking it on the server, so it comes back at once, as a failed delete's does.
+          commit(restoreAt(sessionsRef.current, left, index));
+          fail({
+            kind: 'delete',
+            sessionId,
+            message: `Couldn't stop tracking “${title}”. Try again.`,
+          });
+        } finally {
+          deleting.current.delete(sessionId);
+        }
+      })();
+      pending.track(leave);
+    },
+    [authedFetch, commit, fail, pending],
+  );
+
+  const removeParticipant = useCallback(
+    async (sessionId: string, member: string): Promise<boolean> => {
+      try {
+        const removed = await withDeadline(WRITE_TIMEOUT_MS, async (signal) => {
+          const res = await authedFetch(
+            `${PARTICIPANTS_ENDPOINT}?sessionId=${encodeURIComponent(sessionId)}&member=${encodeURIComponent(member)}`,
+            { method: 'DELETE' },
+            signal,
+          );
+          return res.ok;
+        });
+        if (removed) {
+          // The member is claimable again, so the pickers and the delete warning must stop counting them.
+          commit(
+            sessionsRef.current.map((s) =>
+              s.id === sessionId
+                ? { ...s, participants: (s.participants ?? []).filter((p) => p.member !== member) }
+                : s,
+            ),
+          );
+        }
+        return removed;
+      } catch {
+        return false;
+      }
+    },
+    [authedFetch, commit],
+  );
+
   /**
    * Reloads from the server and clears every failure. The sessions whose
    * writes had failed are remembered, so the load can say whether it rolled
@@ -1208,6 +1350,9 @@ export function useServerSessions(): SessionsBackend {
     isPaying,
     replaceAll,
     appendAll,
+    addJoinedSession,
+    leaveSession,
+    removeParticipant,
     status,
     loaded,
     error,

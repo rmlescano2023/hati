@@ -129,6 +129,10 @@ export function useMemorySessions(seed: Session[]): SessionsBackend {
       isPaying: () => false,
       replaceAll,
       appendAll,
+      // A practice session is never joined and has no one to remove, so these do nothing (BR-G9).
+      addJoinedSession: noop,
+      leaveSession: noop,
+      removeParticipant: () => Promise.resolve(false),
       status: 'ready',
       loaded: true,
       error: null,
