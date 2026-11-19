@@ -196,6 +196,18 @@
   border-top: 1px solid var(--border);
 }
 
+/* The organizer's Invite row: the body's last row, with its own rule unless Mark all or Undo is
+   already drawing one above it. */
+.invite {
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.markAll + .invite {
+  padding-top: 0;
+  border-top: none;
+}
+
 /* Confirm with "Already settled" beside it, wrapping on a phone. */
 .actions {
   display: flex;

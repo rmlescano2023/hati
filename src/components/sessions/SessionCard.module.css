@@ -75,6 +75,14 @@
   overflow-wrap: anywhere;
 }
 
+/* Who shared a session the account joined, in the same quiet type as the purchase count. */
+.shared {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--text3);
+  overflow-wrap: anywhere;
+}
+
 .count {
   font-size: 11px;
   letter-spacing: 0.04em;

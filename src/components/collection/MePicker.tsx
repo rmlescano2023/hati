@@ -12,6 +12,10 @@ type Props = {
   onChange: (value: string) => void;
   remember: boolean;
   onRememberChange: (remember: boolean) => void;
+  /** Members someone has already joined as, or the organizer is. Shown, but can't be picked. */
+  unavailable?: string[];
+  /** Whether "I'm not in this session" is offered. A joiner is in the session by definition. */
+  offerNotInSession?: boolean;
 };
 
 /**
@@ -19,13 +23,28 @@ type Props = {
  * by the Finish dialog, a Needs setup card and "Change"; the choice is optional
  * wherever it appears, so nothing is preselected unless the caller says so.
  */
-export function MePicker({ legend, members, value, onChange, remember, onRememberChange }: Props) {
+export function MePicker({
+  legend,
+  members,
+  value,
+  onChange,
+  remember,
+  onRememberChange,
+  unavailable = [],
+  offerNotInSession = true,
+}: Props) {
   const profile = useProfile();
   const name = useId();
   const offer = rememberOffer(profile, value);
   const options = [
-    ...sortNames(members).map((m) => ({ value: m, label: m })),
-    { value: NOT_IN_SESSION, label: "I'm not in this session" },
+    ...sortNames(members).map((m) =>
+      unavailable.includes(m)
+        ? { value: m, label: `${m} · on Hati`, disabled: true }
+        : { value: m, label: m, disabled: false },
+    ),
+    ...(offerNotInSession
+      ? [{ value: NOT_IN_SESSION, label: "I'm not in this session", disabled: false }]
+      : []),
   ];
 
   return (
@@ -39,9 +58,18 @@ export function MePicker({ legend, members, value, onChange, remember, onRemembe
               name={name}
               value={option.value}
               checked={value === option.value}
+              disabled={option.disabled}
               onChange={() => onChange(option.value)}
             />
-            <span className={styles.optionLabel}>{option.label}</span>
+            <span
+              className={
+                option.disabled
+                  ? `${styles.optionLabel} ${styles.optionDisabled}`
+                  : styles.optionLabel
+              }
+            >
+              {option.label}
+            </span>
           </label>
         ))}
       </fieldset>

@@ -43,6 +43,11 @@
   overflow-wrap: anywhere;
 }
 
+/* A member who is already on Hati: shown so the user sees their name is taken, but not pickable. */
+.optionDisabled {
+  color: var(--text3);
+}
+
 @media (max-width: 640px) {
   /* Touch-sized rows, like the app's other 38px targets. */
   .option {

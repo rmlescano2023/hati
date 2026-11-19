@@ -1,21 +1,34 @@
+import { useState } from 'react';
 import { BreakdownGroup } from '../components/breakdown/BreakdownGroup';
 import { EmptyState } from '../components/shared/EmptyState';
 import { Button } from '../components/shared/Button';
+import { InviteMembersDialog } from '../components/collection/InviteMembersDialog';
+import { StopTrackingButton } from '../components/collection/StopTrackingButton';
 import { ExportSoaButton } from '../components/summary/ExportSoaButton';
 import { useSessionsStore } from '../context/SessionsStoreContext';
 import { groupRecordsForBreakdown } from '../lib/calculations';
+import { isJoined } from '../lib/collection';
 import { compareNames, formatLongDate, joinNames, sortNames } from '../lib/format';
+import { sharedByLine } from '../lib/joinedSessions';
 import { sessionDisplayTitle, sessionTitle } from '../lib/sessionLabel';
 import styles from './HistoryDetailPage.module.css';
 
 type Props = {
   sessionId: string;
   onBack: () => void;
+  /** Called once a joined session has been left from here, so the app can go back and announce it. */
+  onLeft?: (title: string) => void;
 };
 
-/** One closed session in full: its read-only breakdown and its own SOA export. */
-export function HistoryDetailPage({ sessionId, onBack }: Props) {
+const noop = () => {};
+
+/**
+ * One closed session in full: its read-only breakdown and its own SOA export. The organizer also
+ * gets Invite members here; a member who joined gets Stop tracking in its place.
+ */
+export function HistoryDetailPage({ sessionId, onBack, onLeft = noop }: Props) {
   const { sessions } = useSessionsStore();
+  const [inviting, setInviting] = useState(false);
   const session = sessions.find((s) => s.id === sessionId);
 
   if (!session) {
@@ -28,6 +41,7 @@ export function HistoryDetailPage({ sessionId, onBack }: Props) {
 
   const closedOn = (session.closedAt ?? session.createdAt).slice(0, 10);
   const members = [...session.members].sort(compareNames);
+  const joined = isJoined(session);
 
   return (
     <>
@@ -47,23 +61,38 @@ export function HistoryDetailPage({ sessionId, onBack }: Props) {
             Finished {formatLongDate(closedOn)}
             {members.length > 0 && <> · {joinNames(members)}</>}
           </p>
+          {joined && (
+            <p className={styles.meta}>
+              {sharedByLine(session.organizerName ?? null)} · You joined as {session.me}
+            </p>
+          )}
         </div>
-        <ExportSoaButton
-          layout="inline"
-          members={sortNames(session.members)}
-          records={session.records}
-          name={session.name}
-          fileNameSuffix={closedOn}
-        />
+        <div className={styles.actions}>
+          <ExportSoaButton
+            layout="inline"
+            members={sortNames(session.members)}
+            records={session.records}
+            name={session.name}
+            fileNameSuffix={closedOn}
+          />
+          {joined ? (
+            <StopTrackingButton
+              session={session}
+              variant="button"
+              className={styles.secondary}
+              onLeft={onLeft}
+            />
+          ) : (
+            <Button size="lg" className={styles.secondary} onClick={() => setInviting(true)}>
+              Invite members
+            </Button>
+          )}
+        </div>
       </header>
+      {inviting && <InviteMembersDialog session={session} onClose={() => setInviting(false)} />}
 
       {groupRecordsForBreakdown(session.records, sortNames(session.members)).map((group) => (
-        <BreakdownGroup
-          key={group.key}
-          group={group}
-          members={members}
-          editable={false}
-        />
+        <BreakdownGroup key={group.key} group={group} members={members} editable={false} />
       ))}
     </>
   );

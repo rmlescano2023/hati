@@ -4,7 +4,9 @@ import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { useProfile } from '../../context/ProfileContext';
 import { useSessionsStore } from '../../context/SessionsStoreContext';
 import {
+  claimedMembers,
   formatCents,
+  isJoined,
   markAllMessage,
   nicknamePrompt,
   openLinePayments,
@@ -14,8 +16,12 @@ import {
 } from '../../lib/collection';
 import { formatLocalDate } from '../../lib/format';
 import { createId } from '../../lib/id';
+import { recordsPaymentsLine, sharedByLine } from '../../lib/joinedSessions';
+import { isPracticeId } from '../../lib/practiceId';
 import { sessionDisplayTitle } from '../../lib/sessionLabel';
 import { ChangeMeDialog } from './ChangeMeDialog';
+import { InviteMembersDialog } from './InviteMembersDialog';
+import { StopTrackingButton } from './StopTrackingButton';
 import { LineRow, type FailedPayment } from './LineRow';
 import { DirectionLabel } from './DirectionLabel';
 import { MePicker } from './MePicker';
@@ -36,6 +42,8 @@ type Props = {
   onPlaced: () => void;
   /** Briefly outlined: this card has just been placed in this section. */
   placed: boolean;
+  /** Called once a joined session has been left, so the page can announce it. */
+  onLeft: (title: string) => void;
 };
 
 /** Rotates with the card's open state; the header's `aria-expanded` carries the meaning. */
@@ -145,9 +153,13 @@ export function CollectionCard({
   onAlreadySettled,
   onPlaced,
   placed,
+  onLeft,
 }: Props) {
   const { session } = card;
   const title = sessionDisplayTitle(session);
+  // A session someone else organized: read-only, with Stop tracking where the organizer has Invite.
+  const joined = isJoined(session);
+  const [inviting, setInviting] = useState(false);
   const finished = `Finished ${formatLocalDate(session.closedAt ?? session.createdAt)}`;
   const bodyId = useId();
   const setup = card.bucket === 'needsSetup';
@@ -159,12 +171,14 @@ export function CollectionCard({
   // The line is shown inside the open card, never on a collapsed one, so a card
   // that has it but no lines still opens, to show just that.
   const allPaid = everyonesPaid(card);
-  const expandable = setup || card.lineCount > 0 || hasLine || card.presettled || allPaid;
+  // A joined card always opens, for Stop tracking (BR-V5).
+  const expandable = joined || setup || card.lineCount > 0 || hasLine || card.presettled || allPaid;
 
   const summary = (
     <span className={styles.titles}>
       <span className={styles.title}>{title}</span>
       <span className={styles.meta}>{finished}</span>
+      {joined && <span className={styles.meta}>{sharedByLine(session.organizerName ?? null)}</span>}
       {summaryDetail(card, expanded)
         .filter((part) => part !== '')
         .map((part) => (
@@ -252,7 +266,17 @@ export function CollectionCard({
 
       {expandable && expanded && !setup && (
         <div id={bodyId} className={styles.body}>
-          {hasLine && <YouAre card={card} title={title} />}
+          {joined ? (
+            <div className={styles.youAre}>
+              <span>
+                You joined as <strong>{session.me}</strong>
+              </span>
+              <span aria-hidden="true">·</span>
+              <StopTrackingButton session={session} variant="link" onLeft={onLeft} />
+            </div>
+          ) : (
+            hasLine && <YouAre card={card} title={title} />
+          )}
           {groups
             .filter((g) => g.lines.length > 0)
             .map((group) => (
@@ -272,15 +296,31 @@ export function CollectionCard({
                     failed={failed(line.key)}
                     onFailed={(f) => onFailed(line.key, f)}
                     onPaid={onPaid}
+                    readOnly={joined}
                   />
                 ))}
               </section>
             ))}
+          {joined && (
+            <p className={styles.detail}>{recordsPaymentsLine(session.organizerName ?? null)}</p>
+          )}
           {allPaid && (
             <p className={styles.detail}>Every line in this session is marked as paid.</p>
           )}
-          {card.bucket === 'outstanding' && <MarkAll card={card} title={title} onPaid={onPaid} />}
-          {card.presettled && <UndoSettled card={card} title={title} />}
+          {!joined && card.bucket === 'outstanding' && (
+            <MarkAll card={card} title={title} onPaid={onPaid} />
+          )}
+          {!joined && card.presettled && <UndoSettled card={card} title={title} />}
+          {!joined && !isPracticeId(session.id) && (
+            <div className={styles.invite}>
+              <Button aria-label={`Invite members to ${title}`} onClick={() => setInviting(true)}>
+                Invite members
+              </Button>
+              {inviting && (
+                <InviteMembersDialog session={session} onClose={() => setInviting(false)} />
+              )}
+            </div>
+          )}
         </div>
       )}
     </article>
@@ -357,6 +397,7 @@ function NeedsSetup({
         onChange={setChoice}
         remember={remember}
         onRememberChange={setRemember}
+        unavailable={claimedMembers(card.session)}
       />
       <div className={styles.actions}>
         <Button
@@ -395,7 +436,7 @@ function UndoSettled({ card, title }: { card: Card; title: string }) {
       <ConfirmDialog
         open={confirming}
         title="Undo “already settled”?"
-        message={`This removes the payments recorded when “${title}” was marked as settled. It goes back to being tracked.`}
+        message={`This removes the payments recorded when “${title}” was marked as settled. It goes back to being tracked.${(card.session.participants?.length ?? 0) > 0 ? ' Members tracking it on Hati will see their lines unpaid again.' : ''}`}
         confirmLabel="Undo"
         destructive
         onCancel={() => {

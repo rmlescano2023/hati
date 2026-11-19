@@ -3,6 +3,8 @@ import { SessionCard } from '../components/sessions/SessionCard';
 import { ConfirmDialog } from '../components/shared/ConfirmDialog';
 import { EmptyState } from '../components/shared/EmptyState';
 import { useSessionsStore } from '../context/SessionsStoreContext';
+import { isJoined } from '../lib/collection';
+import { sharedByLine } from '../lib/joinedSessions';
 import { deleteSessionMessage } from '../lib/sessionLabel';
 import { showsEmptyState } from '../lib/writeQueue';
 import styles from './HomePage.module.css';
@@ -51,7 +53,10 @@ export function HistoryPage({ onOpenSession }: Props) {
             key={session.id}
             session={session}
             onClick={() => onOpenSession(session.id)}
-            onDelete={() => setPendingDeleteId(session.id)}
+            // A joined session is the organizer's to delete; a member stops tracking it from its
+            // detail or from Collection (BR-V9).
+            onDelete={isJoined(session) ? undefined : () => setPendingDeleteId(session.id)}
+            sharedBy={isJoined(session) ? sharedByLine(session.organizerName ?? null) : undefined}
           />
         ))}
       </div>

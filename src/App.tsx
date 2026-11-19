@@ -9,6 +9,7 @@ import type { SessionTabId } from './components/layout/SessionTabs';
 import { Button } from './components/shared/Button';
 import { ConfirmDialog } from './components/shared/ConfirmDialog';
 import { PlusIcon } from './components/shared/icons';
+import { useProfile } from './context/ProfileContext';
 import { useSessionsStore } from './context/SessionsStoreContext';
 import { HomePage } from './pages/HomePage';
 import { HistoryPage } from './pages/HistoryPage';
@@ -21,10 +22,13 @@ import { TutorialsDialog, type Tutorial } from './components/onboarding/Tutorial
 import { GuideOfferDialog } from './components/onboarding/GuideOfferDialog';
 import { PracticeCollection } from './components/onboarding/guides/PracticeCollection';
 import { PracticeExpenses } from './components/onboarding/guides/PracticeExpenses';
+import { JoinFlow } from './components/join/JoinFlow';
 import onboardingStyles from './components/onboarding/OnboardingDialog.module.css';
 import type { ScreenShape } from './components/onboarding/steps';
 import { useOnboarding } from './hooks/useOnboarding';
 import { guideOfferDue, type Guide } from './lib/guideOffer';
+import { joinFlowReady } from './lib/joinedSessions';
+import { browserStorage, clearJoin, peekJoin } from './lib/joinLink';
 import { showsEmptyState } from './lib/writeQueue';
 import type { PaidByPicks } from './lib/staging';
 import styles from './App.module.css';
@@ -54,7 +58,19 @@ const TOP_LEVEL = new Set<Screen['kind']>(['home', 'collection', 'history']);
 
 export default function App() {
   const { sessions, createSession, deleteSession, recordOpen, sync } = useSessionsStore();
+  const profile = useProfile();
   const [screen, setScreen] = useState<Screen>({ kind: 'home' });
+  /** The invite link waiting to be checked, from `main.tsx`'s stash; `started` once its dialog runs. */
+  const [join, setJoin] = useState<{ raw: string; started: boolean } | null>(() => {
+    // A pure read, so StrictMode's second run of this initialiser is harmless. The stash is
+    // cleared when the flow starts rather than here, so a refresh while "Loading your sessions…"
+    // still gets the dialog, and one after it appeared doesn't (AC-5.3).
+    const raw = peekJoin(browserStorage(), Date.now());
+    return raw === null ? null : { raw, started: false };
+  });
+  const joinActive = join !== null;
+  /** What a screen reader hears for something that must outlive the component that caused it. */
+  const [announcement, setAnnouncement] = useState('');
   /** Whether the New Session prompt is open. */
   const [naming, setNaming] = useState(false);
   /** Whether the profile name dialog is open. */
@@ -119,10 +135,12 @@ export default function App() {
   // A returning account sees it once, on whatever screen the app opens to. It
   // waits out the welcome and the tour, which a new account gets instead (BR-W5).
   // A guide is never interrupted (BR-TG10), so a due one opens once the guide has ended.
+  // It waits out the join flow too, which is the visit's one prompt (BR-G1).
   const whatsNewOpen =
     phase === 'off' &&
     screen.kind !== 'practice' &&
     offer === null &&
+    !joinActive &&
     (whatsNewDue || whatsNewPreview);
   const closeWhatsNew = () => {
     if (whatsNewPreview) setWhatsNewPreview(false);
@@ -137,7 +155,8 @@ export default function App() {
   if (visit.key !== visitKey) setVisit({ key: visitKey, n: visit.n + 1 });
   /** The visit a one-time prompt last showed on: no offer follows one on the same visit (BR-TG8). */
   const [promptedVisit, setPromptedVisit] = useState(-1);
-  const promptShowing = phase !== 'off' || whatsNewOpen;
+  // The join flow is its visit's one-time prompt too, so no guide offer opens on it (BR-G3).
+  const promptShowing = phase !== 'off' || whatsNewOpen || joinActive;
   if (promptShowing && promptedVisit !== visit.n) setPromptedVisit(visit.n);
   /**
    * The visit that had unsaved work on Expenses at any point, which is how a visit through
@@ -175,10 +194,44 @@ export default function App() {
   }, [offerDue, visit.n]);
 
   // The offer opens as soon as we know this is a first login, and only then —
-  // the guard keeps a later state change from reopening a finished sequence.
+  // the guard keeps a later state change from reopening a finished sequence. A pending invite goes
+  // first: the welcome is held, not lost, and opens when the join flow closes, on the screen it
+  // landed on (BR-G1, BR-G2).
   useEffect(() => {
-    if (firstLogin) setPhase((current) => (current === 'off' ? 'intro' : current));
-  }, [firstLogin]);
+    if (firstLogin && !joinActive) setPhase((current) => (current === 'off' ? 'intro' : current));
+  }, [firstLogin, joinActive]);
+
+  // The join dialog opens once the sessions and the profile have loaded and nothing else is open.
+  useEffect(() => {
+    if (join === null || join.started) return;
+    if (
+      joinFlowReady({
+        pending: true,
+        loaded: sync.loaded,
+        profileStatus: profile.status,
+        phase,
+        practice: screen.kind === 'practice',
+      })
+    ) {
+      clearJoin(browserStorage());
+      setJoin({ ...join, started: true });
+    }
+  }, [join, sync.loaded, profile.status, phase, screen.kind]);
+
+  /**
+   * Ends the join flow. Null stays where the user is (Cancel, Close, OK and Escape). Otherwise it
+   * lands on Collection with the session open, which is what opens the card and scrolls to it.
+   */
+  const closeJoin = (to: { openSessionId: string; announce?: string } | null) => {
+    setJoin(null);
+    if (to === null) return;
+    window.scrollTo(0, 0);
+    // The landing visit is the join flow's too, so the Collection guide's offer can't open on it
+    // (BR-G3). Landing from Home starts a new visit; landing on Collection again doesn't.
+    setPromptedVisit(screen.kind === 'collection' ? visit.n : visit.n + 1);
+    setScreen({ kind: 'collection', openSessionId: to.openSessionId });
+    if (to.announce) setAnnouncement(to.announce);
+  };
 
   /**
    * The session the tour asked the user to create, so it can be cleared up
@@ -445,7 +498,16 @@ export default function App() {
         >
           Skip tutorial
         </Button>
-        <Button variant="primary" onClick={() => setPhase('running')}>
+        <Button
+          variant="primary"
+          onClick={() => {
+            // The tour's first step is on Home, and the welcome can open on Collection after a
+            // join (BR-G2), so the tour starts from Home.
+            window.scrollTo(0, 0);
+            setScreen({ kind: 'home' });
+            setPhase('running');
+          }}
+        >
           Take the tour
         </Button>
       </OnboardingDialog>
@@ -524,6 +586,7 @@ export default function App() {
           }}
         />
       )}
+      {join?.started && <JoinFlow raw={join.raw} onClose={closeJoin} />}
       {naming && (
         <NewSessionDialog
           onCancel={() => setNaming(false)}
@@ -593,7 +656,8 @@ export default function App() {
             !profileOpen &&
             !tutorialsOpen &&
             !naming &&
-            offer === null
+            offer === null &&
+            !joinActive
           }
           previewSettled={screen.previewSettled}
           onHelp={phase === 'running' ? undefined : () => startTutorial('collection', 'help')}
@@ -609,6 +673,10 @@ export default function App() {
         <HistoryDetailPage
           sessionId={screen.sessionId}
           onBack={() => setScreen({ kind: 'history' })}
+          onLeft={(title) => {
+            setScreen({ kind: 'history' });
+            setAnnouncement(`Stopped tracking ${title}.`);
+          }}
         />
       )}
       {screen.kind === 'session' && (
@@ -638,6 +706,9 @@ export default function App() {
         ) : (
           <PracticeCollection key={`guide-${guideKey}`} onEnd={endGuide} />
         ))}
+      <p role="status" className="visually-hidden">
+        {announcement}
+      </p>
     </PageShell>
   );
 }

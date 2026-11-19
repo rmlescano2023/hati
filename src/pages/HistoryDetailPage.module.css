@@ -48,3 +48,30 @@
   color: var(--text3);
   overflow-wrap: anywhere;
 }
+
+/* The export and its neighbour, side by side at the end of the header row. */
+.actions {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.secondary {
+  width: var(--footer-action-width);
+}
+
+@media (max-width: 640px) {
+  /* Stacked under the titles, full width (E1-18). The descendant selector outranks the
+     export's own `.inline > button` width. */
+  .actions {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+  }
+
+  .header .actions button {
+    width: 100%;
+  }
+}

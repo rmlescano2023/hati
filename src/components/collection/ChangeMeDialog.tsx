@@ -3,7 +3,7 @@ import { Button } from '../shared/Button';
 import { ModalDialog } from '../shared/ModalDialog';
 import { useProfile } from '../../context/ProfileContext';
 import { useSessionsStore } from '../../context/SessionsStoreContext';
-import { NOT_IN_SESSION, rememberOffer, type Me } from '../../lib/collection';
+import { NOT_IN_SESSION, claimedMembers, rememberOffer, type Me } from '../../lib/collection';
 import type { Session } from '../../types';
 import { MePicker } from './MePicker';
 import confirmStyles from '../shared/ConfirmDialog.module.css';
@@ -51,6 +51,7 @@ export function ChangeMeDialog({ session, me, onClose }: Props) {
           onChange={setValue}
           remember={remember}
           onRememberChange={setRemember}
+          unavailable={claimedMembers(session)}
         />
         {session.payments.length > 0 && (
           <p className={styles.note}>

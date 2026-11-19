@@ -32,6 +32,11 @@ type Props = {
   onFailed: (failed: FailedPayment | null) => void;
   /** Called as a payment ends, `ok` once the server has it, so the page can announce a session settling. */
   onPaid: (ok: boolean) => void;
+  /**
+   * A joined session's line: the figures and the payments recorded on it, but nothing to record
+   * or undo, because only the organizer records payments in this release (BR-V7).
+   */
+  readOnly?: boolean;
 };
 
 const STATUS_LABEL: Record<LineStatus, string> = {
@@ -45,7 +50,7 @@ const STATUS_LABEL: Record<LineStatus, string> = {
  * and the payments against it. The wording follows the direction of the money
  * (BR-20), so "Record payment" is money coming in and "I paid" money going out.
  */
-export function LineRow({ sessionId, line, failed, onFailed, onPaid }: Props) {
+export function LineRow({ sessionId, line, failed, onFailed, onPaid, readOnly = false }: Props) {
   const { addPayments, removePayment } = useSessionsStore();
   const owedToYou = line.direction === 'owedToYou';
   const { other } = line;
@@ -83,7 +88,7 @@ export function LineRow({ sessionId, line, failed, onFailed, onPaid }: Props) {
   // record, so its form closes and a refusal shows as the line's state.
   const paidUp = line.remainingCents === 0;
   if (open && paidUp) setOpen(false);
-  const showForm = (open || failed !== undefined) && !paidUp;
+  const showForm = !readOnly && (open || failed !== undefined) && !paidUp;
   useEffect(() => {
     if (showForm) input.current?.focus();
   }, [showForm]);
@@ -224,6 +229,7 @@ export function LineRow({ sessionId, line, failed, onFailed, onPaid }: Props) {
           </div>
         </form>
       ) : (
+        !readOnly &&
         line.remainingCents > 0 && (
           <div ref={actions} className={styles.actions}>
             <Button
@@ -260,19 +266,21 @@ export function LineRow({ sessionId, line, failed, onFailed, onPaid }: Props) {
                 </span>
                 <span className={styles.time}>{formatLocalDateTime(payment.createdAt)}</span>
               </span>
-              <Button
-                variant="ghost"
-                size="sm"
-                data-undo={payment.id}
-                aria-label={
-                  owedToYou
-                    ? `Undo ${formatCents(payment.amountCents)} received from ${other}`
-                    : `Undo ${formatCents(payment.amountCents)} paid to ${other}`
-                }
-                onClick={() => setUndoing(payment)}
-              >
-                Undo
-              </Button>
+              {!readOnly && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  data-undo={payment.id}
+                  aria-label={
+                    owedToYou
+                      ? `Undo ${formatCents(payment.amountCents)} received from ${other}`
+                      : `Undo ${formatCents(payment.amountCents)} paid to ${other}`
+                  }
+                  onClick={() => setUndoing(payment)}
+                >
+                  Undo
+                </Button>
+              )}
             </li>
           ))}
         </ul>
