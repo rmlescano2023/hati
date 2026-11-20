@@ -46,12 +46,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
+    // The claims an account sent go with it, pending and declined (BR-C17). Claims sent to that
+    // member stay pending, and pass to the organizer, because the member has no account now.
+    // Participants first, then claims: the order every route that touches both takes.
     if (access.role === 'owner') {
-      await client.sql`
-        delete from session_participants where session_id = ${sessionId} and member = ${member}`;
+      const { rows } = await client.sql<{ user_id: string }>`
+        delete from session_participants where session_id = ${sessionId} and member = ${member}
+        returning user_id`;
+      for (const row of rows) {
+        await client.sql`
+          delete from payment_claims where session_id = ${sessionId} and claimed_by = ${row.user_id}`;
+      }
     } else {
       await client.sql`
         delete from session_participants where session_id = ${sessionId} and user_id = ${userId}`;
+      await client.sql`
+        delete from payment_claims where session_id = ${sessionId} and claimed_by = ${userId}`;
     }
     await client.sql`commit`;
     // Nobody to remove still means it's done.

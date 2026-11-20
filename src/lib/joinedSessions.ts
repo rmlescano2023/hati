@@ -303,3 +303,22 @@ export function joinedMarkAllMessage(title: string, owedCents: number, oweCents:
   }
   return markAllText(title, owedCents, 0);
 }
+
+/**
+ * Why a payment or claim over the cap is refused (A3). `remaining` is what is left on the line and
+ * `open` is that minus what is pending, so a line fully covered by pending claims says so rather
+ * than quoting a figure the user can't use.
+ */
+export function overCapMessage(remainingCents: number, openCents: number): string {
+  if (remainingCents === 0) return 'This line is already paid in full.';
+  if (openCents === 0) return "What's left on this line is already waiting for confirmation.";
+  return `Only ${formatCents(openCents)} is left on this line.`;
+}
+
+/** Why a confirm is refused when less is left than the claim (AC-21.5, A3). */
+export function overConfirmMessage(remainingCents: number, debtor: string): string {
+  if (remainingCents === 0) {
+    return "This line is already paid in full, so this can't be confirmed. Decline it.";
+  }
+  return `Only ${formatCents(remainingCents)} is left on this line, so this can't be confirmed. Decline it, or ask ${debtor} to withdraw it and send what's left.`;
+}

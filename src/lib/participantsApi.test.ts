@@ -8,6 +8,8 @@ const db = vi.hoisted(() => ({
   userId: 'user_a' as string | null,
   /** What `lockSessionRole` answers. */
   role: null as { role: 'owner' } | { role: 'participant'; member: string } | null,
+  /** The accounts the owner path's delete returns. */
+  removed: [] as { user_id: string }[],
   statements: [] as { text: string; values: unknown[] }[],
 }));
 
@@ -15,7 +17,8 @@ vi.mock('../../api/_shared.js', () => {
   const sql = (strings: TemplateStringsArray, ...values: unknown[]) => {
     const text = strings.join('?').replace(/\s+/g, ' ').trim();
     db.statements.push({ text, values });
-    return Promise.resolve({ rows: [], rowCount: 0 });
+    const rows = text.includes('returning user_id') ? db.removed : [];
+    return Promise.resolve({ rows, rowCount: rows.length });
   };
   return {
     getUserId: async () => db.userId,
@@ -64,6 +67,7 @@ const Q = { sessionId: 'session_1', member: 'Ben' };
 beforeEach(() => {
   db.userId = 'user_a';
   db.role = null;
+  db.removed = [];
   db.statements = [];
 });
 
@@ -129,5 +133,44 @@ describe('DELETE /api/participants', () => {
     const res = await call(Q, 'POST');
     expect(res.statusCode).toBe(405);
     expect(res.headers.Allow).toBe('DELETE');
+  });
+});
+
+describe('DELETE /api/participants and the claims (AC-29.1, AC-29.4, BR-C17)', () => {
+  it("deletes the removed account's claims after the owner's delete returns who it was", async () => {
+    db.role = { role: 'owner' };
+    db.removed = [{ user_id: 'user_b' }];
+    await call(Q);
+    const names = db.statements.map((s) => s.text.split(' ').slice(0, 3).join(' '));
+    expect(names.indexOf('delete from session_participants')).toBeLessThan(
+      names.indexOf('delete from payment_claims'),
+    );
+    const [del] = sent('delete from payment_claims');
+    expect(del.text).toContain('claimed_by = ?');
+    expect(del.values).toEqual(['session_1', 'user_b']);
+  });
+
+  it('deletes no claims when the owner removes a member nobody joined as', async () => {
+    db.role = { role: 'owner' };
+    await call(Q);
+    expect(sent('delete from payment_claims')).toHaveLength(0);
+  });
+
+  it("deletes the caller's own claims when a participant stops tracking", async () => {
+    db.userId = 'user_b';
+    db.role = { role: 'participant', member: 'Ben' };
+    await call(Q);
+    const [del] = sent('delete from payment_claims');
+    expect(del.values).toEqual(['session_1', 'user_b']);
+    expect(sent('commit')).toHaveLength(1);
+  });
+
+  it('never deletes claims by their creditor, so those sent to the member stay', async () => {
+    db.role = { role: 'owner' };
+    db.removed = [{ user_id: 'user_b' }];
+    await call(Q);
+    expect(sent('delete from payment_claims').every((s) => !s.text.includes('creditor'))).toBe(
+      true,
+    );
   });
 });
