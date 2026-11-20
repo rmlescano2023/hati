@@ -101,38 +101,23 @@
   color: var(--text2);
 }
 
-.settledHeading {
-  margin-bottom: 0.75rem;
-}
-
-/* The heading's own look, made pressable. */
-.settledToggle {
-  display: inline-flex;
+/* A card the viewer's own action just moved to History, at the top of Outstanding. */
+.moved {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
-  padding: 0;
-  border: none;
-  background: none;
-  font: inherit;
-  letter-spacing: inherit;
-  text-transform: inherit;
-  color: inherit;
-  cursor: pointer;
+  gap: 8px;
+  padding: 10px 12px;
   border-radius: var(--radius-sm);
+  background: var(--accent-bg);
+  color: var(--accent-text);
+  font-size: 13px;
+  overflow-wrap: anywhere;
 }
 
-.settledToggle:hover {
-  color: var(--text);
-}
-
-.chevron {
-  width: 14px;
-  height: 14px;
-  transition: transform 0.15s ease;
-}
-
-.chevronOpen {
-  transform: rotate(180deg);
+.moved > p {
+  flex: 1 1 16rem;
+  margin: 0;
 }
 
 /* Read by screen readers, never seen: the announcement that a session settled. */

@@ -17,6 +17,8 @@ import {
   pairPaymentIds,
   type CollectionCard as Card,
 } from '../lib/collection';
+import { movedManyLine, movedToHistoryLine } from '../lib/joinedSessions';
+import { sessionDisplayTitle } from '../lib/sessionLabel';
 import { showsEmptyState } from '../lib/writeQueue';
 import appStyles from '../App.module.css';
 import homeStyles from './HomePage.module.css';
@@ -42,12 +44,26 @@ type Props = {
    * opens that one instead.
    */
   autoOpen?: boolean;
+  /**
+   * How the page was reached for `openSessionId`: finishing a session, joining one, or "Open in
+   * Collection". Only an arrival may redirect a card that is already in History to its detail page;
+   * every way back from the detail page passes none, so it can't bounce the reader (BR-A2).
+   */
+  arrival?: 'finish' | 'join' | 'open';
+  /** Opens a card's detail page, from "View details". Absent in a guide, which has none. */
+  onViewDetails?: (sessionId: string) => void;
+  /** Opens a session's detail page from the move notice. Absent in a guide. */
+  onOpenInHistory?: (sessionId: string) => void;
+  /** Called when an arrival lands on a card that is already in History, to show its detail page. */
+  onArriveSettled?: (sessionId: string) => void;
+  /** Fetches the invite link for an organizer's export from a card. */
+  inviteUrlFor?: (sessionId: string) => Promise<string | null>;
 };
 
 /**
- * Who has paid and who hasn't, for finished sessions only. Sessions Hati can't
- * place come first, so they get set up; then what is still outstanding, with
- * its totals; then what is settled, collapsed out of the way.
+ * Who has paid and who hasn't, for finished sessions that still have something left for this
+ * viewer. Sessions Hati can't place come first, so they get set up; then what is still outstanding,
+ * with its totals. A session whose lines are all paid is in History, not here.
  */
 export function CollectionPage({
   openSessionId,
@@ -56,6 +72,11 @@ export function CollectionPage({
   onHelp,
   onOfferClear,
   autoOpen = false,
+  arrival,
+  onViewDetails,
+  onOpenInHistory,
+  onArriveSettled,
+  inviteUrlFor,
 }: Props) {
   const { sessions, settleSessions, isPaying, sync } = useSessionsStore();
   const profile = useProfile();
@@ -121,22 +142,59 @@ export function CollectionPage({
       return next.size === current.size ? current : next;
     });
   }, [isLive]);
-  const [settledOpen, setSettledOpen] = useState(false);
   const [announcement, setAnnouncement] = useState('');
-  const settledToggle = useRef<HTMLButtonElement>(null);
+  /** A card the viewer's own action just moved to History, said at the top of Outstanding (US-H8). */
+  const [moved, setMoved] = useState<{ id: string; title: string } | { count: number } | null>(
+    null,
+  );
+  // The cards each section held on the previous render, so the move can tell where a card was and
+  // what is now at that place. Updated last in the render's effects, after the ones that read it.
+  const lastLists = useRef({ needsSetup: [] as string[], outstanding: [] as string[] });
+  const latestLists = useRef(lastLists.current);
+  latestLists.current = {
+    needsSetup: collection.needsSetup.map((c) => c.session.id),
+    outstanding: collection.outstanding.map((c) => c.session.id),
+  };
+  /**
+   * Says that sessions moved to History, and brings focus to what is now where the first one was:
+   * the next card in its section, or the Outstanding heading when there is none (AC-H8.4). `before`
+   * is the sections as they were.
+   */
+  const titleOf = (id: string) => {
+    const session = sessions.find((x) => x.id === id);
+    return session ? sessionDisplayTitle(session) : 'This session';
+  };
+  const announceMove = (ids: string[], before: { needsSetup: string[]; outstanding: string[] }) => {
+    if (ids.length === 0) return;
+    const title = ids.length === 1 ? titleOf(ids[0]) : '';
+    setAnnouncement(ids.length === 1 ? movedToHistoryLine(title) : movedManyLine(ids.length));
+    setMoved(ids.length === 1 ? { id: ids[0], title } : { count: ids.length });
+    const section = before.needsSetup.includes(ids[0]) ? 'needsSetup' : 'outstanding';
+    const index = before[section].indexOf(ids[0]);
+    requestAnimationFrame(() => {
+      const next = latestLists.current[section][index];
+      const target = next
+        ? document.querySelector<HTMLElement>(`#collection-${next} [aria-expanded]`)
+        : document.getElementById('collection-outstanding-heading');
+      target?.focus();
+    });
+  };
 
-  // Landing from Finish, or on the first card with a claim waiting: once the profile has placed the
-  // session, open the Settled section if that is where it landed, then scroll to its card.
+  // Landing from Finish, a join, or on the first card with a claim waiting: once the profile has
+  // placed the session, scroll to its card. A card that is already in History has no place here, so
+  // an arrival hands it to the detail page instead (BR-A1); no arrival means no redirect, so a way
+  // back from the detail page can't bounce the reader.
   const [landingId, setLandingId] = useState<string | null>(openSessionId ?? null);
   useEffect(() => {
     if (landingId === null || profile.status !== 'ready') return;
-    if (!settledOpen && collection.settled.some((c) => c.session.id === landingId)) {
-      setSettledOpen(true);
+    if (collection.settled.some((c) => c.session.id === landingId)) {
+      if (arrival !== undefined) onArriveSettled?.(landingId);
+      setLandingId(null);
       return;
     }
     document.getElementById(`collection-${landingId}`)?.scrollIntoView({ block: 'start' });
     setLandingId(null);
-  }, [collection, landingId, profile.status, settledOpen]);
+  }, [arrival, collection, landingId, onArriveSettled, profile.status]);
 
   // Arriving opens the first card with a claim waiting, once, when the profile has placed them. A
   // claim that arrives while the page is already open changes the badge and the count, and opens
@@ -151,9 +209,9 @@ export function CollectionPage({
     setLandingId(id);
   }, [autoOpen, collection, openSessionId, profile.status]);
 
-  // Confirming a Needs setup card moves it to another section, possibly far down
-  // the page or into the collapsed Settled section. Once it has moved, bring the
-  // user to it and outline it briefly, so the card doesn't just vanish.
+  // Confirming a Needs setup card moves it to another section, possibly far down the page, or to
+  // History. Once it has moved, bring the user to it and outline it briefly, or say it moved to
+  // History, so the card doesn't just vanish.
   const placing = useRef<string | null>(null);
   const [placedId, setPlacedId] = useState<string | null>(null);
   useEffect(() => {
@@ -166,35 +224,39 @@ export function CollectionPage({
       placing.current = null;
       return;
     }
-    if (card.bucket === 'settled' && !settledOpen) {
-      setSettledOpen(true);
+    placing.current = null;
+    if (card.bucket === 'settled') {
+      announceMove([id], lastLists.current);
       return;
     }
-    placing.current = null;
     document.getElementById(`collection-${id}`)?.scrollIntoView({ block: 'start' });
     setPlacedId(id);
-  }, [cards, settledOpen]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- announceMove reads the latest render's lists through refs.
+  }, [cards]);
   useEffect(() => {
     if (placedId === null) return;
     const timer = setTimeout(() => setPlacedId(null), 1600);
     return () => clearTimeout(timer);
   }, [placedId]);
 
-  // A payment that settles a session moves its card, and the focus with it, so
-  // the move is announced and focus lands on the Settled toggle (AC-11.2). That
-  // happens only once the server has confirmed the payment and the card really is
-  // in Settled: the optimistic move alone says nothing, since a refused payment
-  // puts the card back and an announcement could not be taken back. A second
-  // payment on the session still in flight is part of that optimistic move, so
-  // the announcement waits for the last one to end, which reports in its turn.
+  // A payment that settles a session moves its card to History, so the move is announced and focus
+  // goes to the next card. That happens only once the server has confirmed the payment and the card
+  // really is settled: the optimistic move alone says nothing, since a refused payment puts the
+  // card back and an announcement could not be taken back. A second payment on the session still in
+  // flight is part of that optimistic move, so the announcement waits for the last one to end,
+  // which reports in its turn.
   const [confirmedPaid, setConfirmedPaid] = useState<string | null>(null);
   useEffect(() => {
     if (confirmedPaid === null) return;
     setConfirmedPaid(null);
     if (!announcesSettled(isPaying(confirmedPaid), cards.get(confirmedPaid)?.bucket)) return;
-    setAnnouncement('Session fully settled. Moved to Settled.');
-    requestAnimationFrame(() => settledToggle.current?.focus());
+    announceMove([confirmedPaid], lastLists.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- announceMove reads the latest render's lists through refs.
   }, [confirmedPaid, cards, isPaying]);
+  // Last, so the effects above read the sections as they were before this render.
+  useEffect(() => {
+    lastLists.current = latestLists.current;
+  });
   // How a payment ended. The live region is emptied first, so a refusal leaves
   // nothing in it and a second identical announcement is read again. A refused
   // payment puts its card or line back, and focus goes to the card's header
@@ -269,20 +331,19 @@ export function CollectionPage({
 
   const { needsSetup, outstanding, settled } = collection;
   const askOpen = canAsk && settledDue;
-  // Marks sessions as already settled, then announces and moves focus only for
-  // the ones that really ended up Settled once the server answered. A mark that
-  // failed puts its card back, and one another device only part paid stays where
-  // it is, so neither is announced (the optimistic move alone says nothing).
+  // Marks sessions as already settled, then says they moved to History and brings focus on, only
+  // for the ones that really ended up settled once the server answered. A mark that failed puts its
+  // card back, and one another device only part paid stays where it is, so neither is announced
+  // (the optimistic move alone says nothing).
   const markSettled = async (ids: string[]) => {
     setAnnouncement('');
+    const before = {
+      needsSetup: needsSetup.map((c) => c.session.id),
+      outstanding: outstanding.map((c) => c.session.id),
+    };
     const { settled: done } = await settleSessions(ids);
     if (done.length > 0) {
-      setAnnouncement(
-        done.length === 1
-          ? 'Session fully settled. Moved to Settled.'
-          : `${done.length} sessions moved to Settled.`,
-      );
-      requestAnimationFrame(() => settledToggle.current?.focus());
+      announceMove(done, before);
     } else if (ids.length === 1) {
       // The card came back, so focus goes to it rather than being lost with the
       // button it was on.
@@ -298,7 +359,8 @@ export function CollectionPage({
     else profile.answerAlreadySettled();
     if (settle.length > 0) void markSettled(settle);
   };
-  const total = needsSetup.length + outstanding.length + settled.length;
+  // Only what still has something left is a card here; settled sessions are in History.
+  const total = needsSetup.length + outstanding.length;
 
   const renderCard = (card: Card) => {
     const id = card.session.id;
@@ -336,6 +398,8 @@ export function CollectionPage({
         placed={placedId === id}
         onLeft={(title) => setAnnouncement(`Stopped tracking ${title}.`)}
         onAnnounce={setAnnouncement}
+        onViewDetails={onViewDetails}
+        inviteUrlFor={inviteUrlFor}
       />
     );
   };
@@ -346,12 +410,18 @@ export function CollectionPage({
         <>
           <div className={styles.helpRow}>{help}</div>
           {/* After a failed load the banner speaks instead of an empty state. */}
-          {showsEmptyState(sync.loaded, total) && (
-            <EmptyState
-              title="Nothing to collect yet"
-              description="Finish a session and it will show up here."
-            />
-          )}
+          {showsEmptyState(sync.loaded, total) &&
+            (settled.length > 0 ? (
+              <EmptyState
+                title="All settled"
+                description="Everything is paid. Settled sessions are in History."
+              />
+            ) : (
+              <EmptyState
+                title="Nothing to collect yet"
+                description="Finish a session and it will show up here."
+              />
+            ))}
         </>
       ) : (
         <>
@@ -388,55 +458,40 @@ export function CollectionPage({
             </section>
           )}
 
-          {(outstanding.length > 0 || settled.length > 0) && (
-            <section className={styles.section}>
-              <h2 className={homeStyles.heading}>{`Outstanding (${outstanding.length})`}</h2>
-              {outstanding.length > 0 ? (
-                <div className={homeStyles.list} data-tour="collection-outstanding">
-                  {outstanding.map(renderCard)}
-                </div>
-              ) : (
-                <p className={styles.quiet}>Nothing outstanding. Everything is settled.</p>
-              )}
-            </section>
-          )}
-
-          {settled.length > 0 && (
-            <section className={styles.section} data-tour="collection-settled">
-              <h2 className={`${homeStyles.heading} ${styles.settledHeading}`}>
-                <button
-                  ref={settledToggle}
-                  type="button"
-                  className={styles.settledToggle}
-                  aria-expanded={settledOpen}
-                  aria-controls="collection-settled"
-                  onClick={() => setSettledOpen((v) => !v)}
-                >
-                  {`Settled (${settled.length})`}
-                  <svg
-                    viewBox="0 0 16 16"
-                    aria-hidden="true"
-                    focusable="false"
-                    className={`${styles.chevron} ${settledOpen ? styles.chevronOpen : ''}`}
-                  >
-                    <path
-                      d="m4 6 4 4 4-4"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </button>
-              </h2>
-              {settledOpen && (
-                <div id="collection-settled" className={homeStyles.list}>
-                  {settled.map(renderCard)}
-                </div>
-              )}
-            </section>
-          )}
+          <section className={styles.section}>
+            <h2
+              id="collection-outstanding-heading"
+              tabIndex={-1}
+              className={homeStyles.heading}
+            >{`Outstanding (${outstanding.length})`}</h2>
+            {moved !== null && onOpenInHistory && (
+              <div className={styles.moved}>
+                {'id' in moved ? (
+                  <>
+                    <p>{movedToHistoryLine(moved.title)}</p>
+                    <Button
+                      size="sm"
+                      aria-label={`Open ${moved.title} in History`}
+                      onClick={() => onOpenInHistory(moved.id)}
+                    >
+                      Open
+                    </Button>
+                  </>
+                ) : (
+                  <p>{movedManyLine(moved.count)}</p>
+                )}
+              </div>
+            )}
+            {outstanding.length > 0 ? (
+              <div className={homeStyles.list} data-tour="collection-outstanding">
+                {outstanding.map(renderCard)}
+              </div>
+            ) : (
+              <p className={styles.quiet} data-tour="collection-done">
+                Nothing outstanding. Sessions that are paid in full are in History.
+              </p>
+            )}
+          </section>
         </>
       )}
 
