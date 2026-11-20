@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { claimableMembers, onHatiMembers, unavailableMembers } from '../src/lib/joinedSessions.js';
+import { claimableMembers, onHatiMembers, organizerMember } from '../src/lib/joinedSessions.js';
 import { sessionDisplayTitle } from '../src/lib/sessionLabel.js';
 import type { InviteAnswer, InvitePreview } from '../src/types';
 import { ensureUser, getUserId, iso, loadSessions, pool } from './_shared.js';
@@ -17,6 +17,8 @@ type LookupRow = {
   members: string[];
   me: string | null;
   organizer_name: string | null;
+  /** With `organizer_name`, only to work out which member the organizer is; never sent on. */
+  organizer_nicknames: string[] | null;
 };
 
 /** Either the pool or a transaction's client: both run the same tagged template. */
@@ -75,7 +77,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (input.kind === 'preview') {
     const { rows } = await pool.sql<LookupRow>`
       select s.id, s.user_id, s.name, s.created_at, s.closed_at, s.members, s.me,
-             u.display_name as organizer_name
+             u.display_name as organizer_name, u.nicknames as organizer_nicknames
       from expense_sessions s join users u on u.id = s.user_id
       where s.invite_token = ${input.token} and s.status = 'closed'`;
     if (rows.length === 0) return res.status(404).json(DEAD_LINK);
@@ -94,7 +96,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // accounts joining as one member are taken one at a time and the second is told it's taken.
     const { rows } = await client.sql<LookupRow>`
       select s.id, s.user_id, s.name, s.created_at, s.closed_at, s.members, s.me,
-             u.display_name as organizer_name
+             u.display_name as organizer_name, u.nicknames as organizer_nicknames
       from expense_sessions s join users u on u.id = s.user_id
       where s.invite_token = ${input.token} and s.status = 'closed'
       for update of s`;
@@ -166,20 +168,20 @@ async function outcomeFor(
     return { outcome: 'already', sessionId: row.id, title, member: mine.member };
   }
 
+  const claimed = joined.map((j) => j.member);
+  // The organizer's member as Collection places them, by pick or by profile name, so a joiner is
+  // never offered it, and the preview doesn't list it, so it never says which member it is.
+  const organizer = organizerMember({ me: row.me, members: row.members }, claimed, {
+    displayName: row.organizer_name,
+    nicknames: row.organizer_nicknames ?? [],
+  });
   const preview: InvitePreview = {
     sessionId: row.id,
     title,
     closedAt: iso(row.closed_at ?? row.created_at),
-    members: row.members,
-    onHati: onHatiMembers(
-      row.members,
-      joined.map((j) => j.member),
-    ),
-    unavailable: unavailableMembers(
-      row.members,
-      row.me,
-      joined.map((j) => j.member),
-    ),
+    members: row.members.filter((m) => m !== organizer),
+    memberCount: row.members.length,
+    onHati: onHatiMembers(row.members, claimed),
     organizerName: row.organizer_name ?? null,
   };
   return { outcome: 'open', preview };

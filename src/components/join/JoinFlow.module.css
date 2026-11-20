@@ -20,3 +20,8 @@
   font-weight: 600;
   overflow-wrap: anywhere;
 }
+
+/* "Not Ben? Choose another member": a quiet link under the buttons. */
+.notYou {
+  align-self: flex-start;
+}

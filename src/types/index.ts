@@ -169,14 +169,15 @@ export type InvitePreview = {
   sessionId: string;
   title: string;
   closedAt: string;
+  /**
+   * The members the joiner may be shown: every member except the organizer's own, who is not
+   * listed at all, so the preview never says which member that is (round 4).
+   */
   members: string[];
+  /** How many members the session has, the organizer's included, for "N members". */
+  memberCount: number;
   /** Members an account has joined as. The only ones labelled "on Hati". */
   onHati: string[];
-  /**
-   * Members the joiner can't pick: the ones on Hati, plus the organizer's own member, who is
-   * never labelled so the label means only "someone joined as this".
-   */
-  unavailable: string[];
   organizerName: string | null;
 };
 

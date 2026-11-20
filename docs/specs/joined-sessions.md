@@ -1880,3 +1880,39 @@ flight, and the last input was under `IDLE_PAUSE_MS` ago.
 
 The 15-second check pauses after 5 minutes with no user input, and resumes on the next input or on
 window focus (14.4, item 2). Built with a pure helper, `checksForChanges`, and tested statically.
+
+### 14.10 Owner feedback round 4 (2026-11-20)
+
+The owner shared Bali Trip, and the joiner's "Join" prompt still listed the organizer's own member.
+The organizer had never picked, so the server (which looked only at the stored pick) thought nobody
+was the organizer.
+
+**The organizer's effective member** (`organizerMember`, `joinedSessions.ts`) is worked out as
+Collection places them, with `resolveMe`:
+- the stored pick when it is a member;
+- nobody when they stored "not in this session";
+- otherwise their profile name's match, skipping members someone has joined as;
+- a nickname-only match is only a suggestion there, so it counts as nobody.
+
+The server loads the organizer's `display_name` and `nicknames` in the same lookup. It uses the member
+for the invite preview and for the join's 409 `taken`. The closed-session PUT guard doesn't rely on
+it (it only keeps a pick off a joined member), so it is unchanged.
+
+**The preview** no longer lists the organizer's member, so it never says which member that is.
+`InvitePreview` is now `{ sessionId, title, closedAt, members, memberCount, onHati, organizerName }`:
+`members` excludes the organizer's member, `memberCount` is the full count for "N members", and
+`unavailable` is gone (`onHati` is the claimed members). Joining as the organizer's member is a 409
+`taken`, because it isn't a member of the preview.
+
+**The prompt (`JoinPick.tsx`)** has two views:
+- **Confirm**, when the joiner's profile name, or failing that a nickname, matches exactly one
+  claimable member (`joinMatch`; an ambiguous name, the organizer's member and a member already
+  joined never match). Title `Join “{title}” as {member}?`, the same date and count line, the
+  highlighted sharer line and the read-only line, the Remember checkbox where `rememberOffer`
+  applies, Cancel and a primary Join (reads "Joining…" in flight), and under them a quiet link
+  `Not {member}? Choose another member`. Focus starts on Join.
+- **List**, for no match, an ambiguous match, or after "Not you?" (nothing preselected), and again
+  after someone else took the matched member. Title `Join “{title}”?`, "Which one are you?", the
+  claimable members as choices and the joined ones greyed "· on Hati". The organizer's member is
+  not listed. Focus starts on the first choice. "Everyone has already joined" counts claimable
+  members only.
