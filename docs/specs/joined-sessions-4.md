@@ -1,6 +1,6 @@
 # Spec: joined sessions, PR 4 ("Collection = active, History = done")
 
-Status: **draft, waiting for the owner's approval.** Branch `joined-sessions-4`.
+Status: **approved by the owner; owner decisions are recorded in section 13.** Branch `joined-sessions-4`.
 
 **Inputs**, owner-approved and taken as fixed:
 - **The brief:** the round 5 brief, Part B (`~/.claude/plans/cached-waddling-wigderson.md`).
@@ -811,3 +811,8 @@ function or dependency.
   **Recommendation:** approve as written.
 
 No other open questions. The requirements and the owner's answers Q1 to Q5 settle the rest.
+
+## 13. Owner decisions
+
+Recorded when the owner approved the spec (2026-11-21):
+- **D-A:** assumptions A1 to A4 (section 1) are accepted as written.
