@@ -730,6 +730,18 @@ import segno
 from segno import consts
 from segno import encoder as E
 
+# segno 1.6.6's write_padding_bits adds a whole zero byte when the stream already ends on a byte
+# boundary, which is every time the full 4-bit terminator fits. ISO/IEC 18004:2015 7.4.10 pads
+# only up to the boundary, and the first pad codeword (0xEC) follows at once. Decoders stop at the
+# terminator, so the text is the same either way, but the bits would not be the standard's. This
+# restores the standard's rule; everything else is segno's own.
+def _write_padding_bits(buff, version, length):
+    if version not in (consts.VERSION_M1, consts.VERSION_M3):
+        buff.extend([0] * ((8 - length % 8) % 8))
+
+
+E.write_padding_bits = _write_padding_bits
+
 TOKEN = 'Zx9_Qk-3VbT0aLmN4pRsWw'
 
 
@@ -827,11 +839,14 @@ print('export const QR_GOLDEN_PENALTIES: { text: string; scores: number[][] } = 
       + json.dumps(scores, ensure_ascii=False) + ';')
 ```
 
-**What to expect** (from a dry run in `/tmp` while writing this spec): about 30KB; 14 entries; the
-six auto entries are versions 1, 4, 5, 6, 7 and 10 with masks 4, 6, 2, 2, 6 and 1. A port of 5.6's
-rules reproduced segno's choice for all six texts and its exact totals for the 84-byte text. If
-the developer's run differs from these numbers, stop and report: the segno version or the script
-has changed.
+**What to expect:** about 30KB; 14 entries; the six auto entries are versions 1, 4, 5, 6, 7 and 10
+with masks 7, 2, 2, 2, 6 and 1. The spec's first dry run, without the padding patch above, gave
+masks 4, 6, 2, 2, 6 and 1: the first two choices differed because segno's extra zero byte changes
+the data and so the penalties. Two things were checked while building: the Python `qrcode` package, a second
+independent encoder, agrees bit for bit with all 14 patched matrices (forced to each entry's mask);
+and an encoder written to the standard disagreed with the unpatched segno output on exactly the
+entries whose stream ends on a byte boundary after the terminator (all but the 84-, 122- and
+213-byte texts, which fill their symbol). If a run differs from these numbers, stop and report.
 
 ### 8.3 Acceptance criteria
 
