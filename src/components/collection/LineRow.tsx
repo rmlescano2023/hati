@@ -46,6 +46,12 @@ type Props = {
   onPaid: (ok: boolean) => void;
   /** A line on a session the account joined, rather than owns. */
   joined?: boolean;
+  /**
+   * The line is shown on History detail, under "Your payments": the figures, Undo and Dismiss stay,
+   * and every action that records or claims is hidden. An undo makes the line unpaid for a moment,
+   * and without this a record button would flash in the detail page (BR-D2).
+   */
+  inHistory?: boolean;
   /** Who a claim on a You owe line waits on (BR-C19), already worded for mid-sentence. */
   decider?: string;
   /** Says what happened, for a screen reader, where the line's own card may have moved on. */
@@ -70,6 +76,7 @@ export function LineRow({
   onFailed,
   onPaid,
   joined = false,
+  inHistory = false,
   decider = 'the organizer',
   onAnnounce,
 }: Props) {
@@ -119,7 +126,7 @@ export function LineRow({
   // record or claim, so its form closes and a refusal shows as the line's state.
   const paidUp = line.openCents === 0;
   if (open && paidUp) setOpen(false);
-  const showForm = (open || failed !== undefined) && !paidUp;
+  const showForm = !inHistory && (open || failed !== undefined) && !paidUp;
   useEffect(() => {
     // The box is inside a wrapper that takes no ref, so it is found by its id.
     if (showForm) document.getElementById(`${messageId}-input`)?.focus();
@@ -312,7 +319,8 @@ export function LineRow({
           </div>
         </form>
       ) : (
-        !paidUp && (
+        !paidUp &&
+        !inHistory && (
           <div ref={actions} className={styles.actions}>
             {claiming ? (
               <>
@@ -365,23 +373,25 @@ export function LineRow({
                   <span className={styles.time}>{formatLocalDateTime(claim.createdAt)}</span>
                   {entryError(claim.id)}
                 </span>
-                <span className={styles.entryActions}>
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    aria-label={`Confirm ${formatCents(claim.amountCents)} from ${other}`}
-                    onClick={() => confirmClaim(claim)}
-                  >
-                    Confirm
-                  </Button>
-                  <Button
-                    size="sm"
-                    aria-label={`Decline ${formatCents(claim.amountCents)} from ${other}`}
-                    onClick={() => setDeclining(claim)}
-                  >
-                    Decline
-                  </Button>
-                </span>
+                {!inHistory && (
+                  <span className={styles.entryActions}>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      aria-label={`Confirm ${formatCents(claim.amountCents)} from ${other}`}
+                      onClick={() => confirmClaim(claim)}
+                    >
+                      Confirm
+                    </Button>
+                    <Button
+                      size="sm"
+                      aria-label={`Decline ${formatCents(claim.amountCents)} from ${other}`}
+                      onClick={() => setDeclining(claim)}
+                    >
+                      Decline
+                    </Button>
+                  </span>
+                )}
               </li>
             ) : (
               <li key={claim.id} className={styles.entry}>
@@ -391,14 +401,16 @@ export function LineRow({
                   <span>{waitingForLine(decider)}</span>
                   {entryError(claim.id)}
                 </span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  aria-label={`Withdraw the ${formatCents(claim.amountCents)} you said you paid ${other}`}
-                  onClick={() => setWithdrawing(claim)}
-                >
-                  Withdraw
-                </Button>
+                {!inHistory && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-label={`Withdraw the ${formatCents(claim.amountCents)} you said you paid ${other}`}
+                    onClick={() => setWithdrawing(claim)}
+                  >
+                    Withdraw
+                  </Button>
+                )}
               </li>
             ),
           )}
@@ -472,7 +484,9 @@ export function LineRow({
           );
         }}
         onConfirm={() => {
-          if (undoing) removePayment(sessionId, undoing.id);
+          // The ending is reported so History detail can wait for the server before it says the
+          // session is back in Collection; on a card the report is harmless.
+          if (undoing) removePayment(sessionId, undoing.id, (result) => onPaid(result.ok));
           setUndoing(null);
         }}
       />

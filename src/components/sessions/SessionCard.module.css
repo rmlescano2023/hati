@@ -75,6 +75,19 @@
   overflow-wrap: anywhere;
 }
 
+/* How a settled session ended for this viewer, and a quiet note beneath it (PR 4). */
+.status {
+  font-size: 12px;
+  color: var(--text2);
+  overflow-wrap: anywhere;
+}
+
+.note {
+  font-size: 11px;
+  color: var(--warn-text);
+  overflow-wrap: anywhere;
+}
+
 /* Who shared a session the account joined, in the same quiet type as the purchase count. */
 .shared {
   font-size: 11px;

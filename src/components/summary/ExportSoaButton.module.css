@@ -57,3 +57,15 @@
     width: 100%;
   }
 }
+
+/* On an open Collection card: next to View details, sized to its label, with its notes under it. */
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.card > .note,
+.card > .error {
+  text-align: left;
+}
