@@ -1910,9 +1910,11 @@ it (it only keeps a pick off a joined member), so it is unchanged.
   joined never match). Title `Join “{title}” as {member}?`, the same date and count line, the
   highlighted sharer line and the read-only line, the Remember checkbox where `rememberOffer`
   applies, Cancel and a primary Join (reads "Joining…" in flight), and under them a quiet link
-  `Not {member}? Choose another member`. Focus starts on Join.
+  `Not {member}?` (its `aria-label` is `Not {member}? Choose another member`). Focus starts on Join.
 - **List**, for no match, an ambiguous match, or after "Not you?" (nothing preselected), and again
   after someone else took the matched member. Title `Join “{title}”?`, "Which one are you?", the
   claimable members as choices and the joined ones greyed "· on Hati". The organizer's member is
   not listed. Focus starts on the first choice. "Everyone has already joined" counts claimable
   members only.
+- **Centred (owner, 2026-11-20).** In the confirm view only, all the text, the Remember row, the
+  Cancel and Join buttons and the link are centred, on phone and desktop. The list view is not.
