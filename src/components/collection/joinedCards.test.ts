@@ -583,3 +583,33 @@ describe('a claim waiting for you stands out (round 3)', () => {
     }
   });
 });
+
+describe('the waiting highlight stays readable (restyle)', () => {
+  const css = (path: string) => readFileSync(resolve(__dirname, path), 'utf8');
+  const files = [
+    './LineRow.module.css',
+    './CollectionCard.module.css',
+    '../layout/NavTabs.module.css',
+  ];
+
+  it('draws its light sweep at 10% white or less, and turns it off for reduced motion', () => {
+    for (const path of files) {
+      const source = css(path);
+      expect(source, path).toContain('::after');
+      expect(source, path).toContain('prefers-reduced-motion');
+      const alphas = [...source.matchAll(/rgba\(255, 255, 255, ([0-9.]+)\)\s+50%/g)].map((m) =>
+        Number(m[1]),
+      );
+      expect(alphas.length, path).toBeGreaterThan(0);
+      for (const alpha of alphas) expect(alpha, path).toBeLessThanOrEqual(0.1);
+    }
+  });
+
+  it('keeps the sweep behind the text and out of the way of taps', () => {
+    for (const path of files) {
+      const source = css(path);
+      expect(source, path).toContain('z-index: -1');
+      expect(source, path).toContain('pointer-events: none');
+    }
+  });
+});

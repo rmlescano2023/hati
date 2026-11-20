@@ -106,16 +106,53 @@
   color: var(--text3);
 }
 
-/* A claim waiting for this account's answer, visible on the collapsed card (round 3). */
+/* A claim waiting for this account's answer, visible on the collapsed card (round 3): a glossy
+   green pill with dark text, a soft glow and a gentle light sweep behind the text. */
 .toConfirm {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   align-self: flex-start;
   display: inline-flex;
   padding: 2px 8px;
   border-radius: var(--radius-pill);
-  background: var(--accent-bg);
-  color: var(--accent-text);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0) 55%),
+    linear-gradient(135deg, var(--accent), var(--accent-strong));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    0 0 8px color-mix(in srgb, var(--accent) 40%, transparent);
+  color: var(--bg);
   font-size: 12px;
   font-weight: 600;
+}
+
+.toConfirm::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  /* A gentle diagonal band of light, at most 6% white, drawn behind the text so it never changes
+     the text colour. It crosses for about a second and a half in every four. */
+  background: linear-gradient(
+    105deg,
+    transparent 38%,
+    rgba(255, 255, 255, 0.08) 50%,
+    transparent 62%
+  );
+  transform: translateX(-130%);
+  animation: sweep 4s ease-in-out infinite;
+}
+
+@keyframes sweep {
+  0% {
+    transform: translateX(-130%);
+  }
+  35%,
+  100% {
+    transform: translateX(130%);
+  }
 }
 
 .detail {
@@ -243,11 +280,44 @@
   color: var(--text2);
 }
 
-/* Waiting for this account to confirm (round 3): the same accent tint as a line. */
+/* Waiting for this account to confirm (round 3): the same look as a waiting line. */
 .other[data-to-confirm] {
-  background: var(--accent-bg);
-  border-radius: var(--radius-sm);
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   padding: 8px;
+  border-radius: var(--radius-sm);
+  /* A soft green wash, lightest on the left and fading out towards the surface, with a 3px accent
+     bar on the left edge. The ring and glow are shadows, not borders, so nothing shifts. */
+  background:
+    linear-gradient(var(--accent), var(--accent)) left / 3px 100% no-repeat,
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--accent) 10%, transparent),
+      color-mix(in srgb, var(--accent) 4%, transparent) 55%,
+      transparent
+    );
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent),
+    0 0 14px color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.other[data-to-confirm]::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  /* A gentle diagonal band of light, at most 6% white, drawn behind the text so it never changes
+     the text colour. It crosses for about a second and a half in every four. */
+  background: linear-gradient(
+    105deg,
+    transparent 38%,
+    rgba(255, 255, 255, 0.06) 50%,
+    transparent 62%
+  );
+  transform: translateX(-130%);
+  animation: sweep 4s ease-in-out infinite;
 }
 
 .otherText {
@@ -259,6 +329,11 @@
 
 .otherMeta {
   color: var(--text3);
+}
+
+/* The small grey text is too faint on the tint, so it takes the next step up. */
+.other[data-to-confirm] .otherMeta {
+  color: var(--text2);
 }
 
 .otherError {
@@ -313,5 +388,15 @@
 
   .share {
     margin-left: 0;
+  }
+}
+
+/* The light sweep is off for anyone who asks for less motion, which leaves the static glossy look.
+   After the rules it switches off, so it wins at equal specificity. */
+@media (prefers-reduced-motion: reduce) {
+  .toConfirm::after,
+  .other[data-to-confirm]::after {
+    animation: none;
+    display: none;
   }
 }

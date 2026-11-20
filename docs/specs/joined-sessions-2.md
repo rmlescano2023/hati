@@ -1332,3 +1332,10 @@ in `docs/specs/joined-sessions.md` section 14. **Task 0 merges `origin/joined-se
 | The count on `nav-collection` shows in the first-run tour. | Hidden while `phase === 'running'`, and tested on the markup. |
 | Auto-open fights a landing from Finish or a join. | `openSessionId` wins, in one pure, tested function. |
 | The count disagrees with the cards. | Both come from `toConfirmCount` in `buildCollection`, with the same profile. |
+
+### 14.6 Owner decision on the look (2026-11-20)
+
+The waiting line and entries, the "N to confirm" pill and the Collection tab badge are restyled: a
+soft green gradient panel with a thin glowing outline and a 3px accent bar, and a glossy accent
+pill and badge, each with a gentle light sweep (at most 10% white, behind the text, off under reduced
+motion). CSS only; text stays at 4.5:1 or better at the sweep's peak.
