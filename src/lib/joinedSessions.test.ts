@@ -15,6 +15,7 @@ import {
   joinedRowLine,
   nameTakenLine,
   onHatiMembers,
+  unavailableMembers,
   ownMessage,
   participantView,
   recordsPaymentsLine,
@@ -48,7 +49,8 @@ const preview = (over: Partial<InvitePreview> = {}): InvitePreview => ({
   title: 'Bali Trip',
   closedAt: '2026-11-02T00:00:00.000Z',
   members: ['Ana', 'Ben', 'Carla'],
-  onHati: ['Ana'],
+  onHati: [],
+  unavailable: ['Ana'],
   organizerName: 'Ana',
   ...over,
 });
@@ -123,22 +125,31 @@ describe('closedSessionMe', () => {
   });
 });
 
-describe('onHatiMembers and claimableMembers', () => {
-  it("lists the organizer's member plus the claimed ones", () => {
-    expect(onHatiMembers(['Ana', 'Ben', 'Carla'], 'Ana', ['Carla'])).toEqual(['Ana', 'Carla']);
+describe('onHatiMembers, unavailableMembers and claimableMembers', () => {
+  it("labels only the members an account has joined as, not the organizer's own", () => {
+    expect(onHatiMembers(['Ana', 'Ben', 'Carla'], ['Carla'])).toEqual(['Carla']);
+    expect(onHatiMembers(['Ana'], [])).toEqual([]);
+  });
+
+  it("makes the organizer's member unavailable as well as the claimed ones", () => {
+    expect(unavailableMembers(['Ana', 'Ben', 'Carla'], 'Ana', ['Carla'])).toEqual(['Ana', 'Carla']);
   });
 
   it('adds nobody for a me of "" or null', () => {
-    expect(onHatiMembers(['Ana'], '', [])).toEqual([]);
-    expect(onHatiMembers(['Ana'], null, [])).toEqual([]);
+    expect(unavailableMembers(['Ana'], '', [])).toEqual([]);
+    expect(unavailableMembers(['Ana'], null, [])).toEqual([]);
   });
 
-  it('leaves the members nobody is on Hati as', () => {
-    expect(claimableMembers(preview({ onHati: ['Ana', 'Carla'] }))).toEqual(['Ben']);
+  it('leaves the members nobody has taken', () => {
+    expect(claimableMembers(preview({ unavailable: ['Ana', 'Carla'] }))).toEqual(['Ben']);
   });
 
   it('has none to claim when the only member is the organizer', () => {
-    const one = preview({ members: ['Ana'], onHati: onHatiMembers(['Ana'], 'Ana', []) });
+    const one = preview({
+      members: ['Ana'],
+      onHati: [],
+      unavailable: unavailableMembers(['Ana'], 'Ana', []),
+    });
     expect(claimableMembers(one)).toEqual([]);
   });
 });
@@ -166,7 +177,7 @@ describe('joinPreselect', () => {
   });
 
   it('gives nothing for two hits', () => {
-    const two = preview({ members: ['Ben', 'ben', 'Carla'], onHati: [] });
+    const two = preview({ members: ['Ben', 'ben', 'Carla'], unavailable: [] });
     expect(joinPreselect(two, names('Ben'))).toEqual({ value: null, suggested: null });
   });
 });
@@ -226,7 +237,7 @@ describe('joinStage', () => {
   it('picks when someone is left to be, and says everyone joined when nobody is', () => {
     expect(stage({ outcome: 'open', preview: preview() })).toBe('pick');
     expect(stage({ outcome: 'taken', preview: preview() })).toBe('pick');
-    const full = preview({ onHati: ['Ana', 'Ben', 'Carla'] });
+    const full = preview({ onHati: ['Ben', 'Carla'], unavailable: ['Ana', 'Ben', 'Carla'] });
     expect(stage({ outcome: 'open', preview: full })).toBe('full');
     expect(stage({ outcome: 'taken', preview: full })).toBe('full');
   });

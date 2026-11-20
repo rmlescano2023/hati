@@ -249,7 +249,13 @@ export function JoinFlow({ raw, onClose }: Props) {
                 : 'Which one are you?'
             }
             members={preview.members}
-            unavailable={preview.onHati}
+            unavailable={preview.unavailable}
+            onHati={preview.onHati}
+            afterMembers={
+              preview.onHati.length > 0 && (
+                <p className={confirm.message}>{nameTakenLine(preview.organizerName)}</p>
+              )
+            }
             offerNotInSession={false}
             value={selected}
             onChange={setChoice}
@@ -257,9 +263,6 @@ export function JoinFlow({ raw, onClose }: Props) {
             onRememberChange={setRemember}
           />
         </div>
-        {preview.onHati.length > 0 && (
-          <p className={confirm.message}>{nameTakenLine(preview.organizerName)}</p>
-        )}
         {error !== null && (
           <p role="alert" className={styles.error}>
             {error}
@@ -272,7 +275,7 @@ export function JoinFlow({ raw, onClose }: Props) {
             disabled={selected === null || busy}
             onClick={() => void join()}
           >
-            Join
+            {busy ? 'Joining…' : 'Join'}
           </Button>
         </div>
       </div>

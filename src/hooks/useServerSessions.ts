@@ -28,6 +28,7 @@ import {
   createSaveQueue,
   discardsFailedCreate,
   failedMessage,
+  failedLeaveIds,
   failedSessionIds,
   keepLocalPayments,
   lineKey,
@@ -1252,6 +1253,13 @@ export function useServerSessions(): SessionsBackend {
     [commit],
   );
 
+  /**
+   * Sessions whose Stop tracking is currently failed, so "Try again" sends the stop itself.
+   * Unlike an organizer's failed delete, which is restored and reloaded, a stop the user asked for
+   * is still what they want.
+   */
+  const leavingFailed = useRef(new Set<string>());
+
   const leaveSession = useCallback(
     (sessionId: string) => {
       const index = sessionsRef.current.findIndex((s) => s.id === sessionId);
@@ -1274,8 +1282,10 @@ export function useServerSessions(): SessionsBackend {
             // A 404 means the session or the place in it has already gone, which is what was asked.
             if (!res.ok && res.status !== 404) throw new Error('The server refused it.');
           });
+          leavingFailed.current.delete(sessionId);
           setFailures((f) => resolveFailure(f, 'delete', sessionId));
         } catch {
+          leavingFailed.current.add(sessionId);
           // Still tracking it on the server, so it comes back at once, as a failed delete's does.
           commit(restoreAt(sessionsRef.current, left, index));
           fail({
@@ -1327,11 +1337,17 @@ export function useServerSessions(): SessionsBackend {
    * any of them back. A load failure alone adds none, so it never shows a note.
    */
   const retry = useCallback(() => {
-    for (const id of failedSessionIds(failures)) revertCandidates.current.add(id);
+    const stops = failedLeaveIds(failures, leavingFailed.current);
+    for (const id of failedSessionIds(failures)) {
+      if (!stops.includes(id)) revertCandidates.current.add(id);
+    }
     setFailures([]);
     setReverted(false);
+    // A failed stop is sent again, not just reloaded. It takes the session off the screen and
+    // holds it there against the reload below.
+    for (const id of stops) leaveSession(id);
     setReloads((n) => n + 1);
-  }, [failures]);
+  }, [failures, leaveSession]);
 
   const dismissReverted = useCallback(() => setReverted(false), []);
 

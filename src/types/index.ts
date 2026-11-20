@@ -170,8 +170,13 @@ export type InvitePreview = {
   title: string;
   closedAt: string;
   members: string[];
-  /** Members already on Hati: claimed by an account, or the organizer's own pick. */
+  /** Members an account has joined as. The only ones labelled "on Hati". */
   onHati: string[];
+  /**
+   * Members the joiner can't pick: the ones on Hati, plus the organizer's own member, who is
+   * never labelled so the label means only "someone joined as this".
+   */
+  unavailable: string[];
   organizerName: string | null;
 };
 

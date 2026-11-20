@@ -1,6 +1,6 @@
 # Spec: joined sessions, PR 1 (join and read-only access, organizer controls, the invite link)
 
-Status: **draft, waiting for the owner's approval.** Branch `joined-sessions-1`, from `origin/main` at
+Status: **approved and built, with the owner's round 2 decisions of 2026-11-20 (section 13).** Branch `joined-sessions-1`, from `origin/main` at
 `c615dd4` (PR #173 merged).
 
 Inputs, all owner-approved and taken as fixed:
@@ -527,7 +527,8 @@ this order (BR-J6):
      title,
      closedAt: iso(row.closed_at),
      members: row.members,
-     onHati: onHatiMembers(row.members, row.me, claimed),
+     onHati: onHatiMembers(row.members, claimed),
+     unavailable: unavailableMembers(row.members, row.me, claimed),
      organizerName: row.organizer_name ?? null,
    };
    ```
@@ -557,8 +558,10 @@ export type InvitePreview = {
   title: string;
   closedAt: string;
   members: string[];
-  /** Members already on Hati: claimed by an account, or the organizer's own pick. */
+  /** Members an account has joined as. The only ones labelled "on Hati" (round 2, item 8). */
   onHati: string[];
+  /** Members the joiner can't pick: `onHati` plus the organizer's own member, unlabelled. */
+  unavailable: string[];
   organizerName: string | null;
 };
 
@@ -665,9 +668,10 @@ imports `sessionLabel.ts`, so neither may import this file.)
   - `incoming === NOT_IN_SESSION` returns `NOT_IN_SESSION`;
   - `incoming` is one of the stored `members` and not in `claimed` returns `incoming`;
   - otherwise `stored`.
-- **`onHatiMembers(members, organizerMe, claimed)`** returns `members` that are claimed or equal
-  to `organizerMe`. (`''` and `null` never equal a member, so E1-2 holds.)
-- **`claimableMembers(preview)`** returns `preview.members` that aren't in `preview.onHati`.
+- **`onHatiMembers(members, claimed)`** returns `members` that an account has joined as.
+- **`unavailableMembers(members, organizerMe, claimed)`** returns `members` that are claimed or
+  equal to `organizerMe`. (`''` and `null` never equal a member, so E1-2 holds.)
+- **`claimableMembers(preview)`** returns `preview.members` that aren't in `preview.unavailable`.
 - **`joinPreselect(preview, names)`** returns `{ value: string | null; suggested: string | null }`.
   It runs `matchMember(claimableMembers(preview), names)`:
   - a profile hit gives `{ value: member, suggested: null }` (AC-6.3);
@@ -891,7 +895,7 @@ the first button does.
 4. `joinReadOnlyLine(organizerName)`.
 5. A `.members` wrapper (`max-height: min(50vh, 20rem); overflow-y: auto`, as
    `AlreadySettledDialog`'s list) holding
-   `<MePicker legend={…} members={preview.members} unavailable={preview.onHati} offerNotInSession={false} value={selected} … />`.
+   `<MePicker legend={…} members={preview.members} unavailable={preview.unavailable} onHati={preview.onHati} offerNotInSession={false} value={selected} … />`.
 6. `nameTakenLine(organizerName)` when `preview.onHati.length > 0`.
 7. The error line (`role="alert"`) when there is one.
 8. Actions: "Cancel" and a primary "Join", disabled while `selected === null` or busy.
@@ -925,8 +929,9 @@ belongs to a new dialog and changes no existing desktop layout.
 ### 6.4 `MePicker`, `ChangeMeDialog` and Needs setup
 
 **`MePicker`** gains two props:
-- `unavailable?: string[]` (default `[]`): those members render as a `disabled` radio labelled
-  `{name} · on Hati`.
+- `unavailable?: string[]` (default `[]`): those members render as a `disabled` radio.
+- `onHati?: string[]` (default `unavailable`): those of them labelled `{name} · on Hati`. The
+  organizer's own member is disabled but unlabelled.
 - `offerNotInSession?: boolean` (default `true`): `false` drops "I'm not in this session".
 
 Add `.optionDisabled { color: var(--text3); }` on the label of a disabled option. `ModalDialog`'s
@@ -1191,8 +1196,8 @@ until they pass.
   - an unclaimed member is taken;
   - a claimed member keeps the stored value;
   - a name not in the stored members keeps the stored value.
-- `onHatiMembers` and `claimableMembers`:
-  - the organizer's member plus claimed members;
+- `onHatiMembers`, `unavailableMembers` and `claimableMembers`:
+  - `onHatiMembers` is the claimed members only; `unavailableMembers` adds the organizer's member;
   - `me` of `''` or null adds nobody (E1-2);
   - a one-member session whose member is the organizer's has no claimable member (E1-1).
 - `joinPreselect` (AC-6.3 to AC-6.5):
@@ -1264,7 +1269,8 @@ ms, true at 30,000 ms (AC-15.1, AC-15.2).
   - an unknown token is a 404 with `dead_link` (AC-8.1);
   - the organizer gets `own` (AC-7.2, E1-8);
   - an existing participant gets `already` with their member (AC-7.1);
-  - anyone else gets `open`, with the organizer's member and claimed members in `onHati`;
+  - anyone else gets `open`, with the claimed members in `onHati` and those plus the organizer's
+    member in `unavailable`;
   - no lock is taken.
 - join:
   - `begin`, then the lookup with `for update of s`, then the participants select, then the
@@ -1511,3 +1517,21 @@ routes. Payments and the PDF are untouched.
   failed link check, Cancel while checking, when Remember saves, a silent quiet-reload failure,
   remove-then-reset, Invite only on an openable card, button order, and focus after Stop tracking.
   **Recommendation:** approve as written. Veto any you'd like changed.
+
+## 13. Owner decisions
+
+**Accepted as written (2026-11-20):** assumptions A1 to A8 (section 1, D-C).
+
+**Round 2, 2026-11-20:**
+1. **B1 reverted.** A save of a stored finished session answers with the parsed body, as the spec
+   in 4.4 says. The server still stores only `name`, `activity_at` and `me`.
+2. **Agent definitions.** The owner approved updating the repeated "404" and "no sharing" lines
+   (decision D-B, recommendation) to match CLAUDE.md. Not done in this round: see the build report.
+3. **U1.** On a phone, "Stop tracking" is at least 44px tall (`@media (max-width: 640px)` only).
+4. **U2.** The join dialog's button reads "Joining…" and is disabled while the request is in flight.
+5. **U3.** "Is your name taken?…" sits directly under the member list, above the Remember checkbox.
+6. **U4.** "Couldn't copy…" shows by the Copy button, not with the dialog's other errors.
+7. **U6.** After a failed Stop tracking, the banner's "Try again" sends the stop again, then reloads.
+8. **"On Hati" labels.** The organizer's own member no longer counts as "on Hati": only members an
+   account joined as are labelled. It is still unselectable and the server still refuses it (409
+   `taken`), so the preview gains `unavailable` (see 4.5 and 5.2).

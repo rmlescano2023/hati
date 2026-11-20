@@ -189,6 +189,15 @@ describe('MePicker with members already on Hati (AC-14.1, AC-6.2)', () => {
     expect(markup).not.toMatch(/<input[^>]*value="Ana"[^>]*disabled/);
   });
 
+  it('leaves a member disabled but unlabelled when only the organizer is that member', () => {
+    const markup = picker({ unavailable: ['Ana', 'Ben'], onHati: ['Ben'] });
+    expect(markup).toContain('Ben · on Hati');
+    expect(markup).not.toContain('Ana · on Hati');
+    expect(markup).toMatch(
+      /<input[^>]*value="Ana"[^>]*disabled=""[^>]*>|<input[^>]*disabled=""[^>]*value="Ana"[^>]*>/,
+    );
+  });
+
   it('can leave out "I\'m not in this session"', () => {
     expect(picker({})).toContain("I'm not in this session");
     expect(picker({ offerNotInSession: false })).not.toContain("I'm not in this session");

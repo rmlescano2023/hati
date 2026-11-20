@@ -41,6 +41,8 @@ export function InviteMembersDialog({ session, onClose }: Props) {
   const [list, setList] = useState<Participant[] | null>(null);
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
+  // Shown by the Copy button it is about, not down with the other errors.
+  const [copyError, setCopyError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [resetting, setResetting] = useState(false);
@@ -80,7 +82,7 @@ export function InviteMembersDialog({ session, onClose }: Props) {
 
   const copy = async () => {
     if (link === null) return;
-    setError(null);
+    setCopyError(null);
     try {
       await navigator.clipboard.writeText(link);
       setCopied(true);
@@ -89,7 +91,7 @@ export function InviteMembersDialog({ session, onClose }: Props) {
       copiedTimer.current = setTimeout(() => setCopied(false), COPIED_MS);
     } catch {
       // No clipboard, or it refused: leave the link selected for the user to copy.
-      setError("Couldn't copy. Select the link and copy it yourself.");
+      setCopyError("Couldn't copy. Select the link and copy it yourself.");
       if (linkEl.current) window.getSelection()?.selectAllChildren(linkEl.current);
     }
   };
@@ -162,6 +164,11 @@ export function InviteMembersDialog({ session, onClose }: Props) {
               <div>
                 <Button onClick={() => void copy()}>{copied ? 'Copied' : 'Copy link'}</Button>
               </div>
+              {copyError !== null && (
+                <p role="alert" className={styles.error}>
+                  {copyError}
+                </p>
+              )}
             </>
           )}
 
