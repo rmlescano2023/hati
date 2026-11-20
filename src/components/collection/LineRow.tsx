@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Button } from '../shared/Button';
+import { ClearableInput } from '../shared/ClearableInput';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { useSessionsStore } from '../../context/SessionsStoreContext';
 import {
@@ -60,7 +61,6 @@ export function LineRow({ sessionId, line, failed, onFailed, onPaid, readOnly = 
   const [undoing, setUndoing] = useState<Payment | null>(null);
   // A double tap on Save, or a held Enter, must still record one payment (AC-7.10).
   const submitted = useRef(false);
-  const input = useRef<HTMLInputElement>(null);
   // The form and the undo dialog are removed rather than closed, so focus would
   // fall back to the page. These find the buttons that opened them again.
   const actions = useRef<HTMLDivElement>(null);
@@ -90,8 +90,9 @@ export function LineRow({ sessionId, line, failed, onFailed, onPaid, readOnly = 
   if (open && paidUp) setOpen(false);
   const showForm = !readOnly && (open || failed !== undefined) && !paidUp;
   useEffect(() => {
-    if (showForm) input.current?.focus();
-  }, [showForm]);
+    // The box is inside a wrapper that takes no ref, so it is found by its id.
+    if (showForm) document.getElementById(`${messageId}-input`)?.focus();
+  }, [showForm, messageId]);
 
   const parsed = parsePaymentAmount(text, line.remainingCents);
   // While the refused amount is unchanged, the server's refusal already says
@@ -192,13 +193,15 @@ export function LineRow({ sessionId, line, failed, onFailed, onPaid, readOnly = 
           <label className={styles.label} htmlFor={`${messageId}-input`}>
             {owedToYou ? 'Amount received' : 'Amount you paid'}
           </label>
-          <input
-            ref={input}
+          <ClearableInput
             id={`${messageId}-input`}
+            clearLabel={
+              owedToYou ? `Clear amount received from ${other}` : `Clear amount paid to ${other}`
+            }
             type="text"
             inputMode="decimal"
             autoComplete="off"
-            className={styles.input}
+            className={styles.amountBox}
             value={text}
             aria-describedby={messageId}
             aria-invalid={!parsed.ok}

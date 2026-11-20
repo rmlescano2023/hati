@@ -1922,3 +1922,28 @@ it (it only keeps a pick off a joined member), so it is unchanged.
   Remember row, the Cancel and Join buttons and the link are centred, on phone and desktop. The two
   body paragraphs (the sharer line and the read-only line) stay left-aligned. The list view is not
   centred.
+
+### 14.11 Owner feedback round 5 (2026-11-21)
+
+The owner hand-tested PR 1 to PR 3 as the organizer with a second account. Five fixes (the structural
+change that follows from it, Collection holding what is still being collected and History what is
+done, is a separate spec).
+1. **Share only on Outstanding.** "Share with members" shows only on an Outstanding organizer card,
+   and on History detail only for a session whose organizer card would be Outstanding
+   (`buildCard`'s bucket, with the profile). Settled and Needs setup cards, and History detail of a
+   settled session, have none. Mark all's row is unchanged; where Outstanding has no Mark all, Share
+   keeps its own row.
+2. **Confirm-view alignment.** The title and the "Finished … · N members" line are left-aligned
+   again, as are the body paragraphs and the Remember row. Only the Cancel and Join group and the
+   "Not {member}?" link are centred. The list view is unchanged.
+3. **Back.** When the list view was reached through "Not {member}?" (a match exists but the list is
+   shown), its Cancel button reads **Back** and returns to the confirm view with focus on Join. When
+   nothing matched, it stays Cancel. Escape closes the dialog either way.
+4. **"Tracking on Hati" row.** The member's name stays on line 1 and line 2 is `Joined {date}`. The
+   Hati profile name is dropped from the row, which replaces round 1's "profile name + date". The
+   Remove button's `aria-label` (`Remove {member}'s account from {title}`) and the Remove
+   confirmation are unchanged.
+5. **Reset control on Collection's amount boxes.** The record-payment amount box (the only amount
+   input in Collection on this branch) uses `ClearableInput` with its circular-arrow `ClearIcon`, as
+   Expenses does, with `clearLabel` "Clear amount received from {name}" or "Clear amount paid to
+   {name}". It is found by its id for focus, because the wrapper takes no ref.

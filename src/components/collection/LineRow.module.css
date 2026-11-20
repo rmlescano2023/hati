@@ -84,9 +84,12 @@
   color: var(--text2);
 }
 
-.input {
-  font-family: var(--mono);
+.amountBox {
   max-width: 14rem;
+}
+
+.amountBox input {
+  font-family: var(--mono);
 }
 
 .message {

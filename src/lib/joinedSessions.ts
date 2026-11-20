@@ -192,8 +192,8 @@ export const sharedByLine = (name: string | null): string =>
 export const recordsPaymentsLine = (name: string | null): string =>
   `${org(name, true)} records the payments on this session.`;
 
-export const joinedRowLine = (p: Participant): string =>
-  `${p.name ?? 'No name set'} · joined ${formatLocalDate(p.joinedAt)}`;
+/** The second line of a member's row in Share with members: just when they joined (round 5). */
+export const joinedRowLine = (p: Participant): string => `Joined ${formatLocalDate(p.joinedAt)}`;
 
 /**
  * What follows the organizer's name in the join prompt's first line. The prompt sets the name apart
