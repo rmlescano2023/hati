@@ -10,7 +10,9 @@ import {
   joinFlowReady,
   joinPreselect,
   joinReadOnlyLine,
+  JOIN_CONFIRM_REST,
   JOIN_SHARED_REST,
+  joinConfirmLine,
   joinSharedLine,
   joinStage,
   joinedRowLine,
@@ -320,6 +322,18 @@ describe('copy builders', () => {
       ' shared this session. Pick who you are, and your share of it shows up in your Collection.',
     );
     expect(joinSharedLine('Ana')).toBe(`Ana${JOIN_SHARED_REST}`);
+  });
+
+  it('joinConfirmLine asks the joiner to confirm rather than pick', () => {
+    expect(JOIN_CONFIRM_REST).toBe(
+      " shared this session. Confirm it's you, and your share of it shows up in your Collection.",
+    );
+    expect(joinConfirmLine('Ana')).toBe(
+      "Ana shared this session. Confirm it's you, and your share of it shows up in your Collection.",
+    );
+    expect(joinConfirmLine(null)).toBe(
+      "You've been invited to this session. Confirm it's you, and your share of it shows up in your Collection.",
+    );
   });
 
   it('joinSharedLine', () => {
