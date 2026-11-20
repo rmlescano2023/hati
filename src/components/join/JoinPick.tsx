@@ -59,7 +59,10 @@ export function JoinPick({ preview, busy, error, onJoin, onCancel, startWithList
   }, [view]);
 
   return (
-    <div ref={body} className={confirm.body}>
+    <div
+      ref={body}
+      className={view === 'confirm' ? `${confirm.body} ${styles.centred}` : confirm.body}
+    >
       <h2 id="join-title" className={confirm.title}>
         {view === 'confirm' ? `Join “${preview.title}” as ${match}?` : `Join “${preview.title}”?`}
       </h2>
@@ -98,7 +101,14 @@ export function JoinPick({ preview, busy, error, onJoin, onCancel, startWithList
         </div>
       )}
       {view === 'confirm' && offer !== null && (
-        <RememberOption offer={offer} value={selected} checked={remember} onChange={setRemember} />
+        <div className={styles.rememberRow}>
+          <RememberOption
+            offer={offer}
+            value={selected}
+            checked={remember}
+            onChange={setRemember}
+          />
+        </div>
       )}
 
       {error !== null && (
@@ -106,7 +116,11 @@ export function JoinPick({ preview, busy, error, onJoin, onCancel, startWithList
           {error}
         </p>
       )}
-      <div className={confirm.actions}>
+      <div
+        className={
+          view === 'confirm' ? `${confirm.actions} ${styles.actionsCentred}` : confirm.actions
+        }
+      >
         <Button onClick={onCancel}>Cancel</Button>
         <Button
           data-join=""
@@ -122,9 +136,10 @@ export function JoinPick({ preview, busy, error, onJoin, onCancel, startWithList
           variant="ghost"
           size="sm"
           className={`link-action ${styles.notYou}`}
+          aria-label={`Not ${match}? Choose another member`}
           onClick={() => setWantsList(true)}
         >
-          Not {match}? Choose another member
+          Not {match}?
         </Button>
       )}
     </div>

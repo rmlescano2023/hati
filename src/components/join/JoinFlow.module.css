@@ -21,7 +21,26 @@
   overflow-wrap: anywhere;
 }
 
-/* "Not Ben? Choose another member": a quiet link under the buttons. */
+/* "Not Ben?": a quiet link under the buttons. Its screen-reader name says what it does. */
 .notYou {
   align-self: flex-start;
+}
+
+/* The confirm view only: every line, the Remember row, the buttons and the link are centred, on
+   phone and desktop alike. The list view keeps its left-aligned radios. */
+.centred {
+  text-align: center;
+}
+
+.centred > .rememberRow {
+  display: flex;
+  justify-content: center;
+}
+
+.centred > .actionsCentred {
+  justify-content: center;
+}
+
+.centred > .notYou {
+  align-self: center;
 }

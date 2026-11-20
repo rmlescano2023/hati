@@ -41,7 +41,8 @@ describe('the join prompt (round 4)', () => {
   it('is a confirm for the one member the profile name matches, with Join and a Not you link', () => {
     const markup = render();
     expect(markup).toContain('Join “Bali Trip” as Ana?');
-    expect(markup).toContain('Not Ana? Choose another member');
+    expect(markup).toContain('>Not Ana?<');
+    expect(markup).toContain('aria-label="Not Ana? Choose another member"');
     expect(markup).not.toContain('type="radio"');
     expect(markup).not.toContain('Which one are you?');
     expect(markup).toContain('>Join<');
@@ -101,5 +102,11 @@ describe('the join prompt (round 4)', () => {
     expect(
       render({}, { error: 'Someone else just joined as Ben. Pick who you are again.' }),
     ).toContain('role="alert"');
+  });
+
+  it('centres the confirm view only, and leaves the list view alone', () => {
+    expect(render()).toMatch(/class="[^"]*centred/);
+    expect(render({}, { startWithList: true })).not.toMatch(/centred/);
+    expect(render({ members: ['Ben', 'Carla'] })).not.toMatch(/centred/);
   });
 });
