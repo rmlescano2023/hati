@@ -1,6 +1,6 @@
 # Spec: joined sessions, PR 2 ("I've paid" claims, then confirm or decline)
 
-Status: **draft, waiting for the owner's approval.** Branch `joined-sessions-2`, from
+Status: **approved by the owner; owner decisions are recorded in section 13.** Branch `joined-sessions-2`, from
 `origin/joined-sessions-1` at `b718d4c` (PR 1 built; review SHIP, QA passed).
 
 **Inputs**, owner-approved and taken as fixed:
@@ -1076,3 +1076,10 @@ access rules in 4.1.
   which one is the organizer, and it's never shown as a label. It's what decides "Waiting for Ana"
   against "Waiting for {organizer}". **Recommendation:** accept. It's the minimum BR-C19 needs, and
   the join dialog already shows who joined.
+
+## 13. Owner decisions
+
+Recorded when the owner approved the spec:
+- **D-A:** assumptions A1 to A5 (section 1) are accepted as written.
+- **D-B:** What's new v3 has the two notes in 5.4 and "Got it" alone.
+- **D-C:** `withAccount` is accepted (A1).
