@@ -37,6 +37,16 @@ export function participantView(
 }
 
 /**
+ * What the "anything changed?" check compares: each session as the viewer is sent it, with the
+ * activity time left out. It is taken over exactly the array a full load would send, so it covers
+ * every insert, deletion and edit the viewer could see, and nothing they can't: a participant's
+ * sessions have already been through `participantView`. The activity time is left out so that
+ * opening a session on another device doesn't cause a reload.
+ */
+export const stateText = (sessions: Session[]): string =>
+  JSON.stringify(sessions.map((s) => ({ ...s, activityAt: null })));
+
+/**
  * The `me` a save of a finished session stores. Only the pick can change on a finished session,
  * and never to a member someone has already joined as, so the organizer and a participant are
  * never the same person (BR-R1). Anything that isn't a valid change keeps what is stored.
@@ -156,8 +166,17 @@ export const recordsPaymentsLine = (name: string | null): string =>
 export const joinedRowLine = (p: Participant): string =>
   `${p.name ?? 'No name set'} · joined ${formatLocalDate(p.joinedAt)}`;
 
+/**
+ * What follows the organizer's name in the join prompt's first line. The prompt sets the name apart
+ * in the accent colour, so the line is built from the name and this tail rather than as one string.
+ */
+export const JOIN_SHARED_REST =
+  ' shared this session. Pick who you are, and your share of it shows up in your Collection.';
+
 export const joinSharedLine = (name: string | null): string =>
-  `${name === null ? "You've been invited to this session." : `${name} shared this session.`} Pick who you are, and your share of it shows up in your Collection.`;
+  name === null
+    ? "You've been invited to this session. Pick who you are, and your share of it shows up in your Collection."
+    : `${name}${JOIN_SHARED_REST}`;
 
 export const joinReadOnlyLine = (name: string | null): string =>
   `You can see the whole session, but only ${org(name, false)} can change it. ${org(name, true)} will see your Hati name and when you joined.`;

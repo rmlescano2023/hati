@@ -3,10 +3,12 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+import { CollectionCard } from './CollectionCard';
 import { MePicker } from './MePicker';
 import { CollectionPage } from '../../pages/CollectionPage';
 import { HistoryDetailPage } from '../../pages/HistoryDetailPage';
 import { HistoryPage } from '../../pages/HistoryPage';
+import { buildCard } from '../../lib/collection';
 import { PracticeProfileProvider } from '../../context/ProfileContext';
 import { PracticeSessionsProvider } from '../../context/SessionsStoreContext';
 import type { Session } from '../../types';
@@ -26,6 +28,16 @@ const wrap = (sessions: Session[], child: ReactNode) =>
   )
     .replace(/&#x27;/g, "'")
     .replace(/<!-- -->/g, '');
+
+const count = (text: string, part: string) => text.split(part).length - 1;
+
+const pay = (id: string, debtor: string, creditor: string) => ({
+  id,
+  debtor,
+  creditor,
+  amountCents: 10000,
+  createdAt: '2026-11-03T00:00:00.000Z',
+});
 
 /** Ana paid ₱300 for all three, so Ben and Carla each owe her ₱100. */
 const finished = (id: string, over: Partial<Session> = {}): Session => ({
@@ -97,7 +109,7 @@ describe('a joined session on Collection', () => {
       'Undo',
       'Mark all as paid',
       'Already settled',
-      'Invite members',
+      'Share with members',
       'Change who you are',
       '>Change<',
     ]) {
@@ -113,17 +125,60 @@ describe('a joined session on Collection', () => {
 });
 
 describe('an organizer on Collection (AC-1.2, AC-1.9)', () => {
-  it('ends an open finished session with Invite members, under Mark all as paid', () => {
+  const MARK_ALL = 'data-tour="collection-mark-all"';
+
+  it('shows Share with members, labelled for a screen reader', () => {
     const markup = collection([finished('session_own')], 'session_own');
-    expect(markup).toContain('aria-label="Invite members to Bali Trip"');
-    expect(markup.indexOf('Mark all as paid')).toBeGreaterThan(-1);
-    expect(markup.indexOf('Invite members')).toBeGreaterThan(markup.indexOf('Mark all as paid'));
+    expect(markup).toContain('aria-label="Share Bali Trip with members"');
+    expect(markup).toContain('Share with members');
   });
 
-  it('has no Invite on a practice session', () => {
+  it("puts Share on the right of Mark all's row, inside the tour target and after Mark all", () => {
+    const markup = collection([finished('session_own')], 'session_own');
+    expect(count(markup, MARK_ALL)).toBe(1);
+    const start = markup.indexOf(MARK_ALL);
+    const end = markup.indexOf('</div>', start);
+    const row = markup.slice(start, end);
+    expect(row).toContain('Mark all as paid');
+    expect(row).toContain('Share with members');
+    expect(row.indexOf('Share with members')).toBeGreaterThan(row.indexOf('Mark all as paid'));
+  });
+
+  it('shows Share alone, in its own row, on a Settled card with no Mark all', () => {
+    const settled = finished('session_own', {
+      payments: [pay('p1', 'Ben', 'Ana'), pay('p2', 'Carla', 'Ana')],
+    });
+    // The Settled section is collapsed on the page, so the card is rendered directly, open.
+    const card = buildCard(settled, { displayName: 'Ana', nicknames: [] });
+    expect(card.bucket).toBe('settled');
+    const noop = () => {};
+    const markup = wrap(
+      [settled],
+      createElement(CollectionCard, {
+        card,
+        expanded: true,
+        onToggle: noop,
+        failed: () => undefined,
+        onFailed: noop,
+        onPaid: noop,
+        onAlreadySettled: noop,
+        onPlaced: noop,
+        placed: false,
+        onLeft: noop,
+      }),
+    );
+    expect(markup).toContain('Share with members');
+    expect(markup).not.toContain(MARK_ALL);
+  });
+
+  it("leaves Mark all's row as it was on a practice session, with no Share (AC-1.9)", () => {
     const markup = collection([finished('practice_own')], 'practice_own');
-    expect(markup).toContain('Mark all as paid');
-    expect(markup).not.toContain('Invite members');
+    const start = markup.indexOf(MARK_ALL);
+    expect(start).toBeGreaterThan(-1);
+    const row = markup.slice(start, markup.indexOf('</div>', start));
+    expect(row).toContain('Mark all as paid');
+    expect(row).not.toContain('Share');
+    expect(markup).not.toContain('Share with members');
   });
 });
 
@@ -151,16 +206,16 @@ describe('History', () => {
     expect(markup).toContain('Shared by Ana · You joined as Ben');
     expect(markup).toContain('↓ Download SOA');
     expect(markup).toContain('aria-label="Stop tracking Bali Trip"');
-    expect(markup).not.toContain('Invite members');
+    expect(markup).not.toContain('Share with members');
   });
 
-  it('shows the organizer Invite members beside the SOA (AC-1.1)', () => {
+  it('shows the organizer Share with members beside the SOA (AC-1.1)', () => {
     const markup = wrap(
       [finished('session_own')],
       createElement(HistoryDetailPage, { sessionId: 'session_own', onBack: () => {} }),
     );
-    expect(markup).toContain('Invite members');
-    expect(markup.indexOf('Invite members')).toBeGreaterThan(markup.indexOf('Download SOA'));
+    expect(markup).toContain('Share with members');
+    expect(markup.indexOf('Share with members')).toBeGreaterThan(markup.indexOf('Download SOA'));
     expect(markup).not.toContain('Stop tracking');
   });
 });
@@ -216,6 +271,16 @@ describe('no new onboarding targets (BR-G7, BR-G8)', () => {
       '../layout/SignedOutScreen.tsx',
     ]) {
       expect(source(path), path).not.toContain('data-tour');
+    }
+  });
+
+  it('has no Invite members left in the sources (round 3, item 1)', () => {
+    for (const path of [
+      './CollectionCard.tsx',
+      '../../pages/HistoryDetailPage.tsx',
+      './InviteMembersDialog.tsx',
+    ]) {
+      expect(source(path), path).not.toContain('Invite members');
     }
   });
 

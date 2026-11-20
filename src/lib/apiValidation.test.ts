@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   isPracticeSessionId,
   parseInviteInput,
+  parseCheckFlag,
   parseJoinedFlag,
   parseParticipantQuery,
   parsePaymentsInput,
@@ -289,6 +290,15 @@ describe('parseJoinedFlag', () => {
     expect(parseJoinedFlag('1')).toBe(true);
     for (const other of [undefined, '', '0', 'true', 1, ['1']]) {
       expect(parseJoinedFlag(other)).toBe(false);
+    }
+  });
+});
+
+describe('parseCheckFlag', () => {
+  it('is true only for the exact value 1', () => {
+    expect(parseCheckFlag('1')).toBe(true);
+    for (const other of [undefined, '', '0', 'true', 1, ['1']]) {
+      expect(parseCheckFlag(other)).toBe(false);
     }
   });
 });

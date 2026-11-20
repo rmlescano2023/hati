@@ -10,6 +10,7 @@ import {
   joinFlowReady,
   joinPreselect,
   joinReadOnlyLine,
+  JOIN_SHARED_REST,
   joinSharedLine,
   joinStage,
   joinedRowLine,
@@ -18,6 +19,7 @@ import {
   unavailableMembers,
   ownMessage,
   participantView,
+  stateText,
   recordsPaymentsLine,
   removeMessage,
   sharedByLine,
@@ -287,6 +289,13 @@ describe('copy builders', () => {
     );
   });
 
+  it('JOIN_SHARED_REST is the tail of the shared line after the name', () => {
+    expect(JOIN_SHARED_REST).toBe(
+      ' shared this session. Pick who you are, and your share of it shows up in your Collection.',
+    );
+    expect(joinSharedLine('Ana')).toBe(`Ana${JOIN_SHARED_REST}`);
+  });
+
   it('joinSharedLine', () => {
     expect(joinSharedLine('Ana')).toBe(
       'Ana shared this session. Pick who you are, and your share of it shows up in your Collection.',
@@ -350,5 +359,60 @@ describe('copy builders', () => {
       'It leaves your Collection and History. Ana keeps the session, and payments already recorded stay. You can join again with the invite link if it still works.',
     );
     expect(stopTrackingMessage(null)).toContain('The organizer keeps the session');
+  });
+});
+
+describe('stateText (the "anything changed?" check)', () => {
+  const pay = (id: string, debtor: string, creditor: string) => ({
+    id,
+    debtor,
+    creditor,
+    amountCents: 100,
+    createdAt: 'x',
+  });
+  const rec = (price: number) => ({
+    id: 'rec_1',
+    date: '2026-11-01',
+    payorMode: 'single' as const,
+    payors: [{ member: 'Ana', amount: 0 }],
+    items: [
+      { id: 'i1', mode: 'equal' as const, name: 'Dinner', totalPrice: price, owners: ['Ana'] },
+    ],
+    createdAt: 'x',
+  });
+  const base = session({ records: [rec(300)], payments: [pay('p1', 'Ben', 'Ana')] });
+
+  it('is the same for the same sessions, and ignores the activity time', () => {
+    expect(stateText([base])).toBe(stateText([{ ...base }]));
+    expect(stateText([{ ...base, activityAt: '2026-12-01T00:00:00.000Z' }])).toBe(
+      stateText([base]),
+    );
+  });
+
+  it.each([
+    ['a payment added', { ...base, payments: [...base.payments, pay('p2', 'Carla', 'Ana')] }],
+    ['a payment removed', { ...base, payments: [] }],
+    ['an item edited', { ...base, records: [rec(301)] }],
+    ['a rename', { ...base, name: 'Bali Trip' }],
+    ['someone joining', { ...base, participants: [{ member: 'Ben', name: null, joinedAt: 'x' }] }],
+  ])('changes with %s', (_what, changed) => {
+    expect(stateText([changed])).not.toBe(stateText([base]));
+  });
+
+  it('changes when a session is removed', () => {
+    const other = session({ id: 'session_2' });
+    expect(stateText([base])).not.toBe(stateText([base, other]));
+  });
+
+  it("does not let a payment between two other members move a participant's state (D1)", () => {
+    const withOther = session({
+      payments: [pay('p1', 'Ben', 'Ana'), pay('p2', 'Carla', 'Ana')],
+    });
+    const without = session({ payments: [pay('p1', 'Ben', 'Ana')] });
+    expect(stateText([participantView(withOther, 'Ben', 'Ana')])).toBe(
+      stateText([participantView(without, 'Ben', 'Ana')]),
+    );
+    // The organizer, who sees it, does change.
+    expect(stateText([withOther])).not.toBe(stateText([without]));
   });
 });
