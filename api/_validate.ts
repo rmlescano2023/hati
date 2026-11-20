@@ -202,3 +202,8 @@ export function parseParticipantQuery(
 ): { sessionId: string; member: string } | null {
   return isShortText(sessionId) && isShortText(member) ? { sessionId, member } : null;
 }
+
+/** Whether a session list is only the cheap "anything changed?" check. Only the exact value `1` is. */
+export function parseCheckFlag(raw: unknown): boolean {
+  return raw === '1';
+}

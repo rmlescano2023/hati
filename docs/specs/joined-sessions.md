@@ -1738,6 +1738,10 @@ name taken?" and the cards' "Shared by" are as before.
    already running. A failed or timed-out check says nothing (A4); the next tick tries again.
    - The interval is set in an effect that depends on `canReloadQuietly`, and cleared on
      unmount.
+   - **Idle pause (owner decision, 2026-11-20).** The check pauses after `IDLE_PAUSE_MS = 5 * 60_000`
+     with no pointer, key or touch input, so an unattended tab doesn't keep the database awake. It
+     resumes on the next input (which checks at once) or on the window gaining focus. Focus also
+     reloads, with the usual guards and the 30-second throttle.
    - Each tick returns early while `document.visibilityState !== 'visible'`.
 3. **The state.**
    - Every successful load reads the `X-Hati-State` response header into a ref.
@@ -1822,9 +1826,10 @@ None.
 
 **`src/lib/apiValidation.test.ts`:** `parseCheckFlag` is true only for `'1'`.
 
-**`src/lib/writeQueue.test.ts`:** `CHECK_INTERVAL_MS` is 15,000. `checksForChanges({ visible, canReload, state, checking })`
-(pure, used by the tick) is true only when the page is visible, it can reload, a state is known
-and no check is in flight.
+**`src/lib/writeQueue.test.ts`:** `CHECK_INTERVAL_MS` is 15,000. `IDLE_PAUSE_MS` is 300,000.
+`checksForChanges({ visible, canReload, state, checking, lastInputAt, now })` (pure, used by the
+tick) is true only when the page is visible, it can reload, a state is known, no check is in
+flight, and the last input was under `IDLE_PAUSE_MS` ago.
 
 **Unchanged and must pass:** `steps.test.ts`, `targets.test.ts`, `guides/guides.test.ts`.
 
@@ -1870,3 +1875,8 @@ and no check is in flight.
 | Polling keeps the Neon `main` compute awake while any tab is visible, because autosuspend never idles it. | Accepted with the owner's choice. A check stops while the tab is hidden. A change stamp (schema) is the later fix if cost shows. |
 | Self-made writes cause one extra quiet reload, about 15 seconds later. | Harmless. `mergeLoaded` keeps anything still in flight. |
 | PR 3's merge keeps an old label. | The source check fails the build's tests. |
+
+### 14.9 Owner decision on the check
+
+The 15-second check pauses after 5 minutes with no user input, and resumes on the next input or on
+window focus (14.4, item 2). Built with a pure helper, `checksForChanges`, and tested statically.

@@ -1,7 +1,8 @@
+import { createHash } from 'node:crypto';
 import type { VercelRequest } from '@vercel/node';
 import { createPool, type VercelPoolClient } from '@vercel/postgres';
 import { verifyToken } from '@clerk/backend';
-import { participantView } from '../src/lib/joinedSessions.js';
+import { participantView, stateText } from '../src/lib/joinedSessions.js';
 import type { Participant, Payment, PurchaseRecord, Session, SessionStatus } from '../src/types';
 
 /**
@@ -275,3 +276,11 @@ export async function lockSessionRole(
   if (rows[0].user_id === userId) return { role: 'owner' };
   return rows[0].member === null ? null : { role: 'participant', member: rows[0].member };
 }
+
+/**
+ * A short fingerprint of what a full load would show, for the "anything changed?" check. It is
+ * taken over the same array the load sends, so a check and a load always agree, and it respects
+ * what each viewer may see without any rule of its own.
+ */
+export const sessionsState = (sessions: Session[]): string =>
+  createHash('sha1').update(stateText(sessions)).digest('base64url');

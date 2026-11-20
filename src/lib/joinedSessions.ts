@@ -37,6 +37,16 @@ export function participantView(
 }
 
 /**
+ * What the "anything changed?" check compares: each session as the viewer is sent it, with the
+ * activity time left out. It is taken over exactly the array a full load would send, so it covers
+ * every insert, deletion and edit the viewer could see, and nothing they can't: a participant's
+ * sessions have already been through `participantView`. The activity time is left out so that
+ * opening a session on another device doesn't cause a reload.
+ */
+export const stateText = (sessions: Session[]): string =>
+  JSON.stringify(sessions.map((s) => ({ ...s, activityAt: null })));
+
+/**
  * The `me` a save of a finished session stores. Only the pick can change on a finished session,
  * and never to a member someone has already joined as, so the organizer and a participant are
  * never the same person (BR-R1). Anything that isn't a valid change keeps what is stored.

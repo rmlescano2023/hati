@@ -36,6 +36,9 @@ import {
   messageOf,
   needsRefresh,
   recordFailedMessage,
+  CHECK_INTERVAL_MS,
+  IDLE_PAUSE_MS,
+  checksForChanges,
   reloadsOnReturn,
   resolveAlreadySettled,
   resolveFailure,
@@ -278,6 +281,13 @@ export function useServerSessions(): SessionsBackend {
    * tries again (A4).
    */
   const quietLoad = useRef(false);
+  /** The server's fingerprint of the last load, or null (none yet, or an older server). */
+  const loadedState = useRef<string | null>(null);
+  /** When the user last did anything (pointer, key or touch); the check pauses when it is long ago. */
+  const lastInputAt = useRef(Date.now());
+  const checking = useRef(false);
+  /** A load is running, which a change found by the check must not cancel. */
+  const loadRunning = useRef(false);
 
   /**
    * Sessions whose write had failed when "Try again" was pressed, checked
@@ -396,16 +406,22 @@ export function useServerSessions(): SessionsBackend {
 
     (async () => {
       if (!quiet) setLoading(true);
+      loadRunning.current = true;
       lastLoadAt.current = Date.now();
       settledDuringLoad.current.clear();
       try {
         // The deadline covers the body too, so a late result is never applied.
-        const body = await withDeadline(WRITE_TIMEOUT_MS, async (signal) => {
+        const { body, state } = await withDeadline(WRITE_TIMEOUT_MS, async (signal) => {
           const res = await authedFetch(LOAD_ENDPOINT, { method: 'GET' }, signal);
           if (!res.ok) throw new FriendlyError(failedMessage('load your data', res.status));
-          return (await readJson(res)) as Session[];
+          return {
+            body: (await readJson(res)) as Session[],
+            // What this load saw, for the check to compare with. An older server sends none.
+            state: res.headers.get('X-Hati-State'),
+          };
         });
         if (cancelled) return;
+        loadedState.current = state;
         // A load never overrides a write the server hasn't confirmed, so
         // "Try again" during a save, create or delete doesn't undo it on screen.
         const before = sessionsRef.current;
@@ -455,7 +471,10 @@ export function useServerSessions(): SessionsBackend {
         });
         setLoading(false);
       }
-    })();
+    })().finally(() => {
+      // A newer load has already marked itself running, so only the current one clears it.
+      if (!cancelled) loadRunning.current = false;
+    });
 
     return () => {
       cancelled = true;
@@ -467,17 +486,87 @@ export function useServerSessions(): SessionsBackend {
   // retry is running, or a failure is on the banner, the reload would cancel the one in flight or
   // silently replace an edit the user was told did not save, and "Try again" is for that.
   const canReloadQuietly = loaded && !loading && failures.length === 0;
+
+  /** Starts the quiet reload, which the load effect then runs; never over a load already running. */
+  const reloadQuietly = useCallback(() => {
+    quietLoad.current = true;
+    setReloads((n) => n + 1);
+  }, []);
+
+  /**
+   * Asks the server whether anything this account can see has changed, and reloads quietly if so.
+   * A failed or timed-out check says nothing (A4): the next tick tries again. A change is shown at
+   * once, without waiting for the 30-second window, because it is known.
+   */
+  const checkForChanges = useCallback(async () => {
+    checking.current = true;
+    try {
+      const sentFor = loadedState.current;
+      const { state } = await withDeadline(WRITE_TIMEOUT_MS, async (signal) => {
+        const res = await authedFetch(`${LOAD_ENDPOINT}&check=1`, { method: 'GET' }, signal);
+        if (!res.ok) throw new Error('The check failed.');
+        return (await res.json()) as { state?: unknown };
+      });
+      // A load that landed while the check was out has already brought the newer state.
+      if (
+        typeof state === 'string' &&
+        loadedState.current === sentFor &&
+        state !== sentFor &&
+        !loadRunning.current
+      ) {
+        reloadQuietly();
+      }
+    } catch {
+      // Nothing the user did has failed, so nothing is said.
+    } finally {
+      checking.current = false;
+    }
+  }, [authedFetch, reloadQuietly]);
+
   useEffect(() => {
     if (!isLoaded || !isSignedIn || !canReloadQuietly) return;
-    const onVisible = () => {
-      if (document.visibilityState !== 'visible') return;
+    const visible = () => document.visibilityState === 'visible';
+    // Coming back reloads (after the 30-second window), and so does clicking into the window: two
+    // windows side by side never fire visibilitychange, but clicking into one fires focus.
+    const onReturn = () => {
+      if (!visible()) return;
+      lastInputAt.current = Date.now();
       if (!reloadsOnReturn(lastLoadAt.current, Date.now())) return;
-      quietLoad.current = true;
-      setReloads((n) => n + 1);
+      reloadQuietly();
     };
-    document.addEventListener('visibilitychange', onVisible);
-    return () => document.removeEventListener('visibilitychange', onVisible);
-  }, [isLoaded, isSignedIn, canReloadQuietly]);
+    const tick = () => {
+      if (
+        checksForChanges({
+          visible: visible(),
+          canReload: true,
+          state: loadedState.current,
+          checking: checking.current,
+          lastInputAt: lastInputAt.current,
+          now: Date.now(),
+        })
+      ) {
+        void checkForChanges();
+      }
+    };
+    // Input after the pause resumes the check at once rather than at the next tick.
+    const onInput = () => {
+      const now = Date.now();
+      const wasIdle = now - lastInputAt.current >= IDLE_PAUSE_MS;
+      lastInputAt.current = now;
+      if (wasIdle) tick();
+    };
+    const inputs = ['pointerdown', 'pointermove', 'keydown', 'touchstart'] as const;
+    for (const type of inputs) window.addEventListener(type, onInput, { passive: true });
+    document.addEventListener('visibilitychange', onReturn);
+    window.addEventListener('focus', onReturn);
+    const timer = setInterval(tick, CHECK_INTERVAL_MS);
+    return () => {
+      for (const type of inputs) window.removeEventListener(type, onInput);
+      document.removeEventListener('visibilitychange', onReturn);
+      window.removeEventListener('focus', onReturn);
+      clearInterval(timer);
+    };
+  }, [isLoaded, isSignedIn, canReloadQuietly, checkForChanges, reloadQuietly]);
 
   /**
    * Sends one save, and never rejects because it reports its own errors. A
