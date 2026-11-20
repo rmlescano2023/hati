@@ -21,11 +21,65 @@ const db = vi.hoisted(() => ({
   lookup: null as Record<string, unknown> | null,
   dates: [] as { date: string }[],
   joiners: [] as { user_id: string; member: string }[],
+  /** The session's purchases and confirmed payments, which decide whether any line is unpaid. */
+  recordRows: [] as Record<string, unknown>[],
+  paymentRows: [] as Record<string, unknown>[],
   statements: [] as { text: string; values: unknown[] }[],
   loaded: [] as unknown[][],
 }));
 
+/** Ana paid ₱300 for all three members, so Ben and Carla each owe her ₱100. */
+const RECORD_ROWS = [
+  {
+    id: 'rec_1',
+    date: '2026-11-01',
+    payor_mode: 'single',
+    payors: [{ member: 'Ana', amount: 0 }],
+    items: [
+      { id: 'i1', mode: 'equal', name: 'Dinner', totalPrice: 300, owners: ['Ana', 'Ben', 'Carla'] },
+    ],
+    created_at: new Date('2026-11-01T02:00:00.000Z'),
+  },
+];
+const PAYMENT_ROWS = [
+  {
+    id: 'p1',
+    debtor: 'Ben',
+    creditor: 'Ana',
+    amount_cents: 10000,
+    created_at: new Date('2026-11-03'),
+  },
+  {
+    id: 'p2',
+    debtor: 'Carla',
+    creditor: 'Ana',
+    amount_cents: 10000,
+    created_at: new Date('2026-11-03'),
+  },
+];
+
 vi.mock('../../api/_shared.js', () => {
+  // Built inside the factory, which is hoisted above the constants.
+  const ownedSession = () => ({
+    id: 'session_1',
+    status: 'closed',
+    members: ['Ana', 'Ben', 'Carla'],
+    records: db.recordRows.map((r) => ({
+      id: r.id,
+      date: r.date,
+      payorMode: r.payor_mode,
+      payors: r.payors,
+      items: r.items,
+      createdAt: String(r.created_at),
+    })),
+    payments: db.paymentRows.map((p) => ({
+      id: p.id,
+      debtor: p.debtor,
+      creditor: p.creditor,
+      amountCents: p.amount_cents,
+      createdAt: String(p.created_at),
+    })),
+  });
   const sql = (strings: TemplateStringsArray, ...values: unknown[]) => {
     const text = strings.join('?').replace(/\s+/g, ' ').trim();
     db.statements.push({ text, values });
@@ -38,6 +92,12 @@ vi.mock('../../api/_shared.js', () => {
       rows = db.lookup ? [db.lookup] : [];
     } else if (text.startsWith('select date::text')) {
       rows = db.dates;
+    } else if (text.startsWith('select r.id, r.date::text')) {
+      rows = db.recordRows;
+    } else if (
+      text.startsWith('select id, debtor, creditor, amount_cents, created_at from session_payments')
+    ) {
+      rows = db.paymentRows;
     } else if (text.startsWith('select user_id, member from session_participants')) {
       rows = db.joiners;
     }
@@ -53,7 +113,7 @@ vi.mock('../../api/_shared.js', () => {
       db.statements.push({ text: 'loadSessions', values: args });
       return db.loaded.length > 0
         ? db.loaded
-        : [{ id: 'session_1', participants: [{ member: 'Ben', name: 'Benny', joinedAt: 'x' }] }];
+        : [{ ...ownedSession(), participants: [{ member: 'Ben', name: 'Benny', joinedAt: 'x' }] }];
     },
     pool: {
       sql,
@@ -116,6 +176,8 @@ beforeEach(() => {
   db.lookup = lookupRow();
   db.dates = [{ date: '2026-11-01' }];
   db.joiners = [];
+  db.recordRows = RECORD_ROWS;
+  db.paymentRows = [];
   db.statements = [];
   db.loaded = [];
 });
@@ -135,7 +197,9 @@ describe('POST /api/invites: the link', () => {
     const res = await call({ sessionId: 'session_1' });
     expect(res.statusCode).toBe(404);
     expect(res.body).toEqual({ error: 'No such session.' });
-    expect(sent('loadSessions')).toHaveLength(0);
+    // The session is read once, to check it is the caller's and still unpaid; the update then finds no row.
+    expect(sent('loadSessions')).toHaveLength(1);
+    expect(sent('update expense_sessions')).toHaveLength(1);
   });
 
   it('returns a minted token and the participants', async () => {
@@ -254,6 +318,8 @@ describe('POST /api/invites: join', () => {
       'select s.id, s.user_id,',
       'select date::text as',
       'select user_id, member',
+      'select r.id, r.date::text',
+      'select id, debtor,',
       'insert into session_participants',
       'commit',
       'loadSessions',
@@ -344,5 +410,78 @@ describe('POST /api/invites: the request', () => {
     const res = await call({}, { query: { token: TOKEN, member: 'Ben' } });
     expect(res.statusCode).toBe(400);
     expect(db.statements).toHaveLength(0);
+  });
+});
+
+describe('the link expires once every line is paid (PR 4, BR-L1)', () => {
+  it('refuses to get, mint or reset a link for a fully paid session, and writes nothing', async () => {
+    db.userId = 'user_a';
+    db.paymentRows = PAYMENT_ROWS;
+    for (const body of [{ sessionId: 'session_1' }, { sessionId: 'session_1', reset: true }]) {
+      const res = await call(body);
+      expect(res.statusCode).toBe(409);
+      expect(res.body).toEqual({
+        error: 'Everyone has paid, so the invite link no longer works.',
+        code: 'all_paid',
+      });
+    }
+    expect(sent('update expense_sessions')).toHaveLength(0);
+  });
+
+  it('still mints for a session with an unpaid line, and reads the session once', async () => {
+    db.userId = 'user_a';
+    const res = await call({ sessionId: 'session_1' });
+    expect(res.statusCode).toBe(200);
+    expect(sent('loadSessions')).toHaveLength(1);
+  });
+
+  it('answers paid, and nothing about the session, to an outsider with a fully paid session', async () => {
+    db.paymentRows = PAYMENT_ROWS;
+    const res = await call({ token: TOKEN });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({ outcome: 'paid' });
+  });
+
+  it('still tells the organizer own and a member already, whatever is paid (AC-H11.5)', async () => {
+    db.paymentRows = PAYMENT_ROWS;
+    db.userId = 'user_a';
+    expect((await call({ token: TOKEN })).body).toMatchObject({ outcome: 'own' });
+    db.userId = 'user_b';
+    db.joiners = [{ user_id: 'user_b', member: 'Ben' }];
+    expect((await call({ token: TOKEN })).body).toMatchObject({ outcome: 'already' });
+  });
+
+  it('is open again after an undo makes a line unpaid, with the same token (Q1)', async () => {
+    db.paymentRows = PAYMENT_ROWS;
+    expect((await call({ token: TOKEN })).body).toEqual({ outcome: 'paid' });
+    db.paymentRows = PAYMENT_ROWS.slice(0, 1);
+    expect((await call({ token: TOKEN })).body).toMatchObject({ outcome: 'open' });
+  });
+
+  it('is open while a line between two other members is unpaid, though the organizer is paid', async () => {
+    // Ben owes Ana ₱100 (paid) and Carla owes Ana ₱100 (unpaid): Ana's own lines are not all paid,
+    // and a session with any unpaid pair stays open for a new joiner.
+    db.paymentRows = PAYMENT_ROWS.slice(0, 1);
+    expect((await call({ token: TOKEN })).body).toMatchObject({ outcome: 'open' });
+  });
+
+  it('treats a session with no pairs as paid', async () => {
+    db.recordRows = [
+      {
+        ...RECORD_ROWS[0],
+        items: [{ id: 'i1', mode: 'equal', name: 'Dinner', totalPrice: 100, owners: ['Ana'] }],
+      },
+    ];
+    expect((await call({ token: TOKEN })).body).toEqual({ outcome: 'paid' });
+  });
+
+  it('rolls back a join into a fully paid session, with no insert, reading the ledger on the transaction', async () => {
+    db.paymentRows = PAYMENT_ROWS;
+    const res = await call({ token: TOKEN, member: 'Ben' });
+    expect(res.body).toEqual({ outcome: 'paid' });
+    expect(sent('insert into session_participants')).toHaveLength(0);
+    expect(sent('rollback')).toHaveLength(1);
+    const names = db.statements.map((s) => s.text.split(' ').slice(0, 3).join(' '));
+    expect(names.indexOf('begin')).toBeLessThan(names.indexOf('select r.id, r.date::text'));
   });
 });
