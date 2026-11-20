@@ -74,4 +74,9 @@
   .header .actions button {
     width: 100%;
   }
+
+  /* Stop tracking is a destructive control: a full 44px target on a phone. */
+  .header .actions [data-stop-tracking] {
+    min-height: 44px;
+  }
 }

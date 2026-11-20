@@ -17,6 +17,7 @@ import {
   createWriteOrder,
   discardsFailedCreate,
   failedMessage,
+  failedLeaveIds,
   failedSessionIds,
   isDeletedElsewhere,
   lineKey,
@@ -1261,5 +1262,24 @@ describe('reloadsOnReturn (AC-15.1, AC-15.2)', () => {
   it('reloads only once 30 seconds have passed since the last load started', () => {
     expect(reloadsOnReturn(1_000, 30_999)).toBe(false);
     expect(reloadsOnReturn(1_000, 31_000)).toBe(true);
+  });
+});
+
+describe('failedLeaveIds (Try again after a failed Stop tracking)', () => {
+  const failure = (kind: Failure['kind'], sessionId: string | null): Failure => ({
+    kind,
+    sessionId,
+    message: 'x',
+  });
+
+  it('names the failed deletes that were stops, and nothing else', () => {
+    const list = [
+      failure('delete', 's1'),
+      failure('delete', 's2'),
+      failure('save', 's1'),
+      failure('load', null),
+    ];
+    expect(failedLeaveIds(list, new Set(['s1']))).toEqual(['s1']);
+    expect(failedLeaveIds(list, new Set())).toEqual([]);
   });
 });

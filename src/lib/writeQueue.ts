@@ -425,6 +425,16 @@ export function addFailure(list: readonly Failure[], next: Failure): Failure[] {
 }
 
 /**
+ * The sessions whose "Stop tracking" failed and still shows as failed, so "Try again" can send
+ * the stop again rather than only reloading. `leaving` is the ids the app sent a stop for: a
+ * failed delete of any other session is the organizer's own, which Try again leaves to a reload.
+ */
+export const failedLeaveIds = (list: readonly Failure[], leaving: ReadonlySet<string>): string[] =>
+  list.flatMap((f) =>
+    f.kind === 'delete' && f.sessionId !== null && leaving.has(f.sessionId) ? [f.sessionId] : [],
+  );
+
+/**
  * Removes the failure with this kind and session. Returns `list` itself when
  * there is none, so a state setter given the result skips the re-render.
  */

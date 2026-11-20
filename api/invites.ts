@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { claimableMembers, onHatiMembers } from '../src/lib/joinedSessions.js';
+import { claimableMembers, onHatiMembers, unavailableMembers } from '../src/lib/joinedSessions.js';
 import { sessionDisplayTitle } from '../src/lib/sessionLabel.js';
 import type { InviteAnswer, InvitePreview } from '../src/types';
 import { ensureUser, getUserId, iso, loadSessions, pool } from './_shared.js';
@@ -172,6 +172,10 @@ async function outcomeFor(
     closedAt: iso(row.closed_at ?? row.created_at),
     members: row.members,
     onHati: onHatiMembers(
+      row.members,
+      joined.map((j) => j.member),
+    ),
+    unavailable: unavailableMembers(
       row.members,
       row.me,
       joined.map((j) => j.member),

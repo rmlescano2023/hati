@@ -52,19 +52,25 @@ export function closedSessionMe(
   return members.includes(incoming) && !claimed.includes(incoming) ? incoming : stored;
 }
 
+/** The members already on Hati: the ones an account has joined as. Only these are labelled so. */
+export const onHatiMembers = (members: string[], claimed: string[]): string[] =>
+  members.filter((m) => claimed.includes(m));
+
 /**
- * The members who are already on Hati: claimed by an account, or the organizer's own pick. A `me`
- * of '' or null never equals a member name, so an organizer who isn't in the session takes nobody.
+ * The members a joiner can't pick: the ones on Hati, and the organizer's own member (BR-J4). A
+ * `me` of '' or null never equals a member name, so an organizer who isn't in the session takes
+ * nobody.
  */
-export const onHatiMembers = (
+export const unavailableMembers = (
   members: string[],
   organizerMe: string | null,
   claimed: string[],
 ): string[] => members.filter((m) => claimed.includes(m) || m === organizerMe);
 
 /** The members a joiner can still be. */
-export const claimableMembers = (preview: Pick<InvitePreview, 'members' | 'onHati'>): string[] =>
-  preview.members.filter((m) => !preview.onHati.includes(m));
+export const claimableMembers = (
+  preview: Pick<InvitePreview, 'members' | 'unavailable'>,
+): string[] => preview.members.filter((m) => !preview.unavailable.includes(m));
 
 /**
  * Who the join dialog starts on: a profile-name hit among the claimable members is preselected, a
@@ -72,7 +78,7 @@ export const claimableMembers = (preview: Pick<InvitePreview, 'members' | 'onHat
  * same matching Collection uses, so a member already on Hati can never be picked by it.
  */
 export function joinPreselect(
-  preview: Pick<InvitePreview, 'members' | 'onHati'>,
+  preview: Pick<InvitePreview, 'members' | 'unavailable'>,
   names: KnownNames,
 ): { value: string | null; suggested: string | null } {
   const match = matchMember(claimableMembers(preview), names);

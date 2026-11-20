@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { useId, type ReactNode } from 'react';
 import { useProfile } from '../../context/ProfileContext';
 import { NOT_IN_SESSION, rememberOffer } from '../../lib/collection';
 import { sortNames } from '../../lib/format';
@@ -12,8 +12,15 @@ type Props = {
   onChange: (value: string) => void;
   remember: boolean;
   onRememberChange: (remember: boolean) => void;
-  /** Members someone has already joined as, or the organizer is. Shown, but can't be picked. */
+  /** Members that can't be picked. They are shown disabled. */
   unavailable?: string[];
+  /**
+   * Which unavailable members are labelled "on Hati": the ones an account joined as. Defaults to
+   * all of them. The organizer's own member is unavailable but not labelled.
+   */
+  onHati?: string[];
+  /** Shown directly under the members, before the Remember checkbox. */
+  afterMembers?: ReactNode;
   /** Whether "I'm not in this session" is offered. A joiner is in the session by definition. */
   offerNotInSession?: boolean;
 };
@@ -31,6 +38,8 @@ export function MePicker({
   remember,
   onRememberChange,
   unavailable = [],
+  onHati = unavailable,
+  afterMembers,
   offerNotInSession = true,
 }: Props) {
   const profile = useProfile();
@@ -39,7 +48,7 @@ export function MePicker({
   const options = [
     ...sortNames(members).map((m) =>
       unavailable.includes(m)
-        ? { value: m, label: `${m} · on Hati`, disabled: true }
+        ? { value: m, label: onHati.includes(m) ? `${m} · on Hati` : m, disabled: true }
         : { value: m, label: m, disabled: false },
     ),
     ...(offerNotInSession
@@ -73,6 +82,7 @@ export function MePicker({
           </label>
         ))}
       </fieldset>
+      {afterMembers}
       {offer !== null && (
         <label className={styles.option}>
           <input

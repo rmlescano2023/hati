@@ -189,7 +189,7 @@ describe('POST /api/invites: preview', () => {
     });
   });
 
-  it("offers anyone else the session, with the organizer's member and the claimed ones on Hati", async () => {
+  it("offers anyone else the session, labelling only the claimed members on Hati and leaving the organizer's member unavailable but unlabelled", async () => {
     db.joiners = [{ user_id: 'user_c', member: 'Carla' }];
     const res = await call({ token: TOKEN });
     expect(res.statusCode).toBe(200);
@@ -200,7 +200,8 @@ describe('POST /api/invites: preview', () => {
         title: 'Bali Trip',
         closedAt: '2026-11-02T00:00:00.000Z',
         members: ['Ana', 'Ben', 'Carla'],
-        onHati: ['Ana', 'Carla'],
+        onHati: ['Carla'],
+        unavailable: ['Ana', 'Carla'],
         organizerName: 'Ana',
       },
     });
