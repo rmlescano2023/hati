@@ -4,7 +4,7 @@ import { ModalDialog } from '../shared/ModalDialog';
 import { useProfile } from '../../context/ProfileContext';
 import { useSessionsStore } from '../../context/SessionsStoreContext';
 import { useInvites } from '../../hooks/useInvites';
-import { rememberOffer } from '../../lib/collection';
+import { buildCard, rememberOffer } from '../../lib/collection';
 import {
   alreadyMessage,
   everyoneJoinedMessage,
@@ -21,11 +21,13 @@ import { JoinPick } from './JoinPick';
 type Props = {
   /** The token as it came off the address, not yet checked. */
   raw: string;
-  /** Where to land, or null to stay where the user is (Cancel, Close, OK and Escape). */
-  onClose: (to: { openSessionId: string; announce?: string } | null) => void;
+  /** Where to land, or null to stay where the user is (Cancel, Close, OK and Escape). `arrival` says how it was reached. */
+  onClose: (
+    to: { openSessionId: string; announce?: string; arrival?: 'finish' | 'join' | 'open' } | null,
+  ) => void;
 };
 
-type Stage = 'checking' | 'failed' | 'dead' | 'own' | 'already' | 'full' | 'pick';
+type Stage = 'checking' | 'failed' | 'dead' | 'own' | 'already' | 'full' | 'paid' | 'pick';
 
 /** What the dialog is showing, with the answer that decided it. */
 type View = { stage: Stage; answer: JoinAnswer | null };
@@ -40,7 +42,7 @@ const COULDNT_JOIN = "Couldn't join. Check your connection and try again.";
  */
 export function JoinFlow({ raw, onClose }: Props) {
   const invites = useInvites();
-  const { addJoinedSession } = useSessionsStore();
+  const { addJoinedSession, sessions } = useSessionsStore();
   const profile = useProfile();
 
   const [view, setView] = useState<View>(() =>
@@ -113,6 +115,20 @@ export function JoinFlow({ raw, onClose }: Props) {
 
   const stay = () => close(null);
 
+  // Where a session the account already has is: History when it is settled for them, so the button
+  // says so and the card isn't a dead end on Collection (AC-H9.5, AC-H11.5).
+  const placeOf = (sessionId: string): 'collection' | 'history' => {
+    const session = sessions.find((s) => s.id === sessionId);
+    if (!session || profile.status !== 'ready') return 'collection';
+    const bucket = buildCard(session, {
+      displayName: profile.displayName,
+      nicknames: profile.nicknames,
+    }).bucket;
+    return bucket === 'settled' ? 'history' : 'collection';
+  };
+  const openLabel = (sessionId: string) =>
+    placeOf(sessionId) === 'history' ? 'Open in History' : 'Open in Collection';
+
   if (stage === 'checking') {
     return simple('checking', 'Checking the invite link…', null, [
       { label: 'Cancel', onClick: stay },
@@ -144,13 +160,21 @@ export function JoinFlow({ raw, onClose }: Props) {
       [{ label: 'OK', primary: true, onClick: stay }],
     );
   }
+  if (stage === 'paid') {
+    return simple(
+      'paid',
+      'Everyone has paid',
+      "Every line in this session is paid, so there's nothing left to track and the link no longer works.",
+      [{ label: 'OK', primary: true, onClick: stay }],
+    );
+  }
   if (answer?.outcome === 'own') {
     return simple('own', 'This is your session', ownMessage(answer.title), [
       { label: 'Close', onClick: stay },
       {
-        label: 'Open in Collection',
+        label: openLabel(answer.sessionId),
         primary: true,
-        onClick: () => close({ openSessionId: answer.sessionId }),
+        onClick: () => close({ openSessionId: answer.sessionId, arrival: 'open' }),
       },
     ]);
   }
@@ -162,9 +186,9 @@ export function JoinFlow({ raw, onClose }: Props) {
       [
         { label: 'Close', onClick: stay },
         {
-          label: 'Open in Collection',
+          label: openLabel(answer.sessionId),
           primary: true,
-          onClick: () => close({ openSessionId: answer.sessionId }),
+          onClick: () => close({ openSessionId: answer.sessionId, arrival: 'open' }),
         },
       ],
     );
@@ -198,6 +222,7 @@ export function JoinFlow({ raw, onClose }: Props) {
         close({
           openSessionId: result.session.id,
           announce: `Joined ${sessionDisplayTitle(result.session)}.`,
+          arrival: 'join',
         });
         return;
       }
@@ -213,7 +238,8 @@ export function JoinFlow({ raw, onClose }: Props) {
       case 'own':
       case 'already':
       case 'dead':
-        // Another device or a reset got there first.
+      case 'paid':
+        // Another device, a reset, or the last payment got there first.
         setView({ stage: joinStage(result) as Stage, answer: result });
         return;
       default:

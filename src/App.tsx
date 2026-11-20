@@ -43,9 +43,20 @@ import styles from './App.module.css';
  */
 type RealScreen =
   | { kind: 'home' }
-  | { kind: 'collection'; openSessionId?: string; previewSettled?: boolean }
+  | {
+      kind: 'collection';
+      openSessionId?: string;
+      previewSettled?: boolean;
+      /** How it was reached for `openSessionId`; only an arrival may redirect a settled card (BR-A2). */
+      arrival?: 'finish' | 'join' | 'open';
+    }
   | { kind: 'history' }
-  | { kind: 'historyDetail'; sessionId: string }
+  | {
+      kind: 'historyDetail';
+      sessionId: string;
+      back: 'history' | 'collection';
+      notice?: 'nothingToDo';
+    }
   | { kind: 'session'; sessionId: string; tab: SessionTabId };
 
 /**
@@ -235,14 +246,16 @@ export default function App() {
    * Ends the join flow. Null stays where the user is (Cancel, Close, OK and Escape). Otherwise it
    * lands on Collection with the session open, which is what opens the card and scrolls to it.
    */
-  const closeJoin = (to: { openSessionId: string; announce?: string } | null) => {
+  const closeJoin = (
+    to: { openSessionId: string; announce?: string; arrival?: 'finish' | 'join' | 'open' } | null,
+  ) => {
     setJoin(null);
     if (to === null) return;
     window.scrollTo(0, 0);
     // The landing visit is the join flow's too, so the Collection guide's offer can't open on it
     // (BR-G3). Landing from Home starts a new visit; landing on Collection again doesn't.
     setPromptedVisit(screen.kind === 'collection' ? visit.n : visit.n + 1);
-    setScreen({ kind: 'collection', openSessionId: to.openSessionId });
+    setScreen({ kind: 'collection', openSessionId: to.openSessionId, arrival: to.arrival });
     if (to.announce) setAnnouncement(to.announce);
   };
 
@@ -572,14 +585,18 @@ export default function App() {
         message={
           <span className={onboardingStyles.points}>
             <span>
-              <strong>Joined sessions.</strong> On a finished session, tap Invite members and share
-              the link. Each person signs in, picks who they are, and follows what they owe or are
-              owed in their own Collection.
+              <strong>Joined sessions.</strong> On a finished session, tap Share with members and
+              share the link. Each person signs in, picks who they are, and follows what they owe or
+              are owed in their own Collection.
             </span>
             <span>
               <strong>&ldquo;I&apos;ve paid.&rdquo;</strong> Members who joined can tell you
               they&apos;ve paid. It waits until you confirm or decline it, so you both end up with
               the same figures.
+            </span>
+            <span>
+              <strong>Collection and History.</strong> Collection now shows only what&apos;s still
+              being paid; settled sessions are in History.
             </span>
           </span>
         }
@@ -679,17 +696,52 @@ export default function App() {
           onHelp={phase === 'running' ? undefined : () => startTutorial('collection', 'help')}
           onOfferClear={setCollectionClear}
           autoOpen={phase !== 'running'}
+          arrival={screen.arrival}
+          onViewDetails={(sessionId) =>
+            setScreen({ kind: 'historyDetail', sessionId, back: 'collection' })
+          }
+          onOpenInHistory={(sessionId) =>
+            setScreen({ kind: 'historyDetail', sessionId, back: 'history' })
+          }
+          // An arrival on a card that is already in History goes to its detail page, with a notice
+          // unless the reader asked to open it (AC-H9.1 to AC-H9.5).
+          onArriveSettled={(sessionId) =>
+            setScreen({
+              kind: 'historyDetail',
+              sessionId,
+              back: 'history',
+              notice: screen.arrival === 'open' ? undefined : 'nothingToDo',
+            })
+          }
+          inviteUrlFor={inviteUrlFor}
         />
       )}
       {screen.kind === 'history' && (
         <HistoryPage
-          onOpenSession={(sessionId) => setScreen({ kind: 'historyDetail', sessionId })}
+          onOpenSession={(sessionId) =>
+            setScreen({ kind: 'historyDetail', sessionId, back: 'history' })
+          }
         />
       )}
       {screen.kind === 'historyDetail' && (
         <HistoryDetailPage
           sessionId={screen.sessionId}
-          onBack={() => setScreen({ kind: 'history' })}
+          back={screen.back}
+          notice={screen.notice}
+          // Back to a card keeps it open, and sets no arrival, so it can't bounce (AC-H4.3).
+          onBack={() =>
+            setScreen(
+              screen.back === 'collection'
+                ? { kind: 'collection', openSessionId: screen.sessionId }
+                : { kind: 'history' },
+            )
+          }
+          onOpenInCollection={(sessionId) =>
+            setScreen({ kind: 'collection', openSessionId: sessionId })
+          }
+          onDeleted={() =>
+            setScreen(screen.back === 'collection' ? { kind: 'collection' } : { kind: 'history' })
+          }
           inviteUrlFor={inviteUrlFor}
           onLeft={(title) => {
             setScreen({ kind: 'history' });
@@ -712,7 +764,7 @@ export default function App() {
           // that the numbers are final and collecting has started.
           onClosed={() => {
             window.scrollTo(0, 0);
-            setScreen({ kind: 'collection', openSessionId: screen.sessionId });
+            setScreen({ kind: 'collection', openSessionId: screen.sessionId, arrival: 'finish' });
           }}
           onHelp={phase === 'running' ? undefined : () => startTutorial('expenses', 'help')}
           onUnsavedChange={reportUnsaved}
