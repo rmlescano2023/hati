@@ -3,7 +3,7 @@ import { compareNames, formatMoney, sortNames } from './format.js';
 import { roundMoney } from './money.js';
 import { NICKNAMES_MAX, normaliseProfileName } from './profileName.js';
 import { sessionDisplayTitle } from './sessionLabel.js';
-import type { NewPayment, Payment, Session } from '../types';
+import type { Claim, NewClaim, NewPayment, Payment, Session } from '../types';
 
 /**
  * Everything Collection shows is derived here, on every render, from the
@@ -181,6 +181,14 @@ export type CollectionLine = {
   status: LineStatus;
   /** This pair's payments, newest first. */
   payments: Payment[];
+  /** Pending claims on this pair that this account can see, newest first. */
+  claims: Claim[];
+  /** This account's own declined claims on this pair, newest first (a debtor participant only). */
+  declined: Claim[];
+  /** P: the pending claims on this pair. Never part of paid, remaining or status (BR-C14). */
+  pendingCents: number;
+  /** What can still be claimed or recorded on it: max(0, remaining − P) (BR-C11, BR-C13). */
+  openCents: number;
 };
 
 export type Bucket = 'needsSetup' | 'outstanding' | 'settled';
@@ -216,12 +224,40 @@ export type CollectionCard = {
   presettled: boolean;
   /** BR-S1: offered "Already settled", on the card and in the question. */
   offersAlreadySettled: boolean;
+  /** The organizer's "To confirm for others": pending claims they decide that aren't on their own lines. */
+  forOthers: Claim[];
+  /** Claims waiting on this account: pending claims on its Owed to you lines, plus `forOthers`. */
+  toConfirmCount: number;
+  /** This account's own pending claims on its You owe lines (AC-28.1). */
+  waitingCents: number;
+  /** What can still be claimed or recorded on each side: remaining minus pending (BR-C13). */
+  owedToYouOpenCents: number;
+  youOweOpenCents: number;
 };
+
+/**
+ * The members who have an account on the session: someone joined as them, or they are the
+ * organizer's stored pick. It decides whose name a claim waits on (BR-C19). On an owned session it
+ * is worked out here, the same rule the server uses for a participant's `withAccount`; it isn't
+ * `unavailableMembers`, because that file imports this one.
+ */
+export function membersWithAccount(
+  session: Pick<Session, 'role' | 'members' | 'me' | 'participants' | 'withAccount'>,
+): string[] {
+  if (isJoined(session)) return session.withAccount ?? [];
+  const claimed = claimedMembers(session);
+  return session.members.filter((m) => claimed.includes(m) || m === session.me);
+}
+
+/** Newest first, ties by id, as payments are. */
+const newestFirst = (a: { createdAt: string; id: string }, b: { createdAt: string; id: string }) =>
+  ms(b.createdAt) - ms(a.createdAt) || byId(b.id, a.id);
 
 function buildLine(
   pair: SettlementPair,
   direction: CollectionLine['direction'],
   payments: Payment[],
+  claims: Claim[],
 ): CollectionLine {
   // A payment counts only on its exact pair; any other is hidden, not lost (BR-15).
   const mine = payments
@@ -229,6 +265,12 @@ function buildLine(
     .sort((a, b) => ms(b.createdAt) - ms(a.createdAt) || byId(b.id, a.id));
   const paidCents = mine.reduce((sum, p) => sum + p.amountCents, 0);
   const remainingCents = Math.max(0, pair.amountCents - paidCents);
+  // Claims are said, not agreed, so they sit beside the figures and are never added to them.
+  const onPair = claims
+    .filter((c) => c.debtor === pair.debtor && c.creditor === pair.creditor)
+    .sort(newestFirst);
+  const pending = onPair.filter((c) => c.status === 'pending');
+  const pendingCents = pending.reduce((sum, c) => sum + c.amountCents, 0);
   return {
     key: JSON.stringify([pair.debtor, pair.creditor]),
     direction,
@@ -241,6 +283,10 @@ function buildLine(
     overpaidCents: Math.max(0, paidCents - pair.amountCents),
     status: paidCents === 0 ? 'unpaid' : remainingCents > 0 ? 'partial' : 'paid',
     payments: mine,
+    claims: pending,
+    declined: onPair.filter((c) => c.status === 'declined'),
+    pendingCents,
+    openCents: Math.max(0, remainingCents - pendingCents),
   };
 }
 
@@ -251,6 +297,7 @@ const lineOrder = (a: CollectionLine, b: CollectionLine): number =>
 const sumRemaining = (lines: CollectionLine[]) =>
   lines.reduce((sum, l) => sum + l.remainingCents, 0);
 const sumPaid = (lines: CollectionLine[]) => lines.reduce((sum, l) => sum + l.paidCents, 0);
+const sumOpen = (lines: CollectionLine[]) => lines.reduce((sum, l) => sum + l.openCents, 0);
 
 /** A joined session's `me` is the member it joined as, so the user's own names are never consulted (BR-V2). */
 const NO_NAMES: KnownNames = { displayName: null, nicknames: [] };
@@ -264,12 +311,16 @@ export function buildCard(session: Session, names: KnownNames): CollectionCard {
   // Every pair, the user's or not: whether the session is settled depends on
   // all of them, and so does marking it settled.
   const pairs = settlementPairs(session);
+  const claims = session.claims ?? [];
 
   if (me.kind === 'member') {
     // Only the lines involving the user are theirs to track (BR-2).
     for (const pair of pairs) {
-      if (pair.creditor === me.name) owedToYou.push(buildLine(pair, 'owedToYou', session.payments));
-      else if (pair.debtor === me.name) youOwe.push(buildLine(pair, 'youOwe', session.payments));
+      if (pair.creditor === me.name) {
+        owedToYou.push(buildLine(pair, 'owedToYou', session.payments, claims));
+      } else if (pair.debtor === me.name) {
+        youOwe.push(buildLine(pair, 'youOwe', session.payments, claims));
+      }
     }
     owedToYou.sort(lineOrder);
     youOwe.sort(lineOrder);
@@ -290,18 +341,37 @@ export function buildCard(session: Session, names: KnownNames): CollectionCard {
       .reduce((sum, p) => sum + p.amountCents, 0);
   const allPairsPaid = !joined && pairs.every((p) => paidOn(p) >= p.amountCents);
 
+  // The claims this account has to answer: those on its own Owed to you lines, and, for the
+  // organizer, those to creditors with no account, whose lines aren't on any card (BR-C2). Never a
+  // claim to a participant, who decides their own.
+  const withAccount = membersWithAccount(session);
+  const ownPairs = new Set(lines.map((l) => l.key));
+  const forOthers = joined
+    ? []
+    : claims
+        .filter(
+          (c) =>
+            c.status === 'pending' &&
+            !withAccount.includes(c.creditor) &&
+            !ownPairs.has(JSON.stringify([c.debtor, c.creditor])),
+        )
+        .sort(newestFirst);
+  const toConfirmCount = owedToYou.reduce((sum, l) => sum + l.claims.length, 0) + forOthers.length;
+  const waiting = toConfirmCount > 0;
+
   // Every pair paid means nothing is left to collect from anyone, so there is
   // no reason to ask who the user is (BR-S3). A joined session already knows
-  // who the user is, so it is bucketed from the user's own lines alone (BR-V3).
+  // who the user is, so it is bucketed from the user's own lines alone (BR-V3). A claim waiting
+  // on this account keeps the card out of Settled, where it would go unseen (BR-C15).
   const bucket: Bucket = joined
-    ? settledLineCount === lines.length
+    ? settledLineCount === lines.length && !waiting
       ? 'settled'
       : 'outstanding'
-    : allPairsPaid
+    : allPairsPaid && !waiting
       ? 'settled'
       : me.kind === 'unknown'
         ? 'needsSetup'
-        : settledLineCount === lines.length
+        : settledLineCount === lines.length && !waiting
           ? 'settled'
           : 'outstanding';
 
@@ -317,6 +387,11 @@ export function buildCard(session: Session, names: KnownNames): CollectionCard {
     youOweRemainingCents: sumRemaining(youOwe),
     receivedCents: sumPaid(owedToYou),
     paidOutCents: sumPaid(youOwe),
+    forOthers,
+    toConfirmCount,
+    waitingCents: youOwe.reduce((sum, l) => sum + l.pendingCents, 0),
+    owedToYouOpenCents: sumOpen(owedToYou),
+    youOweOpenCents: sumOpen(youOwe),
     settledAt: latest?.createdAt ?? finishedAt,
     pairCount: pairs.length,
     allPairsPaid,
@@ -325,6 +400,7 @@ export function buildCard(session: Session, names: KnownNames): CollectionCard {
       !joined &&
       !session.finishedWithCollection &&
       session.payments.length === 0 &&
+      claims.length === 0 &&
       pairs.length > 0 &&
       pairs.length <= PAYMENTS_PER_REQUEST_MAX &&
       bucket !== 'settled',
@@ -420,11 +496,57 @@ export function parsePaymentAmount(raw: string, remainingCents: number): ParsedA
   return { ok: true, cents };
 }
 
-/** One payment per open line, at what is left on it: what Mark all as paid records. */
+/**
+ * One payment per line with something open, at what is open: what the organizer's Mark all as paid
+ * records. Open is what is left minus what is pending, so a pending claim can still be confirmed
+ * afterwards (BR-C13), and a line with nothing open is skipped.
+ */
 export function openLinePayments(card: CollectionCard): Omit<NewPayment, 'id'>[] {
   return [...card.owedToYou, ...card.youOwe]
-    .filter((l) => l.remainingCents > 0)
-    .map((l) => ({ debtor: l.debtor, creditor: l.creditor, amountCents: l.remainingCents }));
+    .filter((l) => l.openCents > 0)
+    .map((l) => ({ debtor: l.debtor, creditor: l.creditor, amountCents: l.openCents }));
+}
+
+/**
+ * What Mark all as paid sends on a joined card (AC-27.3): a claim per You owe line, which the
+ * creditor must confirm, and a payment per Owed to you line, which counts at once. Each is at what
+ * is open on the line, and a line with nothing open is skipped.
+ */
+export function joinedMarkAll(card: CollectionCard): {
+  claims: Omit<NewClaim, 'id'>[];
+  payments: Omit<NewPayment, 'id'>[];
+} {
+  const send = (l: CollectionLine) => ({
+    debtor: l.debtor,
+    creditor: l.creditor,
+    amountCents: l.openCents,
+  });
+  return {
+    claims: card.youOwe.filter((l) => l.openCents > 0).map(send),
+    payments: card.owedToYou.filter((l) => l.openCents > 0).map(send),
+  };
+}
+
+/**
+ * A typed amount on a line, checked against what is open on it rather than what is left. Over the
+ * cap with something pending, the message says so, because "more than what's left" alone would
+ * look like a wrong figure when the rest is merely waiting (AC-20.4, AC-26.2). Every other message
+ * is `parsePaymentAmount`'s.
+ */
+export function parseLineAmount(
+  raw: string,
+  line: Pick<CollectionLine, 'openCents' | 'pendingCents'>,
+  side: 'debtor' | 'creditor',
+): ParsedAmount {
+  const parsed = parsePaymentAmount(raw, line.openCents);
+  if (parsed.ok || line.pendingCents === 0 || !parsed.message.startsWith("That's more than")) {
+    return parsed;
+  }
+  const waiting =
+    side === 'debtor'
+      ? `${formatCents(line.pendingCents)} is already waiting for confirmation.`
+      : `${formatCents(line.pendingCents)} is waiting for you to confirm.`;
+  return { ok: false, message: `${parsed.message} ${waiting}` };
 }
 
 /**
@@ -440,9 +562,15 @@ export function announcesSettled(paymentInFlight: boolean, bucket: Bucket | unde
 
 /** The Mark all as paid confirmation, naming each side that has something left. */
 export function markAllMessage(card: CollectionCard): string {
-  const title = sessionDisplayTitle(card.session);
-  const owed = card.owedToYouRemainingCents;
-  const owe = card.youOweRemainingCents;
+  return markAllText(
+    sessionDisplayTitle(card.session),
+    card.owedToYouOpenCents,
+    card.youOweOpenCents,
+  );
+}
+
+/** The Mark all confirmation for the sides with something left; one that records everything at once. */
+export function markAllText(title: string, owed: number, owe: number): string {
   const what =
     owed > 0 && owe > 0
       ? `the ${formatCents(owed)} still owed to you and the ${formatCents(owe)} you still owe`
@@ -467,6 +595,14 @@ export function newPayments(
   return incoming.filter((p) => !have.has(p.id)).map((p) => ({ ...p, createdAt }));
 }
 
+/** The claims of a request that aren't on screen yet, as `newPayments` does for payments. */
+export function newClaims(existing: Claim[], incoming: NewClaim[], createdAt: string): Claim[] {
+  const have = new Set(existing.map((c) => c.id));
+  return incoming
+    .filter((c) => !have.has(c.id))
+    .map((c) => ({ ...c, createdAt, status: 'pending', decidedAt: null, mine: true }));
+}
+
 /**
  * Which payments one pair has, as a string that changes exactly when they do.
  * Sorted, because a reload re-stamps times with the server's and can reorder
@@ -485,12 +621,12 @@ export function pairPaymentIds(payments: Payment[], debtor: string, creditor: st
  * less left than the device thought: the server's list, minus any undo still
  * in flight, plus any other add still in flight that the server hasn't got yet.
  */
-export function mergeServerPayments(
-  local: Payment[],
-  server: Payment[],
+export function mergeServerPayments<T extends { id: string }>(
+  local: T[],
+  server: T[],
   inFlightAdd: (id: string) => boolean,
   inFlightRemove: (id: string) => boolean,
-): Payment[] {
+): T[] {
   const serverIds = new Set(server.map((p) => p.id));
   return [
     ...server.filter((p) => !inFlightRemove(p.id)),

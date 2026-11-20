@@ -5,7 +5,7 @@ import { isInviteToken } from '../src/lib/joinedSessions.js';
 import { isPracticeId } from '../src/lib/practiceId.js';
 import { normaliseSessionName } from '../src/lib/sessionName.js';
 import { parseSession } from '../src/lib/storage.js';
-import type { NewPayment, Session } from '../src/types';
+import type { ClaimDecision, NewClaim, NewPayment, Session } from '../src/types';
 
 /**
  * The validation boundary for a write.
@@ -201,4 +201,30 @@ export function parseParticipantQuery(
   member: unknown,
 ): { sessionId: string; member: string } | null {
   return isShortText(sessionId) && isShortText(member) ? { sessionId, member } : null;
+}
+
+/**
+ * A request to say "I've paid", one claim or Mark all's batch. It is `parsePaymentsInput`'s rules
+ * exactly, under its own field name: the same id, name, amount, count and no-duplicate-pair checks,
+ * because a claim is money in waiting and the server must never guess an amount or a pair.
+ */
+export function parseClaimsInput(raw: unknown): { sessionId: string; claims: NewClaim[] } | null {
+  if (!isPlainObject(raw)) return null;
+  const parsed = parsePaymentsInput({ sessionId: raw.sessionId, payments: raw.claims });
+  return parsed === null ? null : { sessionId: parsed.sessionId, claims: parsed.payments };
+}
+
+const CLAIM_ID = /^pay_[A-Za-z0-9]{1,64}$/;
+
+/** A decision on one claim: which claim, and confirm or decline. Anything else is a 400. */
+export function parseClaimDecision(raw: unknown): { id: string; decision: ClaimDecision } | null {
+  if (!isPlainObject(raw)) return null;
+  const { id, decision } = raw;
+  if (typeof id !== 'string' || !CLAIM_ID.test(id)) return null;
+  return decision === 'confirm' || decision === 'decline' ? { id, decision } : null;
+}
+
+/** The `id` of a claim query: one claim id, or null. */
+export function parseClaimIdQuery(raw: unknown): string | null {
+  return typeof raw === 'string' && CLAIM_ID.test(raw) ? raw : null;
 }

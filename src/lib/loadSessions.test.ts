@@ -14,6 +14,8 @@ const db = vi.hoisted(() => ({
   records: [] as Record<string, unknown>[],
   payments: [] as Record<string, unknown>[],
   participants: [] as Record<string, unknown>[],
+  claims: [] as Record<string, unknown>[],
+  claimed: [] as Record<string, unknown>[],
 }));
 
 vi.mock('@vercel/postgres', () => {
@@ -27,6 +29,9 @@ vi.mock('@vercel/postgres', () => {
     if (text.includes('from session_participants p join expense_sessions s')) rows = db.joined;
     else if (text.includes('from session_participants p join users u'))
       rows = inList(db.participants);
+    else if (text.includes('select session_id, member from session_participants'))
+      rows = inList(db.claimed);
+    else if (text.includes('from payment_claims')) rows = inList(db.claims);
     else if (text.includes('from purchase_records')) rows = inList(db.records);
     else if (text.includes('from session_payments')) rows = inList(db.payments);
     else if (text.includes('from expense_sessions')) rows = db.owned;
@@ -63,7 +68,14 @@ const joinedQuery = () => sent('from session_participants p join expense_session
 beforeEach(() => {
   db.statements = [];
   db.owned = [row('own_1')];
-  db.joined = [{ ...row('joined_1', { me: 'Zed' }), member: 'Ben', organizer_name: 'Ana' }];
+  db.joined = [
+    {
+      ...row('joined_1', { me: undefined }),
+      organizer_me: 'Ana',
+      member: 'Ben',
+      organizer_name: 'Ana',
+    },
+  ];
   db.records = [];
   db.payments = [
     pay('p1', 'joined_1', 'Ben', 'Ana'),
@@ -121,10 +133,10 @@ describe('loadSessions', () => {
     expect(sessions.map((s) => s.id)).toEqual(['own_1', 'joined_1']);
   });
 
-  it("never selects the organizer's pick in the joined query", async () => {
+  it("selects the organizer's pick only as organizer_me, for withAccount", async () => {
     await loadSessions('user_b', null, true);
     const [query] = joinedQuery();
-    expect(query.text).not.toMatch(/\bs\.me\b/);
+    expect(query.text.replace('s.me as organizer_me', '')).not.toMatch(/\bs\.me\b/);
     expect(query.text).toContain('s.user_id <>');
     expect(query.text).toContain("s.status = 'closed'");
   });
@@ -156,5 +168,87 @@ describe('loadSessions', () => {
     db.joined = [];
     expect(await loadSessions('user_a', null, true)).toEqual([]);
     expect(sent('from purchase_records')).toHaveLength(0);
+  });
+
+  describe('claims (RC-1, extended)', () => {
+    const claimRow = (
+      id: string,
+      sessionId: string,
+      debtor: string,
+      creditor: string,
+      over: Record<string, unknown> = {},
+    ) => ({
+      id,
+      session_id: sessionId,
+      debtor,
+      creditor,
+      amount_cents: 100,
+      claimed_by: 'user_b',
+      status: 'pending',
+      created_at: new Date('2026-11-04T00:00:00.000Z'),
+      decided_at: null,
+      ...over,
+    });
+
+    beforeEach(() => {
+      db.claims = [
+        claimRow('c_ben_ana', 'joined_1', 'Ben', 'Ana'),
+        claimRow('c_ben_declined', 'joined_1', 'Ben', 'Ana', {
+          status: 'declined',
+          decided_at: new Date('2026-11-05T00:00:00.000Z'),
+        }),
+        claimRow('c_carla_ana', 'joined_1', 'Carla', 'Ana', { claimed_by: 'user_c' }),
+        claimRow('c_carla_ben', 'joined_1', 'Carla', 'Ben', { claimed_by: 'user_c' }),
+        claimRow('c_own_pending', 'own_1', 'Ben', 'Carla'),
+        claimRow('c_own_declined', 'own_1', 'Ben', 'Ana', { status: 'declined' }),
+      ];
+      db.claimed = [
+        { session_id: 'joined_1', member: 'Ben' },
+        { session_id: 'joined_1', member: 'Carla' },
+      ];
+    });
+
+    it('loads claims over the ids of both visibility queries', async () => {
+      await loadSessions('user_b', null, true);
+      const [query] = sent('from payment_claims');
+      expect(query.values).toContainEqual(['own_1', 'joined_1']);
+    });
+
+    it('gives an owned session its pending claims only, without who sent them', async () => {
+      const [own] = await loadSessions('user_a', null, true);
+      expect(own.claims?.map((c) => c.id)).toEqual(['c_own_pending']);
+      expect(JSON.stringify(own)).not.toContain('claimedBy');
+      expect(JSON.stringify(own)).not.toContain('claimed_by');
+      expect(own.withAccount).toBeUndefined();
+    });
+
+    it('gives a joined session the participant rule', async () => {
+      const sessions = await loadSessions('user_b', null, true);
+      const joined = sessions.find((s) => s.id === 'joined_1')!;
+      // Ben's own claims, both statuses, and the claim waiting on him as a creditor. Never Carla's
+      // claim on Ana.
+      expect(joined.claims?.map((c) => c.id).sort()).toEqual([
+        'c_ben_ana',
+        'c_ben_declined',
+        'c_carla_ben',
+      ]);
+      expect(joined.claims?.find((c) => c.id === 'c_ben_ana')?.mine).toBe(true);
+      expect(joined.claims?.find((c) => c.id === 'c_carla_ben')?.mine).toBe(false);
+    });
+
+    it("works out withAccount from the claimed members and the organizer's pick, and sends neither raw", async () => {
+      const [joined] = (await loadSessions('user_b', null, true)).filter(
+        (s) => s.id === 'joined_1',
+      );
+      expect(joined.withAccount).toEqual(['Ana', 'Ben', 'Carla']);
+      expect(JSON.stringify(joined)).not.toContain('organizer_me');
+      expect(joined.me).toBe('Ben');
+    });
+
+    it('asks which members are claimed over the joined ids only', async () => {
+      await loadSessions('user_b', null, true);
+      const [query] = sent('select session_id, member from session_participants');
+      expect(query.values).toContainEqual(['joined_1']);
+    });
   });
 });

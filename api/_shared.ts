@@ -1,7 +1,12 @@
 import type { VercelRequest } from '@vercel/node';
 import { createPool, type VercelPoolClient } from '@vercel/postgres';
 import { verifyToken } from '@clerk/backend';
-import { participantView } from '../src/lib/joinedSessions.js';
+import {
+  participantView,
+  unavailableMembers,
+  visibleLedger,
+  type ClaimRow,
+} from '../src/lib/joinedSessions.js';
 import type { Participant, Payment, PurchaseRecord, Session, SessionStatus } from '../src/types';
 
 /**
@@ -81,7 +86,36 @@ type PaymentRow = {
 export const iso = (v: Date | string): string => (v instanceof Date ? v.toISOString() : String(v));
 
 /** A joined session's row: the session as stored, the member the caller joined as, and who organized it. */
-type JoinedRow = Omit<SessionRow, 'me'> & { member: string; organizer_name: string | null };
+type JoinedRow = Omit<SessionRow, 'me'> & {
+  member: string;
+  organizer_name: string | null;
+  /** Only ever an argument to `unavailableMembers`, for `withAccount`; never put on a session. */
+  organizer_me: string | null;
+};
+
+type ClaimDbRow = {
+  id: string;
+  session_id: string;
+  debtor: string;
+  creditor: string;
+  amount_cents: number;
+  claimed_by: string;
+  status: 'pending' | 'declined';
+  created_at: Date | string;
+  decided_at: Date | string | null;
+};
+
+/** A claim row as the server holds it, with who sent it, which goes no further than this file and the write routes. */
+const toClaimRow = (row: ClaimDbRow): ClaimRow => ({
+  id: row.id,
+  debtor: row.debtor,
+  creditor: row.creditor,
+  amountCents: row.amount_cents,
+  createdAt: iso(row.created_at),
+  status: row.status,
+  decidedAt: row.decided_at === null ? null : iso(row.decided_at),
+  claimedBy: row.claimed_by,
+});
 
 type ParticipantRow = {
   session_id: string;
@@ -119,6 +153,25 @@ async function loadContent(ownedIds: string[], joinedIds: string[]) {
     from session_payments p
     where p.session_id = any(${list}::text[])
     order by p.created_at, p.id`;
+
+  const { rows: claimDbRows } = await pool.sql<ClaimDbRow>`
+    select c.id, c.session_id, c.debtor, c.creditor, c.amount_cents, c.claimed_by, c.status,
+           c.created_at, c.decided_at
+    from payment_claims c
+    where c.session_id = any(${list}::text[])
+    order by c.created_at, c.id`;
+
+  // Who has joined each joined session, for `withAccount`. The owned ids have it already, through
+  // the participants query below, which also says who they are.
+  const joinedList = joinedIds as unknown as string;
+  const claimedRows =
+    joinedIds.length === 0
+      ? []
+      : (
+          await pool.sql<{ session_id: string; member: string }>`
+            select session_id, member from session_participants
+            where session_id = any(${joinedList}::text[])`
+        ).rows;
 
   const participantRows =
     ownedIds.length === 0
@@ -172,7 +225,21 @@ async function loadContent(ownedIds: string[], joinedIds: string[]) {
     else participants.set(row.session_id, [participant]);
   }
 
-  return { records, payments, participants };
+  const claims = new Map<string, ClaimRow[]>();
+  for (const row of claimDbRows) {
+    const bucket = claims.get(row.session_id);
+    if (bucket) bucket.push(toClaimRow(row));
+    else claims.set(row.session_id, [toClaimRow(row)]);
+  }
+
+  const claimed = new Map<string, string[]>();
+  for (const row of claimedRows) {
+    const bucket = claimed.get(row.session_id);
+    if (bucket) bucket.push(row.member);
+    else claimed.set(row.session_id, [row.member]);
+  }
+
+  return { records, payments, participants, claims, claimed };
 }
 
 /**
@@ -186,7 +253,9 @@ async function loadContent(ownedIds: string[], joinedIds: string[]) {
  * caller that doesn't ask for joined sessions, such as a tab still on an older
  * bundle, gets owned sessions only. A joined session goes through
  * `participantView` before it is returned, so the caller sees only the
- * payments on their own lines and never the organizer's pick.
+ * payments and claims on their own lines and never the organizer's pick. A
+ * claim never leaves with the account that sent it: `visibleLedger` is the
+ * one place that turns what is stored into what a caller may see.
  *
  * `only` narrows it to one session, for the payments POST, which checks a
  * payment against that session's settlement lines, and for a join's response.
@@ -203,12 +272,14 @@ export async function loadSessions(
     where user_id = ${userId} and (${only}::text is null or id = ${only})
     order by created_at`;
 
-  // The organizer's own pick (`s.me`) is deliberately not selected: a participant never sees it.
+  // The organizer's own pick is selected only as `organizer_me`, to work out `withAccount`: a
+  // participant is never sent it.
   const joinedRows = joined
     ? (
         await pool.sql<JoinedRow>`
           select s.id, s.status, s.created_at, s.closed_at, s.members, s.name, s.activity_at,
-                 s.finished_with_collection, p.member, u.display_name as organizer_name
+                 s.finished_with_collection, p.member, u.display_name as organizer_name,
+                 s.me as organizer_me
           from session_participants p
           join expense_sessions s on s.id = p.session_id
           join users u on u.id = s.user_id
@@ -245,8 +316,22 @@ export async function loadSessions(
       role: 'owner' as const,
       organizerName: null,
       participants: content.participants.get(s.id) ?? [],
+      claims: visibleLedger({ role: 'owner' }, [], content.claims.get(s.id) ?? [], userId).claims,
     })),
-    ...joinedRows.map((s) => participantView(base(s, null), s.member, s.organizer_name ?? null)),
+    ...joinedRows.map((s) => {
+      const ledger = visibleLedger(
+        { role: 'participant', member: s.member },
+        content.payments.get(s.id) ?? [],
+        content.claims.get(s.id) ?? [],
+        userId,
+      );
+      return participantView(
+        { ...base(s, null), payments: ledger.payments, claims: ledger.claims },
+        s.member,
+        s.organizer_name ?? null,
+        unavailableMembers(s.members, s.organizer_me, content.claimed.get(s.id) ?? []),
+      );
+    }),
   ];
 }
 
@@ -274,4 +359,33 @@ export async function lockSessionRole(
   if (rows.length === 0) return null;
   if (rows[0].user_id === userId) return { role: 'owner' };
   return rows[0].member === null ? null : { role: 'participant', member: rows[0].member };
+}
+
+/**
+ * A session's payments and claims, read inside a locked transaction for the write routes: the caps
+ * and the 409 bodies. Every claim here still has who sent it, so a route must pass the rows through
+ * `visibleLedger` before any of it goes into a response.
+ */
+export async function loadLedger(
+  client: VercelPoolClient,
+  sessionId: string,
+): Promise<{ payments: Payment[]; claims: ClaimRow[] }> {
+  const { rows: paymentRows } = await client.sql<PaymentRow>`
+    select id, session_id, debtor, creditor, amount_cents, created_at
+    from session_payments where session_id = ${sessionId}
+    order by created_at, id`;
+  const { rows: claimRows } = await client.sql<ClaimDbRow>`
+    select id, session_id, debtor, creditor, amount_cents, claimed_by, status, created_at, decided_at
+    from payment_claims where session_id = ${sessionId}
+    order by created_at, id`;
+  return {
+    payments: paymentRows.map((row) => ({
+      id: row.id,
+      debtor: row.debtor,
+      creditor: row.creditor,
+      amountCents: row.amount_cents,
+      createdAt: iso(row.created_at),
+    })),
+    claims: claimRows.map(toClaimRow),
+  };
 }

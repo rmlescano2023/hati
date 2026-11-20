@@ -6,6 +6,10 @@ import {
   buildCollection,
   claimedMembers,
   isJoined,
+  joinedMarkAll,
+  membersWithAccount,
+  newClaims,
+  parseLineAmount,
   isKnownName,
   markAllMessage,
   matchMember,
@@ -24,7 +28,7 @@ import {
   type KnownNames,
 } from './collection';
 import { NICKNAMES_MAX } from './profileName';
-import type { Payment, PurchaseRecord, Session } from '../types';
+import type { Claim, Payment, PurchaseRecord, Session } from '../types';
 
 const names = (displayName: string | null, ...nicknames: string[]): KnownNames => ({
   displayName,
@@ -971,5 +975,260 @@ describe('isJoined and claimedMembers', () => {
     expect(
       claimedMembers(tripA({ participants: [{ member: 'Ben', name: null, joinedAt: 'x' }] })),
     ).toEqual(['Ben']);
+  });
+});
+
+const claim = (
+  id: string,
+  debtor: string,
+  creditor: string,
+  amountCents: number,
+  over: Partial<Claim> = {},
+): Claim => ({
+  id,
+  debtor,
+  creditor,
+  amountCents,
+  createdAt: '2026-11-03T00:00:00.000Z',
+  status: 'pending',
+  decidedAt: null,
+  mine: false,
+  ...over,
+});
+
+describe('claims on lines (BR-C14)', () => {
+  // Ben owes Ana ₱500 (and Carla ₱300), as a joined member of Ana's session.
+  const owes = (claims: Claim[], payments: Payment[] = []) =>
+    finished(
+      'session_c',
+      ['Ana', 'Ben', 'Carla'],
+      [purchase('r1', 'Ana', 1000, ['Ana', 'Ben']), purchase('r2', 'Carla', 600, ['Ben', 'Carla'])],
+      {
+        role: 'participant',
+        organizerName: 'Ana',
+        me: 'Ben',
+        participants: [],
+        withAccount: ['Ana'],
+        claims,
+        payments,
+      },
+    );
+
+  it('shows a pending claim beside the figures and never in them', () => {
+    const card = buildCard(owes([claim('c1', 'Ben', 'Ana', 20000, { mine: true })]), names(null));
+    const line = card.youOwe.find((l) => l.other === 'Ana')!;
+    expect(line.amountCents).toBe(50000);
+    expect([line.paidCents, line.remainingCents, line.status]).toEqual([0, 50000, 'unpaid']);
+    expect([line.pendingCents, line.openCents]).toEqual([20000, 30000]);
+    expect(line.claims.map((c) => c.id)).toEqual(['c1']);
+    expect(card.youOweRemainingCents).toBe(80000);
+    expect(card.waitingCents).toBe(20000);
+    expect(card.youOweOpenCents).toBe(60000);
+  });
+
+  it('is not changed by a declined claim, which only the debtor keeps a note of', () => {
+    const declined = claim('c2', 'Ben', 'Ana', 20000, {
+      status: 'declined',
+      decidedAt: 'd',
+      mine: true,
+    });
+    const line = buildCard(owes([declined]), names(null)).youOwe.find((l) => l.other === 'Ana')!;
+    expect([line.pendingCents, line.openCents]).toEqual([0, 50000]);
+    expect(line.claims).toEqual([]);
+    expect(line.declined.map((c) => c.id)).toEqual(['c2']);
+  });
+
+  it('sums several pending claims on one pair, newest first', () => {
+    const line = buildCard(
+      owes([
+        claim('c1', 'Ben', 'Ana', 10000, { createdAt: '2026-11-03T00:00:00.000Z', mine: true }),
+        claim('c2', 'Ben', 'Ana', 15000, { createdAt: '2026-11-04T00:00:00.000Z', mine: true }),
+      ]),
+      names(null),
+    ).youOwe.find((l) => l.other === 'Ana')!;
+    expect(line.pendingCents).toBe(25000);
+    expect(line.claims.map((c) => c.id)).toEqual(['c2', 'c1']);
+  });
+
+  it('leaves no open amount when pending covers what is left', () => {
+    const line = buildCard(
+      owes([claim('c1', 'Ben', 'Ana', 50000, { mine: true })]),
+      names(null),
+    ).youOwe.find((l) => l.other === 'Ana')!;
+    expect(line.openCents).toBe(0);
+  });
+
+  it('keeps a joined card Outstanding, with the claim waiting on the creditor, until it is confirmed', () => {
+    // Ana's side: she is a participant too here, owed ₱500 by Ben, all of it paid but a claim waits.
+    const mine = finished(
+      'session_d',
+      ['Ana', 'Ben'],
+      [purchase('r1', 'Ana', 1000, ['Ana', 'Ben'])],
+      {
+        role: 'participant',
+        me: 'Ana',
+        organizerName: 'Zed',
+        participants: [],
+        withAccount: ['Ana', 'Ben'],
+        payments: [pay('p1', 'Ben', 'Ana', 50000)],
+        claims: [claim('c1', 'Ben', 'Ana', 1000)],
+      },
+    );
+    const card = buildCard(mine, names(null));
+    expect(card.toConfirmCount).toBe(1);
+    expect(card.bucket).toBe('outstanding');
+    const confirmed = buildCard({ ...mine, claims: [] }, names(null));
+    expect(confirmed.bucket).toBe('settled');
+  });
+});
+
+describe('the organizer and claims to confirm (BR-C2, A2)', () => {
+  const owned = (claims: Claim[], over: Partial<Session> = {}) =>
+    finished(
+      'session_o',
+      ['Ana', 'Ben', 'Carla'],
+      [purchase('r1', 'Ana', 900, ['Ana', 'Ben', 'Carla'])],
+      { me: 'Ana', participants: [{ member: 'Ben', name: null, joinedAt: 'x' }], claims, ...over },
+    );
+
+  it("puts a claim to a creditor with no account in forOthers, and not the organizer's own line's", () => {
+    const toOwn = claim('c_own', 'Ben', 'Ana', 10000);
+    const toCarla = claim('c_carla', 'Ben', 'Carla', 15000);
+    const card = buildCard(owned([toOwn, toCarla]), names(null));
+    expect(card.forOthers.map((c) => c.id)).toEqual(['c_carla']);
+    expect(card.owedToYou.find((l) => l.other === 'Ben')?.claims.map((c) => c.id)).toEqual([
+      'c_own',
+    ]);
+    expect(card.toConfirmCount).toBe(2);
+  });
+
+  it('leaves a claim to a creditor who has joined to that participant', () => {
+    const joinedCarla = owned([claim('c_carla', 'Ben', 'Carla', 15000)], {
+      participants: [
+        { member: 'Ben', name: null, joinedAt: 'x' },
+        { member: 'Carla', name: null, joinedAt: 'x' },
+      ],
+    });
+    expect(buildCard(joinedCarla, names(null)).forOthers).toEqual([]);
+  });
+
+  it('keeps such a card out of Settled, and in Needs setup when the organizer is unplaced', () => {
+    const paid = [pay('p1', 'Ben', 'Ana', 30000), pay('p2', 'Carla', 'Ana', 30000)];
+    const waiting = owned([claim('c_carla', 'Ben', 'Carla', 15000)], { payments: paid });
+    expect(buildCard(waiting, names(null)).bucket).toBe('outstanding');
+    const unplaced = owned([claim('c_carla', 'Ben', 'Carla', 15000)], { me: null, payments: paid });
+    const card = buildCard(unplaced, names(null));
+    expect(card.bucket).toBe('needsSetup');
+    expect(card.forOthers).toHaveLength(1);
+  });
+
+  it('is not offered Already settled while a claim waits (BR-C18)', () => {
+    const before = owned([], { finishedWithCollection: false });
+    expect(buildCard(before, names(null)).offersAlreadySettled).toBe(true);
+    const withClaim = owned([claim('c1', 'Ben', 'Ana', 100)], { finishedWithCollection: false });
+    expect(buildCard(withClaim, names(null)).offersAlreadySettled).toBe(false);
+  });
+
+  it('records only what is open in Mark all (BR-C13)', () => {
+    const card = buildCard(owned([claim('c1', 'Ben', 'Ana', 10000)]), names(null));
+    expect(openLinePayments(card).find((p) => p.debtor === 'Ben')?.amountCents).toBe(20000);
+  });
+});
+
+describe('membersWithAccount', () => {
+  it("is the joined members plus the organizer's stored pick on an owned session", () => {
+    const s = finished('s', ['Ana', 'Ben', 'Carla'], [], {
+      me: 'Ana',
+      participants: [{ member: 'Ben', name: null, joinedAt: 'x' }],
+    });
+    expect(membersWithAccount(s)).toEqual(['Ana', 'Ben']);
+  });
+
+  it("is the server's list on a joined session", () => {
+    const s = finished('s', ['Ana', 'Ben'], [], { role: 'participant', withAccount: ['Ana'] });
+    expect(membersWithAccount(s)).toEqual(['Ana']);
+    expect(membersWithAccount({ ...s, withAccount: undefined })).toEqual([]);
+  });
+});
+
+describe('joinedMarkAll', () => {
+  it('sends a claim per You owe line and a payment per Owed to you line, at the open amounts', () => {
+    const s = finished(
+      's',
+      ['Ana', 'Ben', 'Carla'],
+      [
+        purchase('r1', 'Ana', 900, ['Ana', 'Ben', 'Carla']),
+        purchase('r2', 'Ben', 600, ['Ben', 'Carla']),
+      ],
+      {
+        role: 'participant',
+        me: 'Ben',
+        organizerName: 'Ana',
+        participants: [],
+        withAccount: ['Ana'],
+        claims: [claim('c1', 'Ben', 'Ana', 10000, { mine: true })],
+      },
+    );
+    const { claims, payments } = joinedMarkAll(buildCard(s, names(null)));
+    expect(claims).toEqual([{ debtor: 'Ben', creditor: 'Ana', amountCents: 20000 }]);
+    expect(payments).toEqual([{ debtor: 'Carla', creditor: 'Ben', amountCents: 30000 }]);
+  });
+});
+
+describe('parseLineAmount (AC-20.4, AC-26.2, AC-20.7)', () => {
+  const line = (pendingCents: number, remainingCents = 50000) =>
+    ({
+      remainingCents,
+      pendingCents,
+      openCents: Math.max(0, remainingCents - pendingCents),
+    }) as never;
+
+  it('says what is already waiting when a debtor goes over', () => {
+    expect(parseLineAmount('301', line(20000, 50000), 'debtor')).toEqual({
+      ok: false,
+      message:
+        "That's more than what's left (₱300.00). ₱200.00 is already waiting for confirmation.",
+    });
+  });
+
+  it('says what is waiting on the creditor when they go over', () => {
+    expect(parseLineAmount('301', line(20000, 50000), 'creditor')).toEqual({
+      ok: false,
+      message: "That's more than what's left (₱300.00). ₱200.00 is waiting for you to confirm.",
+    });
+  });
+
+  it("keeps today's messages with nothing pending, and accepts a fit amount", () => {
+    expect(parseLineAmount('501', line(0), 'debtor')).toEqual({
+      ok: false,
+      message: "That's more than what's left (₱500.00).",
+    });
+    expect(parseLineAmount('abc', line(0), 'debtor')).toEqual({
+      ok: false,
+      message: 'Enter a number.',
+    });
+    expect(parseLineAmount('300', line(20000), 'debtor')).toEqual({ ok: true, cents: 30000 });
+  });
+});
+
+describe('newClaims', () => {
+  it('skips ids already on screen and marks the rest as mine and pending', () => {
+    const existing = [claim('c1', 'Ben', 'Ana', 100)];
+    const incoming = [
+      { id: 'c1', debtor: 'Ben', creditor: 'Ana', amountCents: 100 },
+      { id: 'c2', debtor: 'Ben', creditor: 'Ana', amountCents: 200 },
+    ];
+    expect(newClaims(existing, incoming, 'T')).toEqual([
+      {
+        id: 'c2',
+        debtor: 'Ben',
+        creditor: 'Ana',
+        amountCents: 200,
+        createdAt: 'T',
+        status: 'pending',
+        decidedAt: null,
+        mine: true,
+      },
+    ]);
   });
 });

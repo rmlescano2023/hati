@@ -147,6 +147,13 @@ export type Session = {
   organizerName?: string | null;
   /** Who joined, for the organizer only (BR-O3); always empty on a joined session. */
   participants?: Participant[];
+  /** Pending claims, and the viewer's own declined ones, as the viewer may see them (D1). */
+  claims?: Claim[];
+  /**
+   * On a joined session only: members with an account on it (someone joined as them, or the
+   * organizer's own pick), which decides whose name a claim waits on (BR-C19). Never a label.
+   */
+  withAccount?: string[];
 };
 
 /** One payment against a finished session's settlement line. Never edited; undo deletes it. */
@@ -163,6 +170,28 @@ export type Payment = {
 
 /** What the client sends to record a payment; the server stamps the time. */
 export type NewPayment = Omit<Payment, 'createdAt'>;
+
+/** A joined debtor's "I've paid": pending until confirmed (then a payment) or declined (BR-C6). */
+export type Claim = {
+  /** Client-minted `pay_xxx`; the payment's id once confirmed. */
+  id: string;
+  debtor: string;
+  creditor: string;
+  /** Whole centavos, always above 0. */
+  amountCents: number;
+  /** ISO time the server stored it: when the debtor says the money moved (BR-C7). */
+  createdAt: string;
+  status: 'pending' | 'declined';
+  /** ISO time it was declined; null while pending. */
+  decidedAt: string | null;
+  /** Sent by this account. */
+  mine: boolean;
+};
+
+/** What the client sends to make a claim; the server stamps the time. */
+export type NewClaim = Pick<Claim, 'id' | 'debtor' | 'creditor' | 'amountCents'>;
+
+export type ClaimDecision = 'confirm' | 'decline';
 
 /** What a token holder sees before joining (I-4, AC-6.2). */
 export type InvitePreview = {

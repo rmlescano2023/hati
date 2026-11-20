@@ -16,7 +16,7 @@ import {
 } from '../../lib/collection';
 import { formatLocalDate } from '../../lib/format';
 import { createId } from '../../lib/id';
-import { recordsPaymentsLine, sharedByLine } from '../../lib/joinedSessions';
+import { sharedByLine } from '../../lib/joinedSessions';
 import { isPracticeId } from '../../lib/practiceId';
 import { sessionDisplayTitle } from '../../lib/sessionLabel';
 import { ChangeMeDialog } from './ChangeMeDialog';
@@ -301,9 +301,6 @@ export function CollectionCard({
                 ))}
               </section>
             ))}
-          {joined && (
-            <p className={styles.detail}>{recordsPaymentsLine(session.organizerName ?? null)}</p>
-          )}
           {allPaid && (
             <p className={styles.detail}>Every line in this session is marked as paid.</p>
           )}

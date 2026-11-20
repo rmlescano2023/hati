@@ -14,13 +14,17 @@ describe('whatsNewDue', () => {
     expect(whatsNewDue(onboarded, 0)).toBe(true);
   });
 
-  it('is on release 2', () => {
-    expect(WHATS_NEW_VERSION).toBe(2);
+  it('is on release 3', () => {
+    expect(WHATS_NEW_VERSION).toBe(3);
   });
 
   it('is not due once the current release has been seen', () => {
-    expect(whatsNewDue(onboarded, 2)).toBe(false);
     expect(whatsNewDue(onboarded, 3)).toBe(false);
+    expect(whatsNewDue(onboarded, 4)).toBe(false);
+  });
+
+  it('is due to an account that saw version 2', () => {
+    expect(whatsNewDue(onboarded, 2)).toBe(true);
   });
 
   it('is due to an account that saw version 1 (AC-TG11.5)', () => {

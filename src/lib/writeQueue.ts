@@ -222,6 +222,24 @@ export function keepLocalPayments<S extends { id: string; payments: unknown }>(
 }
 
 /**
+ * The loaded list with the on-screen claims of the sessions `keep` names. It is
+ * `keepLocalPayments`' twin and runs with the same predicate: a confirm changes
+ * both lists at once, so keeping one without the other would show a confirmed
+ * claim as a payment and as a pending claim.
+ */
+export function keepLocalClaims<S extends { id: string; claims?: unknown }>(
+  loaded: S[],
+  local: S[],
+  keep: (id: string) => boolean,
+): S[] {
+  const localById = new Map(local.map((s) => [s.id, s]));
+  return loaded.map((s) => {
+    const mine = keep(s.id) ? localById.get(s.id) : undefined;
+    return mine ? { ...s, claims: mine.claims } : s;
+  });
+}
+
+/**
  * How long one save, create, delete or load may take, token fetch included.
  * Local saves take 5 to 10 seconds, so this leaves room without leaving the
  * user to wait minutes on a request that is never coming back.

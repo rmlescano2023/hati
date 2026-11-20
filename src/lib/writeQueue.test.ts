@@ -24,6 +24,7 @@ import {
   recordFailedMessage,
   reloadsOnReturn,
   resolveSuperseded,
+  keepLocalClaims,
   keepLocalPayments,
   mergeLoaded,
   messageOf,
@@ -1281,5 +1282,31 @@ describe('failedLeaveIds (Try again after a failed Stop tracking)', () => {
     ];
     expect(failedLeaveIds(list, new Set(['s1']))).toEqual(['s1']);
     expect(failedLeaveIds(list, new Set())).toEqual([]);
+  });
+});
+
+describe('keepLocalClaims (a confirm moves a claim into the payments)', () => {
+  type S = { id: string; payments: string[]; claims: string[] };
+  const loaded: S[] = [
+    { id: 's1', payments: ['pay_1'], claims: [] },
+    { id: 's2', payments: [], claims: ['clm_2'] },
+  ];
+  const local: S[] = [
+    { id: 's1', payments: ['pay_1', 'clm_1'], claims: ['clm_9'] },
+    { id: 's2', payments: [], claims: [] },
+  ];
+
+  it("takes the on-screen claims of the sessions kept, and the server's elsewhere", () => {
+    const merged = keepLocalClaims(loaded, local, (id) => id === 's1');
+    expect(merged.find((s) => s.id === 's1')?.claims).toEqual(['clm_9']);
+    expect(merged.find((s) => s.id === 's2')?.claims).toEqual(['clm_2']);
+  });
+
+  it('moves with the payments, so a confirmed claim is never both', () => {
+    const keep = (id: string) => id === 's1';
+    const merged = keepLocalClaims(keepLocalPayments(loaded, local, keep), local, keep);
+    const s1 = merged.find((s) => s.id === 's1')!;
+    expect(s1.payments).toEqual(['pay_1', 'clm_1']);
+    expect(s1.claims).toEqual(['clm_9']);
   });
 });

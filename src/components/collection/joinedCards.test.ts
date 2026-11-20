@@ -82,8 +82,9 @@ describe('a joined session on Collection', () => {
     expect(open).toContain('aria-label="Stop tracking Bali Trip"');
   });
 
-  it('shows the lines and says the organizer records the payments (AC-10.4)', () => {
-    expect(open).toContain('Ana records the payments on this session.');
+  it('shows the lines, with no line about who records the payments (BR-V11)', () => {
+    // PR 2 replaces the PR 1 line that said the organizer records the payments (BR-V11).
+    expect(open).not.toContain('records the payments on this session');
     // Ben's one line: he owes Ana a third of the dinner, and nothing has been paid yet.
     expect(open).toContain('₱100.00');
     expect(open).toContain('Unpaid');

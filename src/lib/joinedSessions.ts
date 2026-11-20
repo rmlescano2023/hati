@@ -1,6 +1,12 @@
-import { NOT_IN_SESSION, matchMember, type KnownNames } from './collection.js';
-import { formatLocalDate } from './format.js';
-import type { InvitePreview, JoinAnswer, Participant, Session } from '../types';
+import {
+  NOT_IN_SESSION,
+  formatCents,
+  markAllText,
+  matchMember,
+  type KnownNames,
+} from './collection.js';
+import { formatLocalDate, formatLocalDateTime } from './format.js';
+import type { Claim, InvitePreview, JoinAnswer, Participant, Payment, Session } from '../types';
 
 /**
  * The rules of joined sessions that the server and the app must agree on. It is DOM-free and
@@ -16,15 +22,57 @@ const INVITE_TOKEN_PATTERN = /^[A-Za-z0-9_-]{22}$/;
 export const isInviteToken = (raw: unknown): raw is string =>
   typeof raw === 'string' && INVITE_TOKEN_PATTERN.test(raw);
 
+/** A claim as the server stores it: the sender's account is known here and goes no further. */
+export type ClaimRow = Omit<Claim, 'mine'> & { claimedBy: string };
+
+/**
+ * The payments and claims a caller may see of one session, and the one place that rule lives: the
+ * session GET and every 409 body that carries a ledger both go through it (D1, BR-C8).
+ *
+ * The organizer sees every payment and the pending claims, never a declined one. A participant
+ * sees the payments on their own lines, and the claims that are theirs: ones they sent as the
+ * debtor, pending or declined, and pending ones waiting on them as the creditor. `claimedBy` is
+ * stripped and `mine` is set from `userId`, so no account id reaches a client.
+ */
+export function visibleLedger(
+  access: { role: 'owner' } | { role: 'participant'; member: string },
+  payments: Payment[],
+  claims: ClaimRow[],
+  userId: string,
+): { payments: Payment[]; claims: Claim[] } {
+  const shown =
+    access.role === 'owner'
+      ? { payments, claims: claims.filter((c) => c.status === 'pending') }
+      : {
+          payments: payments.filter(
+            (p) => p.debtor === access.member || p.creditor === access.member,
+          ),
+          claims: claims.filter(
+            (c) =>
+              (c.debtor === access.member && c.claimedBy === userId) ||
+              (c.creditor === access.member && c.status === 'pending'),
+          ),
+        };
+  return {
+    payments: shown.payments,
+    claims: shown.claims.map(({ claimedBy, ...claim }) => ({
+      ...claim,
+      mine: claimedBy === userId,
+    })),
+  };
+}
+
 /**
  * What a participant is allowed to see of a session (D1): everything about it, but only the
- * payments on their own lines, and never the organizer's pick or who else joined. It is the one
- * place that rule lives, so every joined session the server sends has passed through it.
+ * payments on their own lines, and never the organizer's pick or who else joined. The claims it is
+ * given have already been through `visibleLedger`, so that rule isn't repeated here. `withAccount`
+ * is which members have an account on it, which only decides whose name a claim waits on.
  */
 export function participantView(
   session: Session,
   member: string,
   organizerName: string | null,
+  withAccount: string[],
 ): Session {
   return {
     ...session,
@@ -32,6 +80,7 @@ export function participantView(
     role: 'participant',
     organizerName,
     participants: [],
+    withAccount,
     payments: session.payments.filter((p) => p.debtor === member || p.creditor === member),
   };
 }
@@ -150,9 +199,6 @@ const org = (name: string | null, capital: boolean): string =>
 export const sharedByLine = (name: string | null): string =>
   name === null ? 'Shared with you' : `Shared by ${name}`;
 
-export const recordsPaymentsLine = (name: string | null): string =>
-  `${org(name, true)} records the payments on this session.`;
-
 export const joinedRowLine = (p: Participant): string =>
   `${p.name ?? 'No name set'} · joined ${formatLocalDate(p.joinedAt)}`;
 
@@ -180,8 +226,80 @@ export const everyoneJoinedMessage = (title: string, name: string | null): strin
 export const inviteIntro = (title: string): string =>
   `Anyone with this link can sign in to Hati, pick who they are in “${title}”, and track their own payments. They can see the whole session but can't change it.`;
 
-export const removeMessage = (p: Participant, title: string): string =>
-  `${p.name ?? 'This account'} joined “${title}” as ${p.member}. Removing them takes the session out of their Collection and History. Payments already recorded stay. They can join again with the invite link unless you reset it.`;
+export const removeMessage = (p: Participant, title: string, hasPending = false): string =>
+  `${p.name ?? 'This account'} joined “${title}” as ${p.member}. Removing them takes the session out of their Collection and History. Payments already recorded stay. They can join again with the invite link unless you reset it.${hasPending ? " Any payment they've said they made that's still waiting is withdrawn." : ''}`;
 
-export const stopTrackingMessage = (name: string | null): string =>
-  `It leaves your Collection and History. ${org(name, true)} keeps the session, and payments already recorded stay. You can join again with the invite link if it still works.`;
+export const stopTrackingMessage = (name: string | null, hasPending = false): string =>
+  `It leaves your Collection and History. ${org(name, true)} keeps the session, and payments already recorded stay. You can join again with the invite link if it still works.${hasPending ? " Any payment you've said you made that's still waiting for confirmation is withdrawn." : ''}`;
+
+/**
+ * The name a claim waits on: the creditor when they have an account on the session, otherwise the
+ * organizer, who decides for everyone without one (BR-C19). Lower case mid-sentence.
+ */
+export const deciderName = (
+  creditor: string,
+  withAccount: string[],
+  organizerName: string | null,
+): string => (withAccount.includes(creditor) ? creditor : (organizerName ?? 'the organizer'));
+
+export const waitingLine = (cents: number, decider: string): string =>
+  `${formatCents(cents)} waiting for ${decider} to confirm`;
+
+export const toConfirmLine = (cents: number): string =>
+  `${formatCents(cents)} waiting for you to confirm`;
+
+export const youSaidLine = (cents: number): string => `You said you paid ${formatCents(cents)}`;
+
+export const waitingForLine = (decider: string): string => `Waiting for ${decider} to confirm`;
+
+export const saysTheyPaidLine = (debtor: string, cents: number): string =>
+  `${debtor} says they paid ${formatCents(cents)}`;
+
+export const saysTheyPaidOtherLine = (debtor: string, creditor: string, cents: number): string =>
+  `${debtor} says they paid ${creditor} ${formatCents(cents)}`;
+
+export const notConfirmedLine = (cents: number, at: string): string =>
+  `Not confirmed: the ${formatCents(cents)} you said you paid on ${formatLocalDateTime(at)}`;
+
+export const talkToLine = (creditor: string): string =>
+  `If you did pay, talk to ${creditor}, then send it again.`;
+
+export const notOnHatiLine = (creditor: string): string =>
+  `${creditor} isn't on Hati, so you confirm it.`;
+
+export const toConfirmCountLine = (n: number): string =>
+  n === 1 ? '1 payment to confirm' : `${n} payments to confirm`;
+
+export const waitingSummaryLine = (cents: number): string =>
+  `${formatCents(cents)} waiting for confirmation`;
+
+/** `own` is a claim on the decider's own line, "paid you"; otherwise it names the creditor. */
+export const declineMessage = (
+  debtor: string,
+  creditor: string,
+  cents: number,
+  at: string,
+  own: boolean,
+): string =>
+  `${debtor} said they paid ${own ? 'you' : creditor} ${formatCents(cents)} on ${formatLocalDateTime(at)}. Declining records nothing, and ${debtor} will see that it wasn't confirmed.`;
+
+export const confirmOthersMessage = (
+  debtor: string,
+  creditor: string,
+  cents: number,
+  title: string,
+): string => `This records ${formatCents(cents)} paid by ${debtor} to ${creditor} on “${title}”.`;
+
+export const withdrawMessage = (creditor: string, cents: number, at: string): string =>
+  `This takes back the ${formatCents(cents)} you said you paid ${creditor} on ${formatLocalDateTime(at)}. Nothing was recorded yet.`;
+
+/** What Mark all as paid confirms on a joined card, by which sides have something open. */
+export function joinedMarkAllMessage(title: string, owedCents: number, oweCents: number): string {
+  if (owedCents > 0 && oweCents > 0) {
+    return `This records the ${formatCents(owedCents)} still owed to you as received, and tells the people you owe that you've paid them ${formatCents(oweCents)}. What you've paid counts once it's confirmed.`;
+  }
+  if (oweCents > 0) {
+    return `This tells the people you owe on “${title}” that you've paid them ${formatCents(oweCents)}, one payment per person. Each counts once it's confirmed, and you can withdraw any of them until then.`;
+  }
+  return markAllText(title, owedCents, 0);
+}
