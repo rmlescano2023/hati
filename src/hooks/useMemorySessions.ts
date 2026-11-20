@@ -94,8 +94,10 @@ export function useMemorySessions(seed: Session[]): SessionsBackend {
   );
 
   const removeAllPayments = useCallback(
-    (sessionId: string) => {
+    (sessionId: string, onSettled?: (ok: boolean) => void) => {
       commit(removeAllPaymentsFrom(sessionsRef.current, sessionId));
+      // In memory there is nothing to wait for.
+      onSettled?.(true);
     },
     [commit],
   );

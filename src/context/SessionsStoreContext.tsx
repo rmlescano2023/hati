@@ -52,7 +52,7 @@ type SessionsStoreValue = {
   /** Marks finished sessions as already settled, one all-or-nothing request each; see `useServerSessions`. */
   settleSessions: (sessionIds: string[]) => Promise<{ settled: string[]; failed: string[] }>;
   /** Undoes "already settled" on one session, in one request; see `useServerSessions`. */
-  removeAllPayments: (sessionId: string) => void;
+  removeAllPayments: (sessionId: string, onSettled?: (ok: boolean) => void) => void;
   /** Whether a payment write for the session is still waiting on the server; see `useServerSessions`. */
   isPaying: (sessionId: string) => boolean;
   /** Undoes one payment; see `useServerSessions`. */

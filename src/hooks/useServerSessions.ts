@@ -142,7 +142,7 @@ export type SessionsBackend = {
    * request, on screen at once. All or nothing on the server, so a failure
    * puts them all back and "Try again" always shows what the server has.
    */
-  removeAllPayments: (sessionId: string) => void;
+  removeAllPayments: (sessionId: string, onSettled?: (ok: boolean) => void) => void;
   /**
    * Dev-only seeding that only ever adds: sessions already there are left
    * alone, and nothing is deleted, so it is safe on a database with real data.
@@ -1156,7 +1156,7 @@ export function useServerSessions(): SessionsBackend {
   );
 
   const removeAllPayments = useCallback(
-    (sessionId: string) => {
+    (sessionId: string, onSettled?: (ok: boolean) => void) => {
       const snapshot = sessionsRef.current.find((s) => s.id === sessionId)?.payments ?? [];
       if (snapshot.length === 0) return;
       setPayments(sessionId, () => []);
@@ -1182,6 +1182,7 @@ export function useServerSessions(): SessionsBackend {
           // Not found means there is nothing left to undo, which is done too.
           if (status === 204 || status === 404) {
             paymentSucceeded(sessionId, seq, [WHOLE_SESSION]);
+            onSettled?.(true);
             return;
           }
         } catch (err) {
@@ -1203,6 +1204,7 @@ export function useServerSessions(): SessionsBackend {
               ? SIGNED_OUT
               : "Couldn't undo “already settled”, so its payments are still recorded.",
         );
+        onSettled?.(false);
       })().finally(() => {
         settledDuringLoad.current.add(sessionId);
         countPaying(sessionId, -1);
