@@ -13,6 +13,8 @@ type Props = {
   session: Session;
   me: Me;
   onClose: () => void;
+  /** Called after the new pick has been saved, which History detail uses to tell the user the session moved. */
+  onChanged?: () => void;
 };
 
 /**
@@ -20,7 +22,7 @@ type Props = {
  * pair, not to who the user is, so a change never moves or deletes one; the
  * note says so when there are any to worry about (AC-5.5, BR-7).
  */
-export function ChangeMeDialog({ session, me, onClose }: Props) {
+export function ChangeMeDialog({ session, me, onClose, onChanged }: Props) {
   const { setMe } = useSessionsStore();
   const profile = useProfile();
   const [value, setValue] = useState<string | null>(
@@ -36,6 +38,7 @@ export function ChangeMeDialog({ session, me, onClose }: Props) {
           e.preventDefault();
           if (value === null) return;
           setMe(session.id, value);
+          onChanged?.();
           const offer = rememberOffer(profile, value);
           if (remember && offer !== null) void profile.remember(value, offer);
           onClose();

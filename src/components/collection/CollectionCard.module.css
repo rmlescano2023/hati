@@ -400,3 +400,30 @@
     display: none;
   }
 }
+
+/* View details and Download SOA, the open card's last row (PR 4). */
+.detailsRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.markAll + .detailsRow,
+.shareRow + .detailsRow {
+  padding-top: 0;
+  border-top: none;
+}
+
+@media (max-width: 640px) {
+  /* The two share the width, as LineRow's buttons do (EH-14). */
+  .detailsRow > * {
+    flex: 1 1 auto;
+  }
+
+  .detailsRow button {
+    width: 100%;
+  }
+}

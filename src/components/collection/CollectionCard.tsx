@@ -17,7 +17,7 @@ import {
   type CollectionLine,
 } from '../../lib/collection';
 import type { Claim } from '../../types';
-import { formatLocalDate, formatLocalDateTime } from '../../lib/format';
+import { formatLocalDate, formatLocalDateTime, sortNames } from '../../lib/format';
 import { createId } from '../../lib/id';
 import {
   confirmOthersMessage,
@@ -35,6 +35,7 @@ import { sessionDisplayTitle } from '../../lib/sessionLabel';
 import { ChangeMeDialog } from './ChangeMeDialog';
 import { InviteMembersDialog } from './InviteMembersDialog';
 import { StopTrackingButton } from './StopTrackingButton';
+import { ExportSoaButton } from '../summary/ExportSoaButton';
 import { LineRow, type FailedPayment } from './LineRow';
 import { DirectionLabel } from './DirectionLabel';
 import { MePicker } from './MePicker';
@@ -59,6 +60,10 @@ type Props = {
   onLeft: (title: string) => void;
   /** Says something to a screen reader on the page's live region, which outlives a card that moves. */
   onAnnounce: (text: string) => void;
+  /** Opens the session's detail page. Collection passes it; a guide's practice doesn't, so it has no View details. */
+  onViewDetails?: (sessionId: string) => void;
+  /** Fetches the invite link for the organizer's export, as History detail does. */
+  inviteUrlFor?: (sessionId: string) => Promise<string | null>;
 };
 
 /** Rotates with the card's open state; the header's `aria-expanded` carries the meaning. */
@@ -180,6 +185,8 @@ export function CollectionCard({
   placed,
   onLeft,
   onAnnounce,
+  onViewDetails,
+  inviteUrlFor,
 }: Props) {
   const { session } = card;
   const title = sessionDisplayTitle(session);
@@ -222,9 +229,6 @@ export function CollectionCard({
         Share with members
       </Button>
     ) : null;
-  const markAllShown =
-    (joined || card.bucket === 'outstanding') && card.owedToYouOpenCents + card.youOweOpenCents > 0;
-
   const summary = (
     <span className={styles.titles}>
       <span className={styles.title}>{title}</span>
@@ -246,11 +250,6 @@ export function CollectionCard({
       )}
     </span>
   );
-
-  const groups: { direction: CollectionLine['direction']; lines: CollectionLine[] }[] = [
-    { direction: 'owedToYou', lines: card.owedToYou },
-    { direction: 'youOwe', lines: card.youOwe },
-  ];
 
   // The "Already settled" button is a different element in each place it shows,
   // or gone, when the card opens or closes, so focus on it would fall back to
@@ -319,72 +318,187 @@ export function CollectionCard({
         <div id={bodyId} className={styles.body}>
           <ForOthers card={card} title={title} onPaid={onPaid} onAnnounce={onAnnounce} />
           <NeedsSetup card={card} onPlaced={onPlaced} extra={alreadySettled('md')} />
+          {/* A card still in Needs setup can't be exported or shared yet, so it only gets the details (Q2). */}
+          {onViewDetails && !isPracticeId(session.id) && (
+            <div className={styles.detailsRow}>
+              <Button
+                aria-label={`View details of ${title}`}
+                onClick={() => onViewDetails(session.id)}
+              >
+                View details
+              </Button>
+            </div>
+          )}
         </div>
       )}
 
       {expandable && expanded && !setup && (
-        <div id={bodyId} className={styles.body}>
-          <ForOthers card={card} title={title} onPaid={onPaid} onAnnounce={onAnnounce} />
-          {joined ? (
-            <div className={styles.youAre}>
-              <span>
-                You joined as <strong>{session.me}</strong>
-              </span>
-              <span aria-hidden="true">·</span>
-              <StopTrackingButton session={session} variant="link" onLeft={onLeft} />
-            </div>
-          ) : (
-            hasLine && <YouAre card={card} title={title} />
-          )}
-          {groups
-            .filter((g) => g.lines.length > 0)
-            .map((group) => (
-              <section
-                key={group.direction}
-                className={styles.group}
-                data-tour={group.direction === 'owedToYou' ? 'collection-owed' : undefined}
-              >
-                <h4 className={styles.groupHeading}>
-                  <DirectionLabel direction={group.direction} />
-                </h4>
-                {group.lines.map((line) => (
-                  <LineRow
-                    key={line.key}
-                    sessionId={session.id}
-                    line={line}
-                    failed={failed(line.key)}
-                    onFailed={(f) => onFailed(line.key, f)}
-                    onPaid={onPaid}
-                    joined={joined}
-                    decider={deciderName(
-                      line.creditor,
-                      membersWithAccount(session),
-                      session.organizerName ?? null,
-                    )}
-                    onAnnounce={onAnnounce}
-                  />
-                ))}
-              </section>
-            ))}
-          {allPaid && (
-            <p className={styles.detail}>Every line in this session is marked as paid.</p>
-          )}
-          {markAllShown && (
-            <MarkAll
-              card={card}
-              title={title}
-              onPaid={onPaid}
-              joined={joined}
-              extra={joined ? null : share}
-            />
-          )}
-          {!joined && card.presettled && <UndoSettled card={card} title={title} />}
-          {share !== null && !markAllShown && <div className={styles.shareRow}>{share}</div>}
-          {/* Outside both rows, so it is never a flex item and never inside the tour target. */}
-          {inviting && <InviteMembersDialog session={session} onClose={() => setInviting(false)} />}
-        </div>
+        <CollectionCardBody
+          id={bodyId}
+          card={card}
+          title={title}
+          place="card"
+          failed={failed}
+          onFailed={onFailed}
+          onPaid={onPaid}
+          onLeft={onLeft}
+          onAnnounce={onAnnounce}
+          share={share}
+          inviteDialog={
+            inviting && <InviteMembersDialog session={session} onClose={() => setInviting(false)} />
+          }
+          onViewDetails={onViewDetails}
+          inviteUrlFor={inviteUrlFor}
+        />
       )}
     </article>
+  );
+}
+
+type BodyProps = {
+  card: Card;
+  title: string;
+  /** On a Collection card, or on History detail under "Your payments" (BR-D2). */
+  place: 'card' | 'history';
+  /** The body's id, for the header button's `aria-controls`. */
+  id?: string;
+  failed: (lineKey: string) => FailedPayment | undefined;
+  onFailed: (lineKey: string, failed: FailedPayment | null) => void;
+  onPaid: (ok: boolean) => void;
+  onLeft: (title: string) => void;
+  onAnnounce: (text: string) => void;
+  /** Share, as the card built it (null when this card doesn't offer it), and its dialog. */
+  share?: ReactNode;
+  inviteDialog?: ReactNode;
+  onViewDetails?: (sessionId: string) => void;
+  inviteUrlFor?: (sessionId: string) => Promise<string | null>;
+  /** Called after the user's pick in this session has been changed, on History detail. */
+  onChanged?: () => void;
+};
+
+/**
+ * The open card's body. On a card it is everything it always was. On History detail
+ * (`place="history"`) it is exactly "Your payments": who the user is, their lines with Undo, and
+ * Undo "Already settled", with none of the actions that record, claim, share or export. Exported so
+ * that detail page can reuse it rather than redraw the lines.
+ */
+export function CollectionCardBody({
+  card,
+  title,
+  place,
+  id,
+  failed,
+  onFailed,
+  onPaid,
+  onLeft,
+  onAnnounce,
+  share = null,
+  inviteDialog,
+  onViewDetails,
+  inviteUrlFor,
+  onChanged,
+}: BodyProps) {
+  const { session } = card;
+  const joined = isJoined(session);
+  const inHistory = place === 'history';
+  const hasLine = (card.me.kind === 'member' && card.me.picked) || card.me.kind === 'notInSession';
+  const allPaid = everyonesPaid(card);
+  const markAllShown =
+    (joined || card.bucket === 'outstanding') && card.owedToYouOpenCents + card.youOweOpenCents > 0;
+  const groups: { direction: CollectionLine['direction']; lines: CollectionLine[] }[] = [
+    { direction: 'owedToYou', lines: card.owedToYou },
+    { direction: 'youOwe', lines: card.youOwe },
+  ];
+
+  return (
+    <div id={id} className={styles.body}>
+      {!inHistory && (
+        <ForOthers card={card} title={title} onPaid={onPaid} onAnnounce={onAnnounce} />
+      )}
+      {joined ? (
+        <div className={styles.youAre}>
+          <span>
+            You joined as <strong>{session.me}</strong>
+          </span>
+          <span aria-hidden="true">·</span>
+          <StopTrackingButton session={session} variant="link" onLeft={onLeft} />
+        </div>
+      ) : (
+        hasLine && <YouAre card={card} title={title} onChanged={onChanged} />
+      )}
+      {groups
+        .filter((g) => g.lines.length > 0)
+        .map((group) => (
+          <section
+            key={group.direction}
+            className={styles.group}
+            data-tour={group.direction === 'owedToYou' ? 'collection-owed' : undefined}
+          >
+            <h4 className={styles.groupHeading}>
+              <DirectionLabel direction={group.direction} />
+            </h4>
+            {group.lines.map((line) => (
+              <LineRow
+                key={line.key}
+                sessionId={session.id}
+                line={line}
+                failed={failed(line.key)}
+                onFailed={(f) => onFailed(line.key, f)}
+                onPaid={onPaid}
+                joined={joined}
+                inHistory={inHistory}
+                decider={deciderName(
+                  line.creditor,
+                  membersWithAccount(session),
+                  session.organizerName ?? null,
+                )}
+                onAnnounce={onAnnounce}
+              />
+            ))}
+          </section>
+        ))}
+      {allPaid && <p className={styles.detail}>Every line in this session is marked as paid.</p>}
+      {!inHistory && markAllShown && (
+        <MarkAll
+          card={card}
+          title={title}
+          onPaid={onPaid}
+          joined={joined}
+          extra={joined ? null : share}
+        />
+      )}
+      {!joined && card.presettled && (
+        <UndoSettled card={card} title={title} onPaid={inHistory ? onPaid : undefined} />
+      )}
+      {!inHistory && share !== null && !markAllShown && (
+        <div className={styles.shareRow}>{share}</div>
+      )}
+      {/* View details and the card's export: the last row, a sibling after Mark all's row and never
+          inside the element the tour points at. Needs setup has its own, in the card. */}
+      {!inHistory &&
+        card.bucket === 'outstanding' &&
+        onViewDetails &&
+        !isPracticeId(session.id) && (
+          <div className={styles.detailsRow}>
+            <Button
+              aria-label={`View details of ${title}`}
+              onClick={() => onViewDetails(session.id)}
+            >
+              View details
+            </Button>
+            <ExportSoaButton
+              layout="card"
+              members={sortNames(session.members)}
+              records={session.records}
+              name={session.name}
+              fileNameSuffix={(session.closedAt ?? session.createdAt).slice(0, 10)}
+              getInviteUrl={joined || !inviteUrlFor ? undefined : () => inviteUrlFor(session.id)}
+            />
+          </div>
+        )}
+      {/* Outside every row, so it is never a flex item and never inside the tour target. */}
+      {!inHistory && inviteDialog}
+    </div>
   );
 }
 
@@ -395,7 +509,16 @@ export function CollectionCard({
  * card placed automatically by the profile name says nothing; a wrong match
  * there is fixed by editing the name in Profile.
  */
-function YouAre({ card, title }: { card: Card; title: string }) {
+function YouAre({
+  card,
+  title,
+  onChanged,
+}: {
+  card: Card;
+  title: string;
+  /** Called after the pick has been saved, which on History detail can bring the session back. */
+  onChanged?: () => void;
+}) {
   const [changing, setChanging] = useState(false);
   return (
     <div className={styles.youAre}>
@@ -417,7 +540,12 @@ function YouAre({ card, title }: { card: Card; title: string }) {
         Change
       </Button>
       {changing && (
-        <ChangeMeDialog session={card.session} me={card.me} onClose={() => setChanging(false)} />
+        <ChangeMeDialog
+          session={card.session}
+          me={card.me}
+          onChanged={onChanged}
+          onClose={() => setChanging(false)}
+        />
       )}
     </div>
   );
@@ -485,7 +613,16 @@ function NeedsSetup({
  * was marked, in one request. It confirms first, and shows on every such card,
  * whether or not the user is in the session (Q3).
  */
-function UndoSettled({ card, title }: { card: Card; title: string }) {
+function UndoSettled({
+  card,
+  title,
+  onPaid,
+}: {
+  card: Card;
+  title: string;
+  /** Told how the undo ended, so History detail can wait for the server before it says the session is back. */
+  onPaid?: (ok: boolean) => void;
+}) {
   const { removeAllPayments } = useSessionsStore();
   const [confirming, setConfirming] = useState(false);
   const row = useRef<HTMLDivElement>(null);
@@ -508,7 +645,7 @@ function UndoSettled({ card, title }: { card: Card; title: string }) {
         }}
         onConfirm={() => {
           setConfirming(false);
-          removeAllPayments(card.session.id);
+          removeAllPayments(card.session.id, onPaid);
         }}
       />
     </div>
