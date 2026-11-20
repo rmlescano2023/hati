@@ -69,7 +69,7 @@ export function JoinPick({ preview, busy, error, onJoin, onCancel, startWithList
       <p className={confirm.message}>
         Finished {formatLocalDate(preview.closedAt)} · {pluralize(preview.memberCount, 'member')}
       </p>
-      <p className={confirm.message}>
+      <p className={`${confirm.message} ${styles.bodyText}`}>
         {preview.organizerName === null ? (
           joinSharedLine(null)
         ) : (
@@ -79,7 +79,9 @@ export function JoinPick({ preview, busy, error, onJoin, onCancel, startWithList
           </>
         )}
       </p>
-      <p className={confirm.message}>{joinReadOnlyLine(preview.organizerName)}</p>
+      <p className={`${confirm.message} ${styles.bodyText}`}>
+        {joinReadOnlyLine(preview.organizerName)}
+      </p>
 
       {view === 'list' && (
         <div className={styles.members}>

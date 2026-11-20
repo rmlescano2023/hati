@@ -1916,5 +1916,7 @@ it (it only keeps a pick off a joined member), so it is unchanged.
   claimable members as choices and the joined ones greyed "· on Hati". The organizer's member is
   not listed. Focus starts on the first choice. "Everyone has already joined" counts claimable
   members only.
-- **Centred (owner, 2026-11-20).** In the confirm view only, all the text, the Remember row, the
-  Cancel and Join buttons and the link are centred, on phone and desktop. The list view is not.
+- **Centred (owner, 2026-11-20).** In the confirm view only, the title, the date and count line, the
+  Remember row, the Cancel and Join buttons and the link are centred, on phone and desktop. The two
+  body paragraphs (the sharer line and the read-only line) stay left-aligned. The list view is not
+  centred.
