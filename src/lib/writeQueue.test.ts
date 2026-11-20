@@ -22,6 +22,9 @@ import {
   isDeletedElsewhere,
   lineKey,
   recordFailedMessage,
+  CHECK_INTERVAL_MS,
+  IDLE_PAUSE_MS,
+  checksForChanges,
   reloadsOnReturn,
   resolveSuperseded,
   keepLocalClaims,
@@ -1308,5 +1311,41 @@ describe('keepLocalClaims (a confirm moves a claim into the payments)', () => {
     const s1 = merged.find((s) => s.id === 's1')!;
     expect(s1.payments).toEqual(['pay_1', 'clm_1']);
     expect(s1.claims).toEqual(['clm_9']);
+  });
+});
+
+describe('the "anything changed?" check (round 3, item 5)', () => {
+  it('runs every 15 seconds and pauses after 5 minutes with no input', () => {
+    expect(CHECK_INTERVAL_MS).toBe(15_000);
+    expect(IDLE_PAUSE_MS).toBe(300_000);
+  });
+
+  const ready = {
+    visible: true,
+    canReload: true,
+    state: 'abc' as string | null,
+    checking: false,
+    lastInputAt: 1_000_000,
+    now: 1_000_000,
+  };
+
+  it('checks only when visible, able to reload, with a known state, none in flight, and not idle', () => {
+    expect(checksForChanges(ready)).toBe(true);
+    expect(checksForChanges({ ...ready, visible: false })).toBe(false);
+    expect(checksForChanges({ ...ready, canReload: false })).toBe(false);
+    expect(checksForChanges({ ...ready, state: null })).toBe(false);
+    expect(checksForChanges({ ...ready, checking: true })).toBe(false);
+  });
+
+  it('pauses at exactly 5 minutes without input and resumes with the next input', () => {
+    const at = (ms: number) => ({ ...ready, now: ready.lastInputAt + ms });
+    expect(checksForChanges(at(IDLE_PAUSE_MS - 1))).toBe(true);
+    expect(checksForChanges(at(IDLE_PAUSE_MS))).toBe(false);
+    expect(
+      checksForChanges({
+        ...at(IDLE_PAUSE_MS + 60_000),
+        lastInputAt: ready.lastInputAt + IDLE_PAUSE_MS + 59_000,
+      }),
+    ).toBe(true);
   });
 });

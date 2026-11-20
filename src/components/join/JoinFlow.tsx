@@ -13,6 +13,7 @@ import {
   isInviteToken,
   joinPreselect,
   joinReadOnlyLine,
+  JOIN_SHARED_REST,
   joinSharedLine,
   joinStage,
   nameTakenLine,
@@ -239,7 +240,16 @@ export function JoinFlow({ raw, onClose }: Props) {
           Finished {formatLocalDate(preview.closedAt)} ·{' '}
           {pluralize(preview.members.length, 'member')}
         </p>
-        <p className={confirm.message}>{joinSharedLine(preview.organizerName)}</p>
+        <p className={confirm.message}>
+          {preview.organizerName === null ? (
+            joinSharedLine(null)
+          ) : (
+            <>
+              <strong className={styles.sharer}>{preview.organizerName}</strong>
+              {JOIN_SHARED_REST}
+            </>
+          )}
+        </p>
         <p className={confirm.message}>{joinReadOnlyLine(preview.organizerName)}</p>
         <div className={styles.members}>
           <MePicker

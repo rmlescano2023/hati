@@ -1,8 +1,10 @@
+import { createHash } from 'node:crypto';
 import type { VercelRequest } from '@vercel/node';
 import { createPool, type VercelPoolClient } from '@vercel/postgres';
 import { verifyToken } from '@clerk/backend';
 import {
   participantView,
+  stateText,
   unavailableMembers,
   visibleLedger,
   type ClaimRow,
@@ -389,3 +391,11 @@ export async function loadLedger(
     claims: claimRows.map(toClaimRow),
   };
 }
+
+/**
+ * A short fingerprint of what a full load would show, for the "anything changed?" check. It is
+ * taken over the same array the load sends, so a check and a load always agree, and it respects
+ * what each viewer may see without any rule of its own.
+ */
+export const sessionsState = (sessions: Session[]): string =>
+  createHash('sha1').update(stateText(sessions)).digest('base64url');

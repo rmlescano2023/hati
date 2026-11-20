@@ -196,11 +196,29 @@
   border-top: 1px solid var(--border);
 }
 
-/* The organizer's Invite row: the body's last row, with its own rule unless Mark all or Undo is
-   already drawing one above it. */
-.invite {
+/* Mark all on the left and Share on the right of one row (round 3). */
+.withShare {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.share {
+  margin-left: auto;
+}
+
+/* Share alone, at the right of its own row, with the rule Mark all's row would have drawn. */
+.shareRow {
+  display: flex;
+  justify-content: flex-end;
   padding-top: 10px;
   border-top: 1px solid var(--border);
+}
+
+.markAll + .shareRow {
+  padding-top: 0;
+  border-top: none;
 }
 
 /* One claim the organizer decides for someone with no account: text on the left, actions at the end. */
@@ -231,11 +249,6 @@
 .otherActions {
   display: flex;
   gap: 8px;
-}
-
-.markAll + .invite {
-  padding-top: 0;
-  border-top: none;
 }
 
 /* Confirm with "Already settled" beside it, wrapping on a phone. */
@@ -271,5 +284,15 @@
 
   .otherActions > button {
     flex: 1 1 auto;
+  }
+
+  /* Both share the row when they fit, and stack full width when they don't. */
+  .withShare > button,
+  .shareRow > button {
+    flex: 1 1 auto;
+  }
+
+  .share {
+    margin-left: 0;
   }
 }

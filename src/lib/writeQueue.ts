@@ -194,6 +194,35 @@ export const RELOAD_ON_RETURN_MS = 30_000;
 export const reloadsOnReturn = (lastLoadAt: number | null, now: number): boolean =>
   lastLoadAt !== null && now - lastLoadAt >= RELOAD_ON_RETURN_MS;
 
+/** How often a visible tab asks the server whether anything it can see has changed. */
+export const CHECK_INTERVAL_MS = 15_000;
+
+/**
+ * After this long with no pointer, key or touch input the check pauses, so a tab left open and
+ * unattended doesn't keep the database awake. The next input, or the window gaining focus, resumes
+ * it.
+ */
+export const IDLE_PAUSE_MS = 5 * 60_000;
+
+/**
+ * Whether a tick of the check should ask the server: the page is visible, it can reload quietly,
+ * the last load's state is known to compare against, no check is already in flight, and the user
+ * has done something in the last `IDLE_PAUSE_MS`.
+ */
+export const checksForChanges = (c: {
+  visible: boolean;
+  canReload: boolean;
+  state: string | null;
+  checking: boolean;
+  lastInputAt: number;
+  now: number;
+}): boolean =>
+  c.visible &&
+  c.canReload &&
+  c.state !== null &&
+  !c.checking &&
+  c.now - c.lastInputAt < IDLE_PAUSE_MS;
+
 /**
  * Whether a screen with nothing to list may say so. An empty list is only the
  * truth after a load that succeeded: while the first load has failed the list

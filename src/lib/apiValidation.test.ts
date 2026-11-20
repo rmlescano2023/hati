@@ -5,6 +5,7 @@ import {
   parseClaimIdQuery,
   parseClaimsInput,
   parseInviteInput,
+  parseCheckFlag,
   parseJoinedFlag,
   parseParticipantQuery,
   parsePaymentsInput,
@@ -359,5 +360,14 @@ describe('parseClaimIdQuery', () => {
     expect(parseClaimIdQuery('abc')).toBeNull();
     expect(parseClaimIdQuery('')).toBeNull();
     expect(parseClaimIdQuery(undefined)).toBeNull();
+  });
+});
+
+describe('parseCheckFlag', () => {
+  it('is true only for the exact value 1', () => {
+    expect(parseCheckFlag('1')).toBe(true);
+    for (const other of [undefined, '', '0', 'true', 1, ['1']]) {
+      expect(parseCheckFlag(other)).toBe(false);
+    }
   });
 });

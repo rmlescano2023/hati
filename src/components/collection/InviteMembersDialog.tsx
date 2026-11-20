@@ -141,7 +141,7 @@ export function InviteMembersDialog({ session, onClose }: Props) {
       <ModalDialog labelledBy="invite-members-title" onCancel={onClose}>
         <div className={confirmStyles.body}>
           <h2 id="invite-members-title" className={confirmStyles.title}>
-            Invite members
+            Share with members
           </h2>
           <p className={confirmStyles.message}>{inviteIntro(title)}</p>
 

@@ -228,3 +228,8 @@ export function parseClaimDecision(raw: unknown): { id: string; decision: ClaimD
 export function parseClaimIdQuery(raw: unknown): string | null {
   return typeof raw === 'string' && CLAIM_ID.test(raw) ? raw : null;
 }
+
+/** Whether a session list is only the cheap "anything changed?" check. Only the exact value `1` is. */
+export function parseCheckFlag(raw: unknown): boolean {
+  return raw === '1';
+}
