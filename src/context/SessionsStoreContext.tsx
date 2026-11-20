@@ -14,6 +14,8 @@ import { applyItemEdit, type StagedItem } from '../lib/staging';
 import { isJoined } from '../lib/collection';
 import { applySessionName, normaliseSessionName } from '../lib/sessionName';
 import type {
+  ClaimDecision,
+  NewClaim,
   NewPayment,
   NewPurchaseRecord,
   PurchaseItem,
@@ -58,6 +60,26 @@ type SessionsStoreValue = {
     sessionId: string,
     paymentId: string,
     onSettled?: (result: PaymentResult) => void,
+  ) => void;
+  /** A joined debtor says they've paid; see `useServerSessions`. */
+  addClaims: (
+    sessionId: string,
+    claims: NewClaim[],
+    onSettled?: (result: PaymentResult) => boolean | void,
+    options?: { quiet?: boolean },
+  ) => Promise<void>;
+  /** Confirms or declines a claim; see `useServerSessions`. */
+  decideClaim: (
+    sessionId: string,
+    claimId: string,
+    decision: ClaimDecision,
+    onSettled?: (result: PaymentResult) => boolean | void,
+  ) => void;
+  /** Withdraws a pending claim or dismisses a declined one; see `useServerSessions`. */
+  removeClaim: (
+    sessionId: string,
+    claimId: string,
+    onSettled?: (result: PaymentResult) => boolean | void,
   ) => void;
   /** Removes a session outright. Unlike closing, nothing is kept. A joined session is never deleted: leave it instead. */
   deleteSession: (sessionId: string) => void;
@@ -167,6 +189,9 @@ function SessionsStoreCore({
     settleSessions,
     removeAllPayments,
     removePayment,
+    addClaims,
+    decideClaim,
+    removeClaim,
     isPaying,
     replaceAll,
     appendAll,
@@ -423,6 +448,9 @@ function SessionsStoreCore({
       settleSessions,
       removeAllPayments,
       removePayment,
+      addClaims,
+      decideClaim,
+      removeClaim,
       isPaying,
       deleteSession,
       addJoinedSession,
@@ -458,6 +486,9 @@ function SessionsStoreCore({
       settleSessions,
       removeAllPayments,
       removePayment,
+      addClaims,
+      decideClaim,
+      removeClaim,
       isPaying,
       deleteSession,
       addJoinedSession,

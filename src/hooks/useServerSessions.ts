@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '@clerk/clerk-react';
-import type { NewPayment, Payment, Session } from '../types';
+import type { Claim, ClaimDecision, NewClaim, NewPayment, Payment, Session } from '../types';
 import { keepOpenedActivity } from '../lib/activity';
 import { sessionDisplayTitle } from '../lib/sessionLabel';
 import {
   isFullyPaid,
   isJoined,
   mergeServerPayments,
+  newClaims,
   newPayments,
   settlePayments,
 } from '../lib/collection';
@@ -30,6 +31,7 @@ import {
   failedMessage,
   failedLeaveIds,
   failedSessionIds,
+  keepLocalClaims,
   keepLocalPayments,
   lineKey,
   mergeLoaded,
@@ -151,6 +153,34 @@ export type SessionsBackend = {
     paymentId: string,
     onSettled?: (result: PaymentResult) => void,
   ) => void;
+  /**
+   * A joined debtor's "I've paid": pending claims on screen at once, and on the server in the
+   * background, all or nothing. Like `addPayments`, the caller mints the ids, a failure takes them
+   * off again, and `options.quiet` leaves the banner to the caller (Mark all's batch).
+   */
+  addClaims: (
+    sessionId: string,
+    claims: NewClaim[],
+    onSettled?: (result: PaymentResult) => boolean | void,
+    options?: { quiet?: boolean },
+  ) => Promise<void>;
+  /**
+   * The creditor, or the organizer for a creditor with no account, confirms or declines a claim. A
+   * confirm puts the payment on screen and takes the claim off in one change, and a failure puts
+   * both back.
+   */
+  decideClaim: (
+    sessionId: string,
+    claimId: string,
+    decision: ClaimDecision,
+    onSettled?: (result: PaymentResult) => boolean | void,
+  ) => void;
+  /** The sender withdraws a pending claim, or dismisses a declined one; on screen at once. */
+  removeClaim: (
+    sessionId: string,
+    claimId: string,
+    onSettled?: (result: PaymentResult) => boolean | void,
+  ) => void;
   /** Dev-only seeding: swap the whole list, session by session. */
   replaceAll: (next: Session[]) => void;
   /**
@@ -209,7 +239,9 @@ const UNDO_ALL_TIMEOUT =
 const PAYMENTS_ENDPOINT = '/api/payments';
 
 /** What a refused payment request may say, read only as far as it is needed. */
-type PaymentErrorBody = { error?: unknown; code?: unknown; payments?: unknown };
+type PaymentErrorBody = { error?: unknown; code?: unknown; payments?: unknown; claims?: unknown };
+
+const CLAIMS_ENDPOINT = '/api/claims';
 
 /**
  * Plain `vite` does not serve `/api`, so a request for it is answered with the
@@ -415,16 +447,22 @@ export function useServerSessions(): SessionsBackend {
         const rollingBack = (id: string) =>
           settledDuringLoad.current.has(id) && revertCandidates.current.has(id);
         const after = keepOpenedActivity(
-          keepLocalPayments(
-            mergeLoaded(
-              Array.isArray(body) ? body : [],
+          // A confirm changes the payments and the claims together, so the two are kept together
+          // by the same predicate: one without the other would show it as both.
+          keepLocalClaims(
+            keepLocalPayments(
+              mergeLoaded(
+                Array.isArray(body) ? body : [],
+                before,
+                (id) =>
+                  queue.isBusy(id) ||
+                  creating.current.has(id) ||
+                  paying.current.has(id) ||
+                  (settledDuringLoad.current.has(id) && !rollingBack(id)),
+                (id) => deleting.current.has(id),
+              ),
               before,
-              (id) =>
-                queue.isBusy(id) ||
-                creating.current.has(id) ||
-                paying.current.has(id) ||
-                (settledDuringLoad.current.has(id) && !rollingBack(id)),
-              (id) => deleting.current.has(id),
+              rollingBack,
             ),
             before,
             rollingBack,
@@ -1148,6 +1186,403 @@ export function useServerSessions(): SessionsBackend {
     [authedFetch, countPaying, paymentFailed, paymentSucceeded, pending, setPayments, writeOrder],
   );
 
+  /** Replaces one session's claims and, with them, its payments, in one change, if the session is still there. */
+  const setLedger = useCallback(
+    (
+      sessionId: string,
+      fn: (ledger: { payments: Payment[]; claims: Claim[] }) => {
+        payments: Payment[];
+        claims: Claim[];
+      },
+    ) => {
+      commit(
+        sessionsRef.current.map((s) =>
+          s.id === sessionId
+            ? { ...s, ...fn({ payments: s.payments, claims: s.claims ?? [] }) }
+            : s,
+        ),
+      );
+    },
+    [commit],
+  );
+
+  /**
+   * Sends one claims request and reads a refusal's body, which carries the ledger as the caller may
+   * see it. The deadline covers the body too.
+   */
+  const claimRequest = useCallback(
+    (path: string, init: RequestInit) =>
+      withDeadline(WRITE_TIMEOUT_MS, async (signal) => {
+        const res = await authedFetch(path, init, signal);
+        const type = res.headers.get('content-type') ?? '';
+        const json =
+          !res.ok && type.includes('application/json')
+            ? ((await res.json()) as PaymentErrorBody)
+            : null;
+        return { status: res.status, body: json };
+      }),
+    [authedFetch],
+  );
+
+  /**
+   * After a refusal that came with the server's ledger, the line shows that rather than waiting for
+   * a reload: its payments and claims, minus any undo or withdraw still in flight, plus any other
+   * add still in flight that the server hasn't got yet.
+   */
+  const applyServerLedger = useCallback(
+    (sessionId: string, body: PaymentErrorBody | null, ids: Set<string>) => {
+      if (!body || !Array.isArray(body.payments) || !Array.isArray(body.claims)) return false;
+      const serverPayments = body.payments as Payment[];
+      const serverClaims = body.claims as Claim[];
+      const adding_ = (id: string) => adding.current.has(id) && !ids.has(id);
+      const removing_ = (id: string) => removing.current.has(id);
+      setLedger(sessionId, ({ payments, claims }) => ({
+        payments: mergeServerPayments(payments, serverPayments, adding_, removing_),
+        claims: mergeServerPayments(claims, serverClaims, adding_, removing_),
+      }));
+      return true;
+    },
+    [setLedger],
+  );
+
+  /** How a claim write ended, for the caller's own message and the banner. */
+  const claimOutcome = useCallback(
+    (
+      sessionId: string,
+      status: number | null,
+      body: PaymentErrorBody | null,
+      timedOut: boolean,
+      fallback: string,
+      onSettled: ((result: PaymentResult) => boolean | void) | undefined,
+    ) => {
+      // Only a refusal of the claim itself has words worth showing; anything else is the banner's.
+      const refusal =
+        (status === 409 || (status === 404 && body?.code === 'not_pending')) &&
+        typeof body?.error === 'string'
+          ? body.error
+          : null;
+      const message =
+        refusal ??
+        (status === 404
+          ? DELETED_ELSEWHERE
+          : status === 401
+            ? SIGNED_OUT
+            : timedOut
+              ? 'This is taking too long. Check your connection and try again.'
+              : fallback);
+      const shown =
+        onSettled?.({
+          ok: false,
+          message,
+          payments: paymentsOf(sessionsRef.current, sessionId),
+          code: typeof body?.code === 'string' ? body.code : undefined,
+          status,
+        }) === true;
+      return { refusal, shown };
+    },
+    [],
+  );
+
+  const addClaims = useCallback(
+    (
+      sessionId: string,
+      claims: NewClaim[],
+      onSettled?: (result: PaymentResult) => boolean | void,
+      options?: { quiet?: boolean },
+    ): Promise<void> => {
+      const session = sessionsRef.current.find((s) => s.id === sessionId);
+      if (!session) {
+        onSettled?.({ ok: false, message: 'This session is gone.', payments: [], status: null });
+        return Promise.resolve();
+      }
+      // Only what this call put on screen is ever taken off again; a retry's claim is the server's.
+      const added = newClaims(session.claims ?? [], claims, new Date().toISOString());
+      setLedger(sessionId, ({ payments, claims: list }) => ({
+        payments,
+        claims: [...list, ...added],
+      }));
+      countPaying(sessionId, 1);
+      const ids = new Set(added.map((c) => c.id));
+      const seq = writeOrder.start();
+      const lines = claims.map(lineKey);
+      const title = sessionDisplayTitle(session);
+
+      const work = (async () => {
+        let status: number | null = null;
+        let body: PaymentErrorBody | null = null;
+        let timedOut = false;
+        try {
+          const result = await claimRequest(CLAIMS_ENDPOINT, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionId, claims }),
+          });
+          if (result.status === 201) {
+            paymentSucceeded(sessionId, seq, lines);
+            onSettled?.({ ok: true });
+            return;
+          }
+          status = result.status;
+          body = result.body;
+        } catch (err) {
+          timedOut = err instanceof TimeoutError;
+        }
+
+        // Every other ending takes the claims off again, so nothing shows as waiting that wasn't sent.
+        setLedger(sessionId, ({ payments, claims: list }) => ({
+          payments,
+          claims: list.filter((c) => !ids.has(c.id)),
+        }));
+        applyServerLedger(sessionId, body, ids);
+        const current = sessionsRef.current.find((s) => s.id === sessionId);
+        if (!current) return;
+
+        const batch = claims.length > 1;
+        const { refusal, shown } = claimOutcome(
+          sessionId,
+          status,
+          body,
+          timedOut,
+          batch
+            ? "Couldn't send what you've paid. Nothing was sent. Try again."
+            : `Couldn't send what you've paid to ${claims[0].creditor} in “${title}”. Try again.`,
+          onSettled,
+        );
+        if (!options?.quiet && (refusal === null || !shown)) {
+          paymentFailed(
+            sessionId,
+            seq,
+            lines,
+            refusal !== null
+              ? batch
+                ? `What you've paid in “${title}” wasn't sent. ${refusal}`
+                : `What you've paid to ${claims[0].creditor} in “${title}” wasn't sent. ${refusal}`
+              : timedOut
+                ? PAYMENTS_TIMEOUT
+                : batch
+                  ? "Couldn't send what you've paid. Nothing was sent. Try again."
+                  : `Couldn't send what you've paid to ${claims[0].creditor} in “${title}”. Try again.`,
+            refusal !== null,
+          );
+        }
+      })().finally(() => {
+        settledDuringLoad.current.add(sessionId);
+        countPaying(sessionId, -1);
+        for (const id of ids) adding.current.delete(id);
+      });
+      for (const id of ids) adding.current.set(id, work);
+      pending.track(work);
+      return work;
+    },
+    [
+      applyServerLedger,
+      claimOutcome,
+      claimRequest,
+      countPaying,
+      paymentFailed,
+      paymentSucceeded,
+      pending,
+      setLedger,
+      writeOrder,
+    ],
+  );
+
+  const decideClaim = useCallback(
+    (
+      sessionId: string,
+      claimId: string,
+      decision: ClaimDecision,
+      onSettled?: (result: PaymentResult) => boolean | void,
+    ) => {
+      const claim = sessionsRef.current
+        .find((s) => s.id === sessionId)
+        ?.claims?.find((c) => c.id === claimId);
+      if (!claim) return;
+      const confirming = decision === 'confirm';
+      // A confirm turns the claim into a payment of the same id and the debtor's time (BR-C7), so
+      // the payment goes on and the claim comes off in one change, and both come back together.
+      const payment: Payment = {
+        id: claim.id,
+        debtor: claim.debtor,
+        creditor: claim.creditor,
+        amountCents: claim.amountCents,
+        createdAt: claim.createdAt,
+      };
+      setLedger(sessionId, ({ payments, claims }) => ({
+        payments: confirming ? [...payments, payment] : payments,
+        claims: claims.filter((c) => c.id !== claimId),
+      }));
+      countPaying(sessionId, 1);
+      const seq = writeOrder.start();
+      const lines = [lineKey(claim)];
+      const ids = new Set([claimId]);
+
+      const work = (async () => {
+        let status: number | null = null;
+        let body: PaymentErrorBody | null = null;
+        let timedOut = false;
+        try {
+          const result = await claimRequest(CLAIMS_ENDPOINT, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: claimId, decision }),
+          });
+          if (result.status === 200) {
+            paymentSucceeded(sessionId, seq, lines);
+            onSettled?.({ ok: true });
+            return;
+          }
+          status = result.status;
+          body = result.body;
+        } catch (err) {
+          timedOut = err instanceof TimeoutError;
+        }
+
+        if (!sessionsRef.current.some((s) => s.id === sessionId)) return;
+        // With the server's ledger the line shows how it really stands. A claim that is no longer
+        // waiting has gone for good. Anything else puts the claim, and the payment, back as they were.
+        const redrawn = applyServerLedger(sessionId, body, ids);
+        if (!redrawn && !(status === 404 && body?.code === 'not_pending')) {
+          setLedger(sessionId, ({ payments, claims }) => ({
+            payments: confirming ? payments.filter((p) => p.id !== claimId) : payments,
+            claims: claims.some((c) => c.id === claimId) ? claims : [...claims, claim],
+          }));
+        } else if (!redrawn) {
+          setLedger(sessionId, ({ payments, claims }) => ({
+            payments: confirming ? payments.filter((p) => p.id !== claimId) : payments,
+            claims,
+          }));
+        }
+        const fallback = confirming
+          ? `Couldn't confirm the payment from ${claim.debtor}. Try again.`
+          : `Couldn't decline the payment from ${claim.debtor}. Try again.`;
+        const { refusal, shown } = claimOutcome(
+          sessionId,
+          status,
+          body,
+          timedOut,
+          fallback,
+          onSettled,
+        );
+        if (refusal === null || !shown) {
+          paymentFailed(
+            sessionId,
+            seq,
+            lines,
+            refusal ?? (timedOut ? PAYMENT_TIMEOUT : fallback),
+            refusal !== null,
+          );
+        }
+      })().finally(() => {
+        settledDuringLoad.current.add(sessionId);
+        countPaying(sessionId, -1);
+        adding.current.delete(claimId);
+      });
+      // An undo of the payment a confirm just put on screen waits for it to land.
+      if (confirming) adding.current.set(claimId, work);
+      pending.track(work);
+    },
+    [
+      applyServerLedger,
+      claimOutcome,
+      claimRequest,
+      countPaying,
+      paymentFailed,
+      paymentSucceeded,
+      pending,
+      setLedger,
+      writeOrder,
+    ],
+  );
+
+  const removeClaim = useCallback(
+    (sessionId: string, claimId: string, onSettled?: (result: PaymentResult) => boolean | void) => {
+      const claim = sessionsRef.current
+        .find((s) => s.id === sessionId)
+        ?.claims?.find((c) => c.id === claimId);
+      if (!claim) return;
+      setLedger(sessionId, ({ payments, claims }) => ({
+        payments,
+        claims: claims.filter((c) => c.id !== claimId),
+      }));
+      countPaying(sessionId, 1);
+      const seq = writeOrder.start();
+      const lines = [lineKey(claim)];
+      const ids = new Set([claimId]);
+      removing.current.add(claimId);
+
+      const work = (async () => {
+        let status: number | null = null;
+        let body: PaymentErrorBody | null = null;
+        let timedOut = false;
+        try {
+          // A withdraw of a claim still being sent waits for it, or it would find nothing to delete.
+          await adding.current.get(claimId);
+          const result = await claimRequest(
+            `${CLAIMS_ENDPOINT}?id=${encodeURIComponent(claimId)}`,
+            { method: 'DELETE' },
+          );
+          // Not found means it is already gone, which is what was asked.
+          if (result.status === 204 || result.status === 404) {
+            paymentSucceeded(sessionId, seq, lines);
+            onSettled?.({ ok: true });
+            return;
+          }
+          status = result.status;
+          body = result.body;
+        } catch (err) {
+          timedOut = err instanceof TimeoutError;
+        }
+
+        if (!sessionsRef.current.some((s) => s.id === sessionId)) return;
+        // Confirmed meanwhile: the server's ledger shows it as the payment it became.
+        if (!applyServerLedger(sessionId, body, ids)) {
+          setLedger(sessionId, ({ payments, claims }) => ({
+            payments,
+            claims: claims.some((c) => c.id === claimId) ? claims : [...claims, claim],
+          }));
+        }
+        const fallback =
+          claim.status === 'declined'
+            ? `Couldn't dismiss the note about your payment to ${claim.creditor}. Try again.`
+            : `Couldn't withdraw your payment to ${claim.creditor}. Try again.`;
+        const { refusal, shown } = claimOutcome(
+          sessionId,
+          status,
+          body,
+          timedOut,
+          fallback,
+          onSettled,
+        );
+        if (refusal === null || !shown) {
+          paymentFailed(
+            sessionId,
+            seq,
+            lines,
+            refusal ?? (timedOut ? UNDO_TIMEOUT : fallback),
+            refusal !== null,
+          );
+        }
+      })().finally(() => {
+        settledDuringLoad.current.add(sessionId);
+        countPaying(sessionId, -1);
+        removing.current.delete(claimId);
+      });
+      pending.track(work);
+    },
+    [
+      applyServerLedger,
+      claimOutcome,
+      claimRequest,
+      countPaying,
+      paymentFailed,
+      paymentSucceeded,
+      pending,
+      setLedger,
+      writeOrder,
+    ],
+  );
+
   /** Creates one seeded session on the server: the row, its content, then its payments. */
   const seedOne = useCallback(
     async (session: Session) => {
@@ -1366,6 +1801,9 @@ export function useServerSessions(): SessionsBackend {
     settleSessions,
     removeAllPayments,
     removePayment,
+    addClaims,
+    decideClaim,
+    removeClaim,
     isPaying,
     replaceAll,
     appendAll,

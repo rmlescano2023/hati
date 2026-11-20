@@ -126,6 +126,10 @@ export function useMemorySessions(seed: Session[]): SessionsBackend {
       settleSessions,
       removeAllPayments,
       removePayment,
+      // A practice session has no joined members and nothing to claim, so these do nothing.
+      addClaims: () => Promise.resolve(),
+      decideClaim: noop,
+      removeClaim: noop,
       isPaying: () => false,
       replaceAll,
       appendAll,
