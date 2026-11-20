@@ -109,4 +109,13 @@ describe('the join prompt (round 4)', () => {
     expect(render({}, { startWithList: true })).not.toMatch(/centred/);
     expect(render({ members: ['Ben', 'Carla'] })).not.toMatch(/centred/);
   });
+
+  it('keeps the two body paragraphs left-aligned while the rest is centred', () => {
+    const markup = render();
+    expect(markup).toMatch(
+      /<p class="[^"]*bodyText[^"]*"><strong[^>]*>Rina<\/strong> shared this session\./,
+    );
+    expect(markup).toMatch(/<p class="[^"]*bodyText[^"]*">You can see the whole session/);
+    expect((markup.match(/bodyText/g) ?? []).length).toBe(2);
+  });
 });
