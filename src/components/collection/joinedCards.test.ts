@@ -144,16 +144,15 @@ describe('an organizer on Collection (AC-1.2, AC-1.9)', () => {
     expect(row.indexOf('Share with members')).toBeGreaterThan(row.indexOf('Mark all as paid'));
   });
 
-  it('shows Share alone, in its own row, on a Settled card with no Mark all', () => {
-    const settled = finished('session_own', {
-      payments: [pay('p1', 'Ben', 'Ana'), pay('p2', 'Carla', 'Ana')],
-    });
-    // The Settled section is collapsed on the page, so the card is rendered directly, open.
-    const card = buildCard(settled, { displayName: 'Ana', nicknames: [] });
-    expect(card.bucket).toBe('settled');
+  // The Settled section is collapsed on the page, so these render the card directly, open.
+  const openCardOf = (
+    session: Session,
+    names = { displayName: 'Ana', nicknames: [] as string[] },
+  ) => {
     const noop = () => {};
+    const card = buildCard(session, names);
     const markup = wrap(
-      [settled],
+      [session],
       createElement(CollectionCard, {
         card,
         expanded: true,
@@ -167,8 +166,24 @@ describe('an organizer on Collection (AC-1.2, AC-1.9)', () => {
         onLeft: noop,
       }),
     );
-    expect(markup).toContain('Share with members');
+    return { card, markup };
+  };
+
+  it('shows no Share on a Settled card (round 5)', () => {
+    const settled = finished('session_own', {
+      payments: [pay('p1', 'Ben', 'Ana'), pay('p2', 'Carla', 'Ana')],
+    });
+    const { card, markup } = openCardOf(settled);
+    expect(card.bucket).toBe('settled');
+    expect(markup).not.toContain('Share with members');
     expect(markup).not.toContain(MARK_ALL);
+  });
+
+  it('shows no Share on a Needs setup card (round 5)', () => {
+    const unplaced = finished('session_own', { me: null });
+    const { card, markup } = openCardOf(unplaced, { displayName: 'Nobody', nicknames: [] });
+    expect(card.bucket).toBe('needsSetup');
+    expect(markup).not.toContain('Share with members');
   });
 
   it("leaves Mark all's row as it was on a practice session, with no Share (AC-1.9)", () => {
@@ -206,6 +221,18 @@ describe('History', () => {
     expect(markup).toContain('Shared by Ana · You joined as Ben');
     expect(markup).toContain('↓ Download SOA');
     expect(markup).toContain('aria-label="Stop tracking Bali Trip"');
+    expect(markup).not.toContain('Share with members');
+  });
+
+  it('shows no Share on History detail once the session is settled (round 5)', () => {
+    const settled = finished('session_own', {
+      payments: [pay('p1', 'Ben', 'Ana'), pay('p2', 'Carla', 'Ana')],
+    });
+    const markup = wrap(
+      [settled],
+      createElement(HistoryDetailPage, { sessionId: 'session_own', onBack: () => {} }),
+    );
+    expect(markup).toContain('Download SOA');
     expect(markup).not.toContain('Share with members');
   });
 
@@ -272,6 +299,14 @@ describe('no new onboarding targets (BR-G7, BR-G8)', () => {
     ]) {
       expect(source(path), path).not.toContain('data-tour');
     }
+  });
+
+  it('gives the amount box the same reset control as Expenses (round 5)', () => {
+    const line = source('./LineRow.tsx');
+    expect(line).toContain("from '../shared/ClearableInput'");
+    expect(line).toContain('<ClearableInput');
+    expect(line).toContain('clearLabel=');
+    expect(line).not.toMatch(/<input\b/);
   });
 
   it('has no Invite members left in the sources (round 3, item 1)', () => {

@@ -174,10 +174,12 @@ export function CollectionCard({
   // A joined card always opens, for Stop tracking (BR-V5).
   const expandable = joined || setup || card.lineCount > 0 || hasLine || card.presettled || allPaid;
 
-  // Placed in Mark all's row when that row shows, or in its own row when it doesn't. A practice
-  // session never shows it (AC-1.9), so the Collection guide's Mark all row is exactly as it was.
+  // Placed in Mark all's row when that row shows, or in its own row when it doesn't. Only an
+  // Outstanding card offers it: a settled session has nothing left to collect, and a card still in
+  // Needs setup isn't placed yet (round 5). A practice session never shows it (AC-1.9), so the
+  // Collection guide's Mark all row is exactly as it was.
   const share =
-    !joined && !isPracticeId(session.id) ? (
+    !joined && card.bucket === 'outstanding' && !isPracticeId(session.id) ? (
       <Button
         variant="primary"
         className={styles.share}

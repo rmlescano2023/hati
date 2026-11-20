@@ -309,11 +309,12 @@ describe('copy builders', () => {
 
   it('joinedRowLine', () => {
     const joinedAt = '2026-11-05T12:00:00.000Z';
+    // Just the date: the profile name is no longer shown on the row (round 5).
     expect(joinedRowLine({ member: 'Ben', name: 'Benny', joinedAt })).toBe(
-      `Benny · joined ${formatLocalDate(joinedAt)}`,
+      `Joined ${formatLocalDate(joinedAt)}`,
     );
     expect(joinedRowLine({ member: 'Ben', name: null, joinedAt })).toBe(
-      `No name set · joined ${formatLocalDate(joinedAt)}`,
+      `Joined ${formatLocalDate(joinedAt)}`,
     );
   });
 
