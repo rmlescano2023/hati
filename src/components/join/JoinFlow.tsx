@@ -1,29 +1,22 @@
 import { useEffect, useRef, useState } from 'react';
-import { MePicker } from '../collection/MePicker';
 import { Button } from '../shared/Button';
 import { ModalDialog } from '../shared/ModalDialog';
 import { useProfile } from '../../context/ProfileContext';
 import { useSessionsStore } from '../../context/SessionsStoreContext';
 import { useInvites } from '../../hooks/useInvites';
-import { nicknamePrompt, rememberOffer } from '../../lib/collection';
-import { formatLocalDate, pluralize } from '../../lib/format';
+import { rememberOffer } from '../../lib/collection';
 import {
   alreadyMessage,
   everyoneJoinedMessage,
   isInviteToken,
-  joinPreselect,
-  joinReadOnlyLine,
-  JOIN_SHARED_REST,
-  joinSharedLine,
   joinStage,
-  nameTakenLine,
   ownMessage,
   takenMessage,
 } from '../../lib/joinedSessions';
 import { sessionDisplayTitle } from '../../lib/sessionLabel';
 import type { InvitePreview, JoinAnswer } from '../../types';
 import confirm from '../shared/ConfirmDialog.module.css';
-import styles from './JoinFlow.module.css';
+import { JoinPick } from './JoinPick';
 
 type Props = {
   /** The token as it came off the address, not yet checked. */
@@ -57,8 +50,8 @@ export function JoinFlow({ raw, onClose }: Props) {
   );
   // Bumped by "Try again", which checks the link once more.
   const [attempt, setAttempt] = useState(0);
-  const [choice, setChoice] = useState<string | null>(null);
-  const [remember, setRemember] = useState(true);
+  // How many times someone else has taken the member picked, so the dialog reopens on the list.
+  const [taken, setTaken] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   // A second tap before the first answer must send nothing, and state alone is a render behind.
@@ -186,37 +179,35 @@ export function JoinFlow({ raw, onClose }: Props) {
   }
   if (preview === null) return null;
 
-  // The picker: preselected from the profile name, suggested from a nickname, else left to the user.
-  const pre =
-    profile.status === 'ready' ? joinPreselect(preview, profile) : { value: null, suggested: null };
-  const selected = choice ?? pre.value ?? pre.suggested;
-  const offer = rememberOffer(profile, selected);
-
-  const join = async () => {
-    if (selected === null || joining.current) return;
+  const join = async (member: string, remember: boolean) => {
+    if (joining.current) return;
     joining.current = true;
     setBusy(true);
     setError(null);
-    const result = await invitesRef.current.join(raw, selected);
+    const result = await invitesRef.current.join(raw, member);
     joining.current = false;
     if (closed.current) return;
     setBusy(false);
     switch (result.outcome) {
-      case 'joined':
+      case 'joined': {
         addJoinedSession(result.session);
-        // Saved only now, so a refused or failed join writes nothing to the profile (A3).
-        if (remember && offer !== null) void profile.remember(selected, offer);
+        // Saved only now, so a refused or failed join writes nothing to the profile (A3). The
+        // dialog worked out whether the checkbox was shown, so `remember` already says it counts.
+        const offer = rememberOffer(profile, member);
+        if (remember && offer !== null) void profile.remember(member, offer);
         close({
           openSessionId: result.session.id,
           announce: `Joined ${sessionDisplayTitle(result.session)}.`,
         });
         return;
+      }
       case 'taken': {
-        // Someone joined as that member first: the list refreshes and nothing is selected (AC-6.8).
-        setChoice(null);
+        // Someone joined as that member first: the list refreshes, nothing is selected, and it
+        // opens on the list rather than the confirm (AC-6.8).
         const next = joinStage(result) as Stage;
         setView({ stage: next, answer: result });
-        if (next === 'pick') setError(takenMessage(selected));
+        setTaken((n) => n + 1);
+        if (next === 'pick') setError(takenMessage(member));
         return;
       }
       case 'own':
@@ -232,63 +223,15 @@ export function JoinFlow({ raw, onClose }: Props) {
 
   return (
     <ModalDialog key="pick" labelledBy="join-title" onCancel={stay}>
-      <div className={confirm.body}>
-        <h2 id="join-title" className={confirm.title}>
-          {`Join “${preview.title}”?`}
-        </h2>
-        <p className={confirm.message}>
-          Finished {formatLocalDate(preview.closedAt)} ·{' '}
-          {pluralize(preview.members.length, 'member')}
-        </p>
-        <p className={confirm.message}>
-          {preview.organizerName === null ? (
-            joinSharedLine(null)
-          ) : (
-            <>
-              <strong className={styles.sharer}>{preview.organizerName}</strong>
-              {JOIN_SHARED_REST}
-            </>
-          )}
-        </p>
-        <p className={confirm.message}>{joinReadOnlyLine(preview.organizerName)}</p>
-        <div className={styles.members}>
-          <MePicker
-            legend={
-              pre.suggested !== null && selected === pre.suggested
-                ? nicknamePrompt(pre.suggested)
-                : 'Which one are you?'
-            }
-            members={preview.members}
-            unavailable={preview.unavailable}
-            onHati={preview.onHati}
-            afterMembers={
-              preview.onHati.length > 0 && (
-                <p className={confirm.message}>{nameTakenLine(preview.organizerName)}</p>
-              )
-            }
-            offerNotInSession={false}
-            value={selected}
-            onChange={setChoice}
-            remember={remember}
-            onRememberChange={setRemember}
-          />
-        </div>
-        {error !== null && (
-          <p role="alert" className={styles.error}>
-            {error}
-          </p>
-        )}
-        <div className={confirm.actions}>
-          <Button onClick={stay}>Cancel</Button>
-          <Button
-            variant="primary"
-            disabled={selected === null || busy}
-            onClick={() => void join()}
-          >
-            {busy ? 'Joining…' : 'Join'}
-          </Button>
-        </div>
-      </div>
+      <JoinPick
+        key={`pick-${taken}`}
+        preview={preview}
+        busy={busy}
+        error={error}
+        onJoin={(member, remember) => void join(member, remember)}
+        onCancel={stay}
+        startWithList={taken > 0}
+      />
     </ModalDialog>
   );
 }

@@ -1,4 +1,4 @@
-import { NOT_IN_SESSION, matchMember, type KnownNames } from './collection.js';
+import { NOT_IN_SESSION, matchMember, resolveMe, type KnownNames } from './collection.js';
 import { formatLocalDate } from './format.js';
 import type { InvitePreview, JoinAnswer, Participant, Session } from '../types';
 
@@ -67,20 +67,32 @@ export const onHatiMembers = (members: string[], claimed: string[]): string[] =>
   members.filter((m) => claimed.includes(m));
 
 /**
- * The members a joiner can't pick: the ones on Hati, and the organizer's own member (BR-J4). A
- * `me` of '' or null never equals a member name, so an organizer who isn't in the session takes
- * nobody.
+ * The member the organizer is, worked out exactly as Collection places them: the stored pick when
+ * it is a member, nobody when they said they aren't in the session, otherwise their profile name's
+ * match. A nickname-only match is only a suggestion there, so it doesn't count here. Members
+ * someone has joined as are skipped, as Collection skips them (AC-14.2). The join uses this, so a
+ * joiner is never offered the member who is already the organizer, whether or not they ever picked
+ * (BR-J4).
  */
-export const unavailableMembers = (
-  members: string[],
-  organizerMe: string | null,
+export function organizerMember(
+  session: { me: string | null; members: string[] },
   claimed: string[],
-): string[] => members.filter((m) => claimed.includes(m) || m === organizerMe);
+  names: KnownNames,
+): string | null {
+  const me = resolveMe(
+    {
+      me: session.me,
+      members: session.members,
+      participants: claimed.map((member) => ({ member, name: null, joinedAt: '' })),
+    },
+    names,
+  );
+  return me.kind === 'member' ? me.name : null;
+}
 
-/** The members a joiner can still be. */
-export const claimableMembers = (
-  preview: Pick<InvitePreview, 'members' | 'unavailable'>,
-): string[] => preview.members.filter((m) => !preview.unavailable.includes(m));
+/** The members a joiner can still be: listed, and not already joined as. */
+export const claimableMembers = (preview: Pick<InvitePreview, 'members' | 'onHati'>): string[] =>
+  preview.members.filter((m) => !preview.onHati.includes(m));
 
 /**
  * Who the join dialog starts on: a profile-name hit among the claimable members is preselected, a
@@ -88,7 +100,7 @@ export const claimableMembers = (
  * same matching Collection uses, so a member already on Hati can never be picked by it.
  */
 export function joinPreselect(
-  preview: Pick<InvitePreview, 'members' | 'unavailable'>,
+  preview: Pick<InvitePreview, 'members' | 'onHati'>,
   names: KnownNames,
 ): { value: string | null; suggested: string | null } {
   const match = matchMember(claimableMembers(preview), names);
@@ -122,6 +134,23 @@ export function joinAnswerFrom(status: number | null, body: unknown): JoinAnswer
   if (status === 400 || status === 404) return { outcome: 'dead' };
   return { outcome: 'failed' };
 }
+
+/**
+ * The one claimable member the joiner's names point at, or null. A profile-name hit counts, and
+ * failing that a nickname hit, each only when it is exactly one member (`matchMember`'s rule), so
+ * an ambiguous name, the organizer's member and a member already joined never match.
+ */
+export const joinMatch = (
+  preview: Pick<InvitePreview, 'members' | 'onHati'>,
+  names: KnownNames,
+): string | null => {
+  const pre = joinPreselect(preview, names);
+  return pre.value ?? pre.suggested;
+};
+
+/** Which view the join prompt opens on: a confirm for one match, otherwise the list. */
+export const joinPromptView = (match: string | null, wantsList: boolean): 'confirm' | 'list' =>
+  match !== null && !wantsList ? 'confirm' : 'list';
 
 export type JoinStage = 'own' | 'already' | 'dead' | 'failed' | 'full' | 'pick' | 'joined';
 

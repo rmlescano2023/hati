@@ -16,7 +16,9 @@ import {
   joinedRowLine,
   nameTakenLine,
   onHatiMembers,
-  unavailableMembers,
+  joinMatch,
+  joinPromptView,
+  organizerMember,
   ownMessage,
   participantView,
   stateText,
@@ -50,9 +52,10 @@ const preview = (over: Partial<InvitePreview> = {}): InvitePreview => ({
   sessionId: 'session_1',
   title: 'Bali Trip',
   closedAt: '2026-11-02T00:00:00.000Z',
-  members: ['Ana', 'Ben', 'Carla'],
+  // The organizer's own member (Ana) is not listed at all.
+  members: ['Ben', 'Carla'],
+  memberCount: 3,
   onHati: [],
-  unavailable: ['Ana'],
   organizerName: 'Ana',
   ...over,
 });
@@ -127,32 +130,51 @@ describe('closedSessionMe', () => {
   });
 });
 
-describe('onHatiMembers, unavailableMembers and claimableMembers', () => {
-  it("labels only the members an account has joined as, not the organizer's own", () => {
+describe("organizerMember (the organizer's effective member)", () => {
+  const members = ['Ana', 'Ben', 'Carla'];
+  const names = (displayName: string | null, ...nicknames: string[]) => ({
+    displayName,
+    nicknames,
+  });
+
+  it('is the stored pick when it is a member', () => {
+    expect(organizerMember({ me: 'Ben', members }, [], names('Ana'))).toBe('Ben');
+  });
+
+  it('is nobody when the organizer said they are not in the session, even with a matching name', () => {
+    expect(organizerMember({ me: '', members }, [], names('Ana'))).toBeNull();
+  });
+
+  it('is the profile-name match when there is no pick', () => {
+    expect(organizerMember({ me: null, members }, [], names('ana'))).toBe('Ana');
+  });
+
+  it('is not a nickname-only match, which Collection only suggests', () => {
+    expect(organizerMember({ me: null, members }, [], names('Zed', 'Ana'))).toBeNull();
+  });
+
+  it('is nobody with no pick and no match, or no profile name', () => {
+    expect(organizerMember({ me: null, members }, [], names('Zed'))).toBeNull();
+    expect(organizerMember({ me: null, members }, [], names(null))).toBeNull();
+  });
+
+  it('skips a member someone has joined as, as Collection does', () => {
+    expect(organizerMember({ me: null, members }, ['Ana'], names('Ana'))).toBeNull();
+  });
+});
+
+describe('onHatiMembers and claimableMembers', () => {
+  it('labels only the members an account has joined as', () => {
     expect(onHatiMembers(['Ana', 'Ben', 'Carla'], ['Carla'])).toEqual(['Carla']);
     expect(onHatiMembers(['Ana'], [])).toEqual([]);
   });
 
-  it("makes the organizer's member unavailable as well as the claimed ones", () => {
-    expect(unavailableMembers(['Ana', 'Ben', 'Carla'], 'Ana', ['Carla'])).toEqual(['Ana', 'Carla']);
-  });
-
-  it('adds nobody for a me of "" or null', () => {
-    expect(unavailableMembers(['Ana'], '', [])).toEqual([]);
-    expect(unavailableMembers(['Ana'], null, [])).toEqual([]);
-  });
-
   it('leaves the members nobody has taken', () => {
-    expect(claimableMembers(preview({ unavailable: ['Ana', 'Carla'] }))).toEqual(['Ben']);
+    expect(claimableMembers(preview({ onHati: ['Carla'] }))).toEqual(['Ben']);
   });
 
-  it('has none to claim when the only member is the organizer', () => {
-    const one = preview({
-      members: ['Ana'],
-      onHati: [],
-      unavailable: unavailableMembers(['Ana'], 'Ana', []),
-    });
-    expect(claimableMembers(one)).toEqual([]);
+  it('has none to claim when only the organizer was a member (they are not listed)', () => {
+    expect(claimableMembers(preview({ members: [], memberCount: 1 }))).toEqual([]);
   });
 });
 
@@ -174,12 +196,16 @@ describe('joinPreselect', () => {
     expect(joinPreselect(preview(), names('Zed'))).toEqual({ value: null, suggested: null });
   });
 
-  it('ignores a hit on a member already on Hati', () => {
+  it("ignores a hit on a member already on Hati, or on the organizer's who is not listed", () => {
+    expect(joinPreselect(preview({ onHati: ['Ben'] }), names('Ben'))).toEqual({
+      value: null,
+      suggested: null,
+    });
     expect(joinPreselect(preview(), names('Ana'))).toEqual({ value: null, suggested: null });
   });
 
   it('gives nothing for two hits', () => {
-    const two = preview({ members: ['Ben', 'ben', 'Carla'], unavailable: [] });
+    const two = preview({ members: ['Ben', 'ben', 'Carla'] });
     expect(joinPreselect(two, names('Ben'))).toEqual({ value: null, suggested: null });
   });
 });
@@ -239,7 +265,7 @@ describe('joinStage', () => {
   it('picks when someone is left to be, and says everyone joined when nobody is', () => {
     expect(stage({ outcome: 'open', preview: preview() })).toBe('pick');
     expect(stage({ outcome: 'taken', preview: preview() })).toBe('pick');
-    const full = preview({ onHati: ['Ben', 'Carla'], unavailable: ['Ana', 'Ben', 'Carla'] });
+    const full = preview({ onHati: ['Ben', 'Carla'] });
     expect(stage({ outcome: 'open', preview: full })).toBe('full');
     expect(stage({ outcome: 'taken', preview: full })).toBe('full');
   });
@@ -414,5 +440,30 @@ describe('stateText (the "anything changed?" check)', () => {
     );
     // The organizer, who sees it, does change.
     expect(stateText([withOther])).not.toBe(stateText([without]));
+  });
+});
+
+describe('the join prompt view (round 4)', () => {
+  const names = (displayName: string | null, ...nicknames: string[]) => ({
+    displayName,
+    nicknames,
+  });
+
+  it('matches the one claimable member a profile name or a nickname hits', () => {
+    expect(joinMatch(preview(), names('ben'))).toBe('Ben');
+    expect(joinMatch(preview(), names(null, 'Carla'))).toBe('Carla');
+  });
+
+  it('matches nobody for no hit, an ambiguous hit, the organizer, or a member already on Hati', () => {
+    expect(joinMatch(preview(), names('Zed'))).toBeNull();
+    expect(joinMatch(preview({ members: ['Ben', 'ben', 'Carla'] }), names('Ben'))).toBeNull();
+    expect(joinMatch(preview(), names('Ana'))).toBeNull();
+    expect(joinMatch(preview({ onHati: ['Ben'] }), names('Ben'))).toBeNull();
+  });
+
+  it('shows the confirm for a match, the list otherwise, and the list after "Not you?"', () => {
+    expect(joinPromptView('Ben', false)).toBe('confirm');
+    expect(joinPromptView('Ben', true)).toBe('list');
+    expect(joinPromptView(null, false)).toBe('list');
   });
 });

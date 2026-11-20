@@ -105,6 +105,7 @@ const lookupRow = (over: Record<string, unknown> = {}) => ({
   members: ['Ana', 'Ben', 'Carla'],
   me: 'Ana',
   organizer_name: 'Ana',
+  organizer_nicknames: [],
   ...over,
 });
 
@@ -189,7 +190,7 @@ describe('POST /api/invites: preview', () => {
     });
   });
 
-  it("offers anyone else the session, labelling only the claimed members on Hati and leaving the organizer's member unavailable but unlabelled", async () => {
+  it("offers anyone else the session without listing the organizer's member, labelling the claimed ones", async () => {
     db.joiners = [{ user_id: 'user_c', member: 'Carla' }];
     const res = await call({ token: TOKEN });
     expect(res.statusCode).toBe(200);
@@ -199,12 +200,36 @@ describe('POST /api/invites: preview', () => {
         sessionId: 'session_1',
         title: 'Bali Trip',
         closedAt: '2026-11-02T00:00:00.000Z',
-        members: ['Ana', 'Ben', 'Carla'],
+        members: ['Ben', 'Carla'],
+        memberCount: 3,
         onHati: ['Carla'],
-        unavailable: ['Ana', 'Carla'],
         organizerName: 'Ana',
       },
     });
+  });
+
+  it('does not list an organizer whose member is only a profile-name match, and refuses it', async () => {
+    db.lookup = lookupRow({ me: null, organizer_name: 'Ana', organizer_nicknames: [] });
+    const preview = await call({ token: TOKEN });
+    expect((preview.body as { preview: { members: string[] } }).preview.members).toEqual([
+      'Ben',
+      'Carla',
+    ]);
+    const join = await call({ token: TOKEN, member: 'Ana' });
+    expect(join.statusCode).toBe(409);
+    expect(join.body).toMatchObject({ code: 'taken' });
+    expect(sent('insert into session_participants')).toHaveLength(0);
+  });
+
+  it('lists everyone when the organizer is not in the session, or only a nickname matches', async () => {
+    db.lookup = lookupRow({ me: '', organizer_name: 'Ana' });
+    expect(
+      ((await call({ token: TOKEN })).body as { preview: { members: string[] } }).preview.members,
+    ).toEqual(['Ana', 'Ben', 'Carla']);
+    db.lookup = lookupRow({ me: null, organizer_name: 'Zed', organizer_nicknames: ['Ana'] });
+    expect(
+      ((await call({ token: TOKEN })).body as { preview: { members: string[] } }).preview.members,
+    ).toEqual(['Ana', 'Ben', 'Carla']);
   });
 
   it('only reads a finished session by its token, and takes no lock or transaction', async () => {
