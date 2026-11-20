@@ -5,7 +5,9 @@ import { useProfile } from '../../context/ProfileContext';
 import { rememberOffer } from '../../lib/collection';
 import { formatLocalDate, pluralize } from '../../lib/format';
 import {
+  JOIN_CONFIRM_REST,
   JOIN_SHARED_REST,
+  joinConfirmLine,
   joinMatch,
   joinPromptView,
   joinReadOnlyLine,
@@ -71,11 +73,15 @@ export function JoinPick({ preview, busy, error, onJoin, onCancel, startWithList
       </p>
       <p className={`${confirm.message} ${styles.bodyText}`}>
         {preview.organizerName === null ? (
-          joinSharedLine(null)
+          view === 'confirm' ? (
+            joinConfirmLine(null)
+          ) : (
+            joinSharedLine(null)
+          )
         ) : (
           <>
             <strong className={styles.sharer}>{preview.organizerName}</strong>
-            {JOIN_SHARED_REST}
+            {view === 'confirm' ? JOIN_CONFIRM_REST : JOIN_SHARED_REST}
           </>
         )}
       </p>

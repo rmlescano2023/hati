@@ -207,6 +207,18 @@ export const joinSharedLine = (name: string | null): string =>
     ? "You've been invited to this session. Pick who you are, and your share of it shows up in your Collection."
     : `${name}${JOIN_SHARED_REST}`;
 
+/**
+ * The confirm view's version of the line above: the joiner is asked to confirm a member rather than
+ * pick one. The list view keeps `joinSharedLine`.
+ */
+export const JOIN_CONFIRM_REST =
+  " shared this session. Confirm it's you, and your share of it shows up in your Collection.";
+
+export const joinConfirmLine = (name: string | null): string =>
+  name === null
+    ? "You've been invited to this session. Confirm it's you, and your share of it shows up in your Collection."
+    : `${name}${JOIN_CONFIRM_REST}`;
+
 export const joinReadOnlyLine = (name: string | null): string =>
   `You can see the whole session, but only ${org(name, false)} can change it. ${org(name, true)} will see your Hati name and when you joined.`;
 
