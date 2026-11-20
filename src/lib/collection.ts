@@ -1,5 +1,5 @@
 import { getFinalSettlement, getNettedOwedMatrix, getRawOwedMatrix } from './calculations.js';
-import { compareNames, formatMoney, sortNames } from './format.js';
+import { compareNames, formatLocalDate, formatMoney, sortNames } from './format.js';
 import { roundMoney } from './money.js';
 import { NICKNAMES_MAX, normaliseProfileName } from './profileName.js';
 import { sessionDisplayTitle } from './sessionLabel.js';
@@ -436,6 +436,51 @@ export function isFullyPaid(session: Pick<Session, 'members' | 'records' | 'paym
   return settlementPairs(session).length > 0 && settlePayments(session).length === 0;
 }
 
+/**
+ * Whether every settlement line of the session is paid in full by confirmed payments, with a session
+ * that has no lines counting as paid: an invite link has nothing left to track once this holds
+ * (BR-L1, BR-L5). Unlike `isFullyPaid`, which is about having been marked settled, an empty
+ * session is paid here. An overpaid pair counts as paid, and a pending claim pays nothing.
+ */
+export function everyLinePaid(session: Pick<Session, 'members' | 'records' | 'payments'>): boolean {
+  return settlementPairs(session).every((pair) => {
+    const paid = session.payments
+      .filter((p) => p.debtor === pair.debtor && p.creditor === pair.creditor)
+      .reduce((sum, p) => sum + p.amountCents, 0);
+    return paid >= pair.amountCents;
+  });
+}
+
+/**
+ * The status line of a card in History, and whether it is settled only for this viewer: the first
+ * of these that applies (A1). `stillOwed` is for an organizer whose own lines are paid while others
+ * still owe each other, which the card notes.
+ */
+export function historyStatus(card: CollectionCard): { status: string; stillOwed: boolean } {
+  const status = card.presettled
+    ? 'Marked as already settled'
+    : card.me.kind === 'notInSession'
+      ? "You weren't in this session"
+      : card.pairCount === 0
+        ? "Nothing to collect. Everyone's even."
+        : card.me.kind === 'unknown'
+          ? "Everyone's paid"
+          : card.lineCount === 0
+            ? 'You were even with everyone'
+            : `Settled ${formatLocalDate(card.settledAt)}`;
+  return { status, stillOwed: !isJoined(card.session) && !everyLinePaid(card.session) };
+}
+
+/** The sessions whose card was in Collection (Needs setup or Outstanding) before and is in History now. */
+export function movesFromCollection(prev: Collection, next: Collection): string[] {
+  const was = new Set([...prev.needsSetup, ...prev.outstanding].map((c) => c.session.id));
+  return next.settled.map((c) => c.session.id).filter((id) => was.has(id));
+}
+
+/** Whether a card that was in History is back in Collection: an undo, or a changed pick, undid it. */
+export const cameBack = (prevBucket: Bucket, nextBucket: Bucket): boolean =>
+  prevBucket === 'settled' && nextBucket !== 'settled';
+
 export type Collection = {
   needsSetup: CollectionCard[];
   outstanding: CollectionCard[];
@@ -457,7 +502,9 @@ export function buildCollection(sessions: Session[], names: KnownNames): Collect
   // down (Q3).
   const settledOn = (c: CollectionCard) => (c.presettled ? c.session.closedAt : c.settledAt);
   const bySettled = (a: CollectionCard, b: CollectionCard) =>
-    ms(settledOn(b)) - ms(settledOn(a)) || byId(a.session.id, b.session.id);
+    ms(settledOn(b)) - ms(settledOn(a)) ||
+    ms(b.session.closedAt) - ms(a.session.closedAt) ||
+    byId(a.session.id, b.session.id);
 
   const outstanding = cards.filter((c) => c.bucket === 'outstanding').sort(byFinished);
   return {

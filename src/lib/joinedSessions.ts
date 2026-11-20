@@ -160,7 +160,7 @@ export function joinPreselect(
     : { value: null, suggested: match.member };
 }
 
-const OUTCOMES = new Set(['own', 'already', 'open', 'joined']);
+const OUTCOMES = new Set(['own', 'already', 'open', 'paid', 'joined']);
 
 /**
  * What a preview or join request's answer means to the app. Only a status and a body the server
@@ -202,7 +202,7 @@ export const joinMatch = (
 export const joinPromptView = (match: string | null, wantsList: boolean): 'confirm' | 'list' =>
   match !== null && !wantsList ? 'confirm' : 'list';
 
-export type JoinStage = 'own' | 'already' | 'dead' | 'failed' | 'full' | 'pick' | 'joined';
+export type JoinStage = 'own' | 'already' | 'dead' | 'failed' | 'full' | 'paid' | 'pick' | 'joined';
 
 /** The dialog an answer calls for. A session with nobody left to be is "full", not a picker with nothing to pick. */
 export function joinStage(answer: JoinAnswer): JoinStage {
@@ -211,6 +211,7 @@ export function joinStage(answer: JoinAnswer): JoinStage {
     case 'already':
     case 'dead':
     case 'failed':
+    case 'paid':
     case 'joined':
       return answer.outcome;
     case 'open':
@@ -383,3 +384,21 @@ export function overConfirmMessage(remainingCents: number, debtor: string): stri
   }
   return `Only ${formatCents(remainingCents)} is left on this line, so this can't be confirmed. Decline it, or ask ${debtor} to withdraw it and send what's left.`;
 }
+
+/** Said when the viewer's own action settles a session: it has left Collection for History (AC-H8.1). */
+export const movedToHistoryLine = (title: string): string =>
+  `“${title}” is paid in full and has moved to History.`;
+
+/** The same, for several at once (AC-H8.2). */
+export const movedManyLine = (n: number): string =>
+  `${n} sessions are settled and have moved to History.`;
+
+/** Said on History detail when an undo or a changed pick brings the session back (AC-H6.1, AC-H6.6, AC-H6.7). */
+export const backInCollectionLine = (title: string, why: 'undo' | 'change'): string =>
+  why === 'undo'
+    ? `“${title}” is back in Collection, because a payment was undone.`
+    : `“${title}” is back in Collection, because you changed who you are in it.`;
+
+/** Said when an arrival lands on a session that is already in History for the viewer (AC-H9.2, AC-H9.4). */
+export const nothingToDoLine = (title: string): string =>
+  `There's nothing for you to collect or pay in “${title}”, so it's in History.`;

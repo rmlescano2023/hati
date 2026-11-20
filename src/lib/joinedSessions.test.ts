@@ -33,6 +33,10 @@ import {
   joinConfirmLine,
   joinSharedLine,
   joinStage,
+  movedManyLine,
+  movedToHistoryLine,
+  backInCollectionLine,
+  nothingToDoLine,
   joinedRowLine,
   nameTakenLine,
   onHatiMembers,
@@ -270,6 +274,11 @@ describe('joinAnswerFrom', () => {
 
 describe('joinStage', () => {
   const stage = (a: JoinAnswer) => joinStage(a);
+
+  it('knows the paid answer, which carries nothing but the word', () => {
+    expect(joinAnswerFrom(200, { outcome: 'paid' })).toEqual({ outcome: 'paid' });
+    expect(stage({ outcome: 'paid' })).toBe('paid');
+  });
 
   it('maps each outcome to its dialog', () => {
     expect(stage({ outcome: 'own', sessionId: 's', title: 't' })).toBe('own');
@@ -650,5 +659,23 @@ describe('the join prompt view (round 4)', () => {
     expect(joinPromptView('Ben', false)).toBe('confirm');
     expect(joinPromptView('Ben', true)).toBe('list');
     expect(joinPromptView(null, false)).toBe('list');
+  });
+});
+
+describe('History and Collection copy (PR 4)', () => {
+  it('words the move and the way back, exactly', () => {
+    expect(movedToHistoryLine('Bali Trip')).toBe(
+      '“Bali Trip” is paid in full and has moved to History.',
+    );
+    expect(movedManyLine(3)).toBe('3 sessions are settled and have moved to History.');
+    expect(backInCollectionLine('Bali Trip', 'undo')).toBe(
+      '“Bali Trip” is back in Collection, because a payment was undone.',
+    );
+    expect(backInCollectionLine('Bali Trip', 'change')).toBe(
+      '“Bali Trip” is back in Collection, because you changed who you are in it.',
+    );
+    expect(nothingToDoLine('Bali Trip')).toBe(
+      "There's nothing for you to collect or pay in “Bali Trip”, so it's in History.",
+    );
   });
 });

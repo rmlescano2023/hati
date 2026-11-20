@@ -215,6 +215,8 @@ export type InviteAnswer =
   | { outcome: 'own'; sessionId: string; title: string }
   | { outcome: 'already'; sessionId: string; title: string; member: string }
   | { outcome: 'open'; preview: InvitePreview }
+  /** Every line is paid, so there is nothing to join; it names nothing about the session. */
+  | { outcome: 'paid' }
   | { outcome: 'joined'; session: Session };
 
 /** How a preview or join ended, as the app sees it: the answer, a refusal, or no answer. */
