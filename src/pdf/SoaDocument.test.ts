@@ -1,9 +1,12 @@
 import { Children, type ReactElement } from 'react';
 import { describe, expect, it } from 'vitest';
-import { OwedMatrixSection, SoaDocument } from './SoaDocument';
+import { Link, Path, Svg } from '@react-pdf/renderer';
+import { InviteBlock, OwedMatrixSection, SoaDocument } from './SoaDocument';
 import { breakdownPage } from './layout';
-import { includes, monoCells, textCells } from './pdfTree.testutil';
+import { elementsOf, includes, monoCells, textCells } from './pdfTree.testutil';
 import { styles } from './styles';
+import { encodeQr, qrPath } from '../lib/qr';
+import { QR_GOLDEN } from '../lib/qr.fixtures';
 import type { OwedMatrix } from '../types';
 
 /* ------------------------------- fixtures -------------------------------- */
@@ -99,5 +102,84 @@ describe('SoaDocument pages (P-PDF)', () => {
     const second = pagesFor(5)[1];
     expect(second.props.size).toBe('A4');
     expect(second.props.orientation).toBe('portrait');
+  });
+});
+
+describe('the invite block (US-31, US-33)', () => {
+  // The golden 84-byte link: version 5, so a 37-module symbol and a 45-unit viewBox with its border.
+  const url = QR_GOLDEN[2].text;
+
+  const pageOne = (inviteUrl?: string) => {
+    const doc = SoaDocument({ members: ['Ana', 'Ben'], records: [], name: null, inviteUrl });
+    const [first, second] = Children.toArray(doc.props.children) as ReactElement<{
+      children: unknown;
+    }>[];
+    return {
+      first: Children.toArray(first.props.children as never) as ReactElement<{ url?: string }>[],
+      second: Children.toArray(second.props.children as never),
+    };
+  };
+  const names = (children: ReactElement[]) =>
+    children.map((c) => (typeof c.type === 'function' ? c.type.name : String(c.type)));
+
+  it('puts the block on page 1 between the header and Final Settlement (AC-31.1)', () => {
+    const { first } = pageOne(url);
+    expect(names(first)).toEqual([
+      'DocHeader',
+      'InviteBlock',
+      'SettlementSection',
+      'NetBalancesSection',
+      'Footer',
+    ]);
+    expect(first[1].type).toBe(InviteBlock);
+    expect(first[1].props.url).toBe(url);
+  });
+
+  it('adds nothing without an invite link, and leaves page 2 as it was (AC-33.1, AC-33.2, AC-31.5)', () => {
+    const without = pageOne();
+    expect(names(without.first)).toEqual([
+      'DocHeader',
+      'SettlementSection',
+      'NetBalancesSection',
+      'Footer',
+    ]);
+    expect(pageOne(url).second).toEqual(without.second);
+  });
+
+  it('draws the QR and prints the link, both as links to the invite (AC-31.2, BR-Q1)', () => {
+    const tree = InviteBlock({ url });
+    const links = elementsOf(tree, Link);
+    expect(links).toHaveLength(2);
+    for (const link of links) expect(link.props.src).toBe(url);
+
+    const svgs = elementsOf(tree, Svg);
+    expect(svgs).toHaveLength(1);
+    expect(svgs[0].props.width).toBe(96);
+    expect(svgs[0].props.height).toBe(96);
+    expect(svgs[0].props.viewBox).toBe('0 0 45 45');
+    const paths = elementsOf(svgs[0], Path);
+    expect(paths).toHaveLength(1);
+    expect(paths[0].props.d).toBe(qrPath(encodeQr(url)));
+  });
+
+  it('carries the copy and prints the link in the mono face, in lines that fit the column', () => {
+    const cells = textCells(InviteBlock({ url }));
+    const texts = cells.map((c) => c.text);
+    expect(texts).toContain('Track what you owe on Hati');
+    expect(texts).toContain('Scan with your phone camera, or open:');
+    const mono = monoCells(cells);
+    expect(mono).toHaveLength(1);
+    expect(mono[0].text.replace(/\n/g, '')).toBe(url);
+    for (const line of mono[0].text.split('\n')) expect(line.length).toBeLessThanOrEqual(72);
+  });
+
+  it('breaks the longest link a vercel.app host can make into two lines', () => {
+    const base = 'https://.example.app/?join=Zx9_Qk-3VbT0aLmN4pRsWw';
+    const longest = base.replace('https://', `https://${'h'.repeat(111 - base.length)}`);
+    expect(longest).toHaveLength(111);
+    const mono = monoCells(textCells(InviteBlock({ url: longest })));
+    const lines = mono[0].text.split('\n');
+    expect(lines).toHaveLength(2);
+    for (const line of lines) expect(line.length).toBeLessThanOrEqual(72);
   });
 });
