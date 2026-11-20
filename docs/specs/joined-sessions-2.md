@@ -1083,3 +1083,252 @@ Recorded when the owner approved the spec:
 - **D-A:** assumptions A1 to A5 (section 1) are accepted as written.
 - **D-B:** What's new v3 has the two notes in 5.4 and "Got it" alone.
 - **D-C:** `withAccount` is accepted (A1).
+
+## 14. Owner feedback round 3 (2026-11-20)
+
+The owner shared "Bali Trip" with a second account, which pressed "I've paid it all", and the
+claim was easy to miss. These decisions are fixed. Items 1, 2, 3 and 5 are PR 1 code, specified
+in `docs/specs/joined-sessions.md` section 14. **Task 0 merges `origin/joined-sessions-1`
+(37bc71a or later) into this branch first.**
+
+### 14.1 Merging round 3 into PR 2
+
+- **`CollectionCard.tsx`:** PR 1's round 3 defines one `markAllShown` expression. Here it is
+  today's PR 2 condition:
+
+  ```ts
+  const markAllShown =
+    (joined || card.bucket === 'outstanding') &&
+    card.owedToYouOpenCents + card.youOweOpenCents > 0;
+  ```
+
+  `MarkAll` gets `extra={joined ? null : share}` and keeps its `joined` prop. A joined card
+  never has Share (BR-V6), so its Mark all row is unchanged. Share's own row shows when
+  `share !== null && !markAllShown`.
+- **The 15-second check** (PR 1, 14.4) needs nothing more here. `stateText` hashes the GET's
+  sessions, which in PR 2 include `claims` and `withAccount`. A new claim, a withdrawal, a decline
+  (its `status`), a dismissal, and a confirm (the claim leaves and the payment arrives) each change
+  the state. A participant's claims have already been through `visibleLedger`, so a claim between
+  two other members never changes their state.
+
+### 14.2 Item 4: a claim waiting for you stands out
+
+**"Waiting for me", exactly:** the pending claims this viewer is offered Confirm and Decline for
+(BR-C2, section 6.4). That's `card.toConfirmCount`:
+- pending claims on the viewer's own Owed to you lines, whether the viewer is the organizer or a
+  creditor participant;
+- for the organizer, `card.forOthers`: pending claims whose creditor has no account and aren't on
+  the organizer's own lines.
+
+**Not counted:**
+- the viewer's own pending claims as a debtor (those wait on someone else);
+- declined claims;
+- a claim a creditor participant decides, which isn't on the organizer's card at all.
+
+**New pure helpers (`src/lib/collection.ts`):**
+- `waitingForMeCount(collection)` sums `toConfirmCount` over `needsSetup`, `outstanding` and
+  `settled`. A waiting card is never in Settled (BR-C15), but it is summed for safety.
+- `autoOpenTarget(collection, { openSessionId, autoOpen })` returns the session id of the first
+  card with `toConfirmCount > 0` in page order (Needs setup, then Outstanding, then Settled), or
+  null. It returns null when `!autoOpen` or `openSessionId !== undefined`.
+
+**(a) A badge on the card's summary.**
+- `summaryDetail` no longer returns `toConfirmCountLine(n)`.
+- The summary renders, after the other detail parts, collapsed and open alike:
+
+  ```tsx
+  {card.toConfirmCount > 0 && (
+    <span className={styles.toConfirm}>
+      <span aria-hidden="true">{card.toConfirmCount} to confirm</span>
+      <span className="visually-hidden">{toConfirmCountLine(card.toConfirmCount)}</span>
+    </span>
+  )}
+  ```
+
+- **Visible text:** "1 to confirm" or "{N} to confirm".
+- **Read as:** "1 payment to confirm" or "{N} payments to confirm". It's inside the header
+  button, so it's part of the card's accessible name.
+- **CSS:**
+
+  ```css
+  /* A claim waiting for this account's answer, visible on the collapsed card (round 3). */
+  .toConfirm {
+    align-self: flex-start;
+    display: inline-flex;
+    padding: 2px 8px;
+    border-radius: var(--radius-pill);
+    background: var(--accent-bg);
+    color: var(--accent-text);
+    font-size: 12px;
+    font-weight: 600;
+  }
+  ```
+
+**(b) The line, and Confirm.**
+- **The line:** `LineRow`'s root gets `data-to-confirm=""` when
+  `owedToYou && line.claims.length > 0`.
+- **For others:** each "To confirm for others" entry (`.other`) always gets it.
+- **CSS** (`LineRow.module.css` and `CollectionCard.module.css`):
+
+  ```css
+  /* Waiting for this account to confirm (round 3): an accent tint, inside the card's padding. */
+  .line[data-to-confirm],
+  .other[data-to-confirm] {
+    background: var(--accent-bg);
+    border-radius: var(--radius-sm);
+    padding: 8px;
+  }
+  ```
+
+- **Confirm** (on the line and in "To confirm for others") becomes `variant="primary"`. Decline,
+  Withdraw and Dismiss keep their styles.
+
+**(c) A count on the Collection tab.**
+- **`NavTabs`** gains `counts?: Partial<Record<TabId, number>>`. For a tab whose count is above 0,
+  inside its existing button, after the label:
+
+  ```tsx
+  <span className={styles.count} aria-hidden="true">{n > 99 ? '99+' : n}</span>
+  <span className="visually-hidden">{`, ${toConfirmCountLine(n)}`}</span>
+  ```
+
+  The tab is then read as "Collection, 2 payments to confirm". The button keeps
+  `data-tour="nav-collection"`: the attribute isn't moved, renamed or duplicated, and the badge is
+  only a child.
+- **`App.tsx`:**
+
+  ```ts
+  const waitingCount = useMemo(
+    () =>
+      profile.status === 'ready' && phase !== 'running'
+        ? waitingForMeCount(buildCollection(sessions, profile))
+        : 0,
+    [sessions, profile, phase],
+  );
+  // and on the nav:
+  <NavTabs … counts={{ collection: waitingCount }} />
+  ```
+
+  - It's hidden during the first-run tour (`phase === 'running'`), whose step "Track who has paid"
+    spotlights that tab, so nothing new appears in the tour.
+  - It's absent in a guide: the practice screen isn't top level, so it renders no `NavTabs`.
+  - It's absent while the profile is loading: without the profile, the organizer's own lines
+    can't be placed.
+- **CSS (`NavTabs.module.css`):**
+
+  ```css
+  .count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    margin-left: 6px;
+    border-radius: var(--radius-pill);
+    background: var(--accent);
+    color: var(--bg);
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  @media (max-width: 640px) {
+    /* The floating pill's tabs are icon over label, so the count sits on the icon's corner. */
+    .tab {
+      position: relative;
+    }
+
+    .count {
+      position: absolute;
+      top: 2px;
+      right: 6px;
+      margin-left: 0;
+    }
+  }
+  ```
+
+**(d) Collection opens the first waiting card.**
+- **`CollectionPage`** gains `autoOpen?: boolean`, **default false**.
+  - App passes `autoOpen={phase !== 'running'}`.
+  - `PracticeCollection` passes nothing, so a guide never auto-opens.
+- **On each mount** (a visit), once `profile.status === 'ready'`:
+  - one effect, guarded by a ref so it runs once, takes `autoOpenTarget(...)`;
+  - for an id, it calls `setOpenId(id)` and points the existing landing scroll at it (the landing
+    effect reads a `landingId` state, initialised to `openSessionId`, in place of the prop).
+- **Arriving from Finish, a join, or "Open in Collection"** passes `openSessionId`. That card
+  wins, and nothing auto-opens on that visit. The nav count and the badges still show the waiting
+  claims.
+- **A claim that arrives while Collection is already open** (a reload or check) doesn't open
+  anything. The badge and the count update. Only an arrival opens a card.
+- **Prompts:** auto-opening isn't a prompt, so "Already settled?" and the guide offer follow their
+  own rules as before.
+
+**Practice and guides:**
+- the scenes have no `claims`, so no badge, tint or auto-open can appear;
+- no `data-tour` attribute is added: the badge, the tint and the count carry none;
+- `steps.test.ts`, `targets.test.ts` and `guides/guides.test.ts` must pass unchanged.
+
+| | Desktop | Phone (≤ 640px) |
+|---|---|---|
+| Card summary | "1 to confirm" pill under the summary lines | the same, wrapping with them |
+| Line or "for others" entry | accent tint; Confirm primary at the row's end | tint; Confirm and Decline wrap under the text (E2-11) |
+| Collection tab | a pill after "Collection" | a dot-sized count on the tab icon's corner |
+| Arrival on Collection | the first waiting card open and scrolled to | the same |
+
+### 14.3 Test plan (static)
+
+**`src/lib/collection.test.ts`:**
+- `waitingForMeCount` counts the viewer's own-line claims and `forOthers`. It doesn't count a
+  debtor's own pending claims, declined claims, or a participant creditor's claim on the
+  organizer's card.
+- `autoOpenTarget`:
+  - returns the first waiting card in page order;
+  - returns null with `openSessionId` set, with `autoOpen` false, and with nothing waiting.
+
+**`src/components/collection/joinedCards.test.ts`:**
+- **Summary badge:** a collapsed card with one claim to confirm has the visible "1 to confirm"
+  (`aria-hidden`) and the hidden "1 payment to confirm". Its detail lines no longer contain "1
+  payment to confirm" as plain text.
+- **Tint:** a creditor line with a pending claim has `data-to-confirm`. A debtor line with its own
+  pending claim doesn't. Every "To confirm for others" entry has it.
+- **Scenes:** every session in `collectionScenes(...)` and the Expenses scenes has no `claims`.
+
+**`src/components/layout/NavTabs.test.ts` (new):**
+- with `counts={{ collection: 2 }}`: "2" and ", 2 payments to confirm" inside the Collection tab,
+  and "99+" for 120;
+- each `data-tour="nav-*"` appears exactly once, and `nav-collection` is on the button that holds
+  the count;
+- with no counts, the markup is the same as today's.
+
+**Unchanged and must pass:** `steps.test.ts`, `targets.test.ts`, `guides/guides.test.ts`.
+
+**ui-ux-tester:**
+- B presses "I've paid it all".
+- Within about 15 seconds, in A's window (PR 1 14.4):
+  - the Collection tab shows "1";
+  - the card shows "1 to confirm";
+  - opening Collection opens that card, scrolled to;
+  - the line is tinted, with Confirm primary.
+- VoiceOver reads "Collection, 1 payment to confirm".
+- Finish a session while a claim waits: the finished session opens, not the waiting one.
+- Preview Tour: no count on the tab. The Collection guide: nothing new.
+- At 375px: the count on the icon corner, no overflow.
+
+### 14.4 Tasks (in order)
+
+0. Merge `origin/joined-sessions-1` (round 3) into this branch, resolving `CollectionCard.tsx` as in
+   14.1. Run `npm test`.
+1. `waitingForMeCount` and `autoOpenTarget`, with tests.
+2. (a) the summary badge; (b) `data-to-confirm` and primary Confirm.
+3. (c) `NavTabs` `counts`, then App's `waitingCount`.
+4. (d) `CollectionPage`'s `autoOpen` and `landingId`, and App's prop.
+5. `npm run lint`, `npx tsc -b`, `npm test`, `npm run build`, including the three onboarding
+   tests.
+
+### 14.5 Risks
+
+| Risk | Guard |
+|---|---|
+| The count on `nav-collection` shows in the first-run tour. | Hidden while `phase === 'running'`, and tested on the markup. |
+| Auto-open fights a landing from Finish or a join. | `openSessionId` wins, in one pure, tested function. |
+| The count disagrees with the cards. | Both come from `toConfirmCount` in `buildCollection`, with the same profile. |
