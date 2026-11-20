@@ -1535,3 +1535,338 @@ routes. Payments and the PDF are untouched.
 8. **"On Hati" labels.** The organizer's own member no longer counts as "on Hati": only members an
    account joined as are labelled. It is still unselectable and the server still refuses it (409
    `taken`), so the preview gains `unavailable` (see 4.5 and 5.2).
+
+## 14. Owner feedback round 3 (2026-11-20)
+
+The owner shared "Bali Trip" with a second account and tried it end to end. These decisions are
+fixed. Items 1, 2, 3 and 5 are PR 1 code and are built on `joined-sessions-1`. Item 4 (claims
+that wait for you) is in `docs/specs/joined-sessions-2.md`, section 14.
+
+**Order across branches:**
+1. Build this section on `joined-sessions-1`.
+2. Merge `joined-sessions-1` into `joined-sessions-2` and build PR 2's section 14.
+3. Merge `joined-sessions-1` into `joined-sessions-3` (14.1, "PR 3").
+
+### 14.1 Item 1: "Invite members" becomes "Share with members"
+
+**Copy** (exact; the component and file names stay as they are):
+
+| Where | Today | Becomes |
+|---|---|---|
+| Collection card button (`CollectionCard.tsx`), text | Invite members | Share with members |
+| Collection card button, `aria-label` | `Invite members to ${title}` | `Share ${title} with members` (e.g. "Share Bali Trip with members") |
+| History detail button (`HistoryDetailPage.tsx`), text | Invite members | Share with members |
+| Dialog title (`InviteMembersDialog.tsx`) | Invite members | Share with members |
+| Comments that name the button (`HistoryDetailPage.tsx`'s doc comment, `CollectionCard.module.css`'s row comment) | "Invite members", "Invite row" | "Share with members", "Share row" |
+
+**Unchanged:** every phrase about the **link** itself, which names the link, not the button.
+- "the invite link", "Getting the link…", "Invite link reset." and the Reset copy;
+- PR 3's "invite QR" and "QR code for the invite link to {title}".
+
+**PR 3** (`joined-sessions-3`, based on `232aa81`) picks this up in two steps:
+1. Merge `origin/joined-sessions-1` into `joined-sessions-3` once this section is pushed.
+   - `InviteMembersDialog.tsx` will conflict, because PR 3 adds the QR there. Keep PR 3's QR and
+     take this section's title.
+   - Take this section's side in `CollectionCard.tsx`, `CollectionCard.module.css` and
+     `HistoryDetailPage.tsx`.
+2. Run the "no Invite members" check below. It reads the source files, so it fails if any PR 3
+   string or conflict resolution kept the old label. PR 3's own new strings don't use it today.
+
+### 14.2 Item 2: Share is highlighted, on the right of Mark all's row
+
+**Constraint (tour):** `data-tour="collection-mark-all"` stays on `MarkAll`'s own `div`, the
+element it is on now.
+- No wrapper is added around that `div`, nothing is renamed, and no second element gets the
+  attribute.
+- The Collection guide's C6 runs on a practice session, where Share is never rendered (`practice_`
+  id, AC-1.9). There, the `div` and everything in it render exactly as today.
+- The first-run tour never targets it.
+
+**Structure (`CollectionCard.tsx`):**
+
+```tsx
+// Built once and placed in Mark all's row when that row shows, or in its own row when it doesn't.
+const share = !joined && !isPracticeId(session.id) ? (
+  <Button
+    variant="primary"
+    className={styles.share}
+    aria-label={`Share ${title} with members`}
+    onClick={() => setInviting(true)}
+  >
+    Share with members
+  </Button>
+) : null;
+const markAllShown = !joined && card.bucket === 'outstanding'; // PR 2 widens this; keep one expression
+…
+{markAllShown && <MarkAll card={card} title={title} onPaid={onPaid} extra={share} />}
+{!joined && card.presettled && <UndoSettled card={card} title={title} />}
+{share !== null && !markAllShown && <div className={styles.shareRow}>{share}</div>}
+{inviting && <InviteMembersDialog session={session} onClose={() => setInviting(false)} />}
+```
+
+- **`MarkAll`** gains `extra?: ReactNode`. It renders it straight after its Mark all button, inside
+  the same `div`:
+
+  ```tsx
+  <div
+    ref={row}
+    className={`${styles.markAll} ${extra ? styles.withShare : ''}`}
+    data-tour="collection-mark-all"
+  >
+    <Button …>Mark all as paid</Button>
+    {extra}
+    <ConfirmDialog … />
+  </div>
+  ```
+
+  Mark all stays the `div`'s first button, so its focus return
+  (`row.current?.querySelector('button')`) is unchanged. `ConfirmDialog` renders nothing while
+  closed.
+- **The Share dialog** is rendered outside both rows, so it is never a flex item and never inside
+  the tour target.
+- **The old `.invite` row and its two CSS rules go.** They're orphans now.
+- **`UndoSettled`** is unchanged. A presettled card has no Mark all, so Share sits alone in its own
+  row under Undo.
+
+**CSS (`CollectionCard.module.css`).** Only a row that holds Share changes. Mark all alone (the
+guide, a joined card in PR 2) and Undo keep today's look exactly.
+
+```css
+/* Mark all on the left and Share on the right of one row (round 3). */
+.withShare {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.share {
+  margin-left: auto;
+}
+
+/* Share alone, at the right of its own row, with the rule Mark all's row would have drawn. */
+.shareRow {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.markAll + .shareRow {
+  padding-top: 0;
+  border-top: none;
+}
+
+@media (max-width: 640px) {
+  /* Both share the row when they fit, and stack full width when they don't. */
+  .withShare > button,
+  .shareRow > button {
+    flex: 1 1 auto;
+  }
+
+  .share {
+    margin-left: 0;
+  }
+}
+```
+
+**History detail (`HistoryDetailPage.tsx`):** the organizer's button becomes
+`<Button variant="primary" size="lg" className={styles.secondary} …>Share with members</Button>`.
+It's the same place, beside "↓ Download SOA", now in the primary style as well.
+`.secondary` keeps its width, and the phone stacking rules are unchanged.
+
+| | Desktop | Phone (≤ 640px) |
+|---|---|---|
+| Card with Mark all | Mark all (default style) at the left, Share (primary) at the right, one row | the same row when both fit, each growing; otherwise stacked full width, Mark all first |
+| Card without Mark all (Settled, presettled) | Share alone at the right | Share full width |
+| History detail | Download SOA and Share, both primary, side by side | stacked full width (unchanged rules) |
+
+### 14.3 Item 3: the sharer's name stands out in the join prompt
+
+The pick dialog's first line (AC-6.2) renders the organizer's name emphasised, in the accent
+colour:
+
+```tsx
+<p className={confirm.message}>
+  {preview.organizerName === null ? (
+    joinSharedLine(null)
+  ) : (
+    <>
+      <strong className={styles.sharer}>{preview.organizerName}</strong>
+      {JOIN_SHARED_REST}
+    </>
+  )}
+</p>
+```
+
+**`joinedSessions.ts`:** `JOIN_SHARED_REST = ' shared this session. Pick who you are, and your share of it shows up in your Collection.'`.
+`joinSharedLine(name)` becomes `name === null ? <today's sentence> : name + JOIN_SHARED_REST`, so
+its text is unchanged.
+
+**`JoinFlow.module.css`:**
+
+```css
+/* The person who shared the session, in the accent colour and bold, so it reads at a glance
+   (round 3). Weight as well as colour, so it doesn't depend on colour alone. */
+.sharer {
+  color: var(--accent-text);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+```
+
+The same rule applies on phone and desktop. Only this line changes: the read-only line, "Is your
+name taken?" and the cards' "Shared by" are as before.
+
+### 14.4 Item 5: updates from other accounts without a refresh ("focus + 15 s check")
+
+**What changes in `useServerSessions`:**
+
+1. **Focus.** The return-to-tab listener also listens to `window`'s `focus`, with the same handler.
+   The handler keeps today's rules: the page is visible, `reloadsOnReturn(lastLoadAt, now)` (30
+   seconds since the last load started), and `canReloadQuietly`. Two windows side by side never
+   fire `visibilitychange`, but clicking into one fires `focus`.
+2. **The 15-second check.** While `canReloadQuietly` holds:
+   - `loaded`, `!loading`, and no failure on the banner (today's guards);
+   - the page is visible;
+   - a state from the last load is known;
+   - no check is already in flight.
+
+   Every `CHECK_INTERVAL_MS = 15_000` the app sends `GET /api/sessions?joined=1&check=1`. If the
+   answer's `state` differs from the last load's, it starts the same quiet reload. That reload
+   doesn't wait for the 30-second window: a known change is shown at once, but never over a load
+   already running. A failed or timed-out check says nothing (A4); the next tick tries again.
+   - The interval is set in an effect that depends on `canReloadQuietly`, and cleared on
+     unmount.
+   - Each tick returns early while `document.visibilityState !== 'visible'`.
+3. **The state.**
+   - Every successful load reads the `X-Hati-State` response header into a ref.
+   - A load without it (an old server) sets null, and checks then stop until a load brings one.
+
+**The server (`api/sessions/index.ts`, `api/_shared.ts`, `api/_validate.ts`). No new function and
+no schema change.**
+
+- **`GET /api/sessions?joined=1`** (the full load) answers as today. It adds the response header
+  `X-Hati-State: <state>`.
+- **`GET /api/sessions?joined=1&check=1`** answers `200 { state: string }` and nothing else.
+  `parseCheckFlag(raw)` is `raw === '1'`. Old clients never send it.
+- **`state` is `sessionsState(sessions)`**, computed over **exactly the array the full GET would
+  send** (`loadSessions(userId, null, joined)`):
+  - `sha1` (Node's built-in `createHash`, base64url) of `stateText(sessions)`;
+  - `stateText` (pure, in `src/lib/joinedSessions.ts`) is `JSON.stringify` of each session with
+    `activityAt` set to null, in the order `loadSessions` returns them.
+- **Why the full set, not a cheaper partial query.** Correctness holds by construction.
+  - It covers every insert, every deletion and every change the viewer could see: a payment and
+    its undo, a removal or a leave (the session leaves the array), a deleted session, a rename,
+    a finish, an edited or removed record, who joined, and from PR 2 a claim's arrival,
+    withdrawal, decline or move into a payment.
+  - It respects D1 automatically: a participant's array has already been through
+    `participantView`, so nothing off their own lines can change their state.
+- **`activityAt` is left out,** so an open on another device doesn't cause a reload. For a joined
+  session, it also means the organizer's activity isn't signalled. Records changes still show,
+  because the records are hashed.
+- **Cost:**
+  - a check runs the same indexed queries as a load, without sending the payload, and the client
+    re-renders nothing;
+  - at about 4 small queries per visible tab every 15 seconds, that's fine at tester scale;
+  - a per-session change stamp would be cheaper, but needs a schema change, so it's **not** part
+    of this. It's an option for later, if load grows.
+
+**Vercel Functions after round 3:**
+- PR 1: 7 (`user`, `sessions/index`, `sessions/[id]`, `payments/index`, `payments/[id]`,
+  `invites`, `participants`).
+- PR 2: 8 (`claims`).
+- PR 3 adds none: 8 in all.
+
+### 14.5 Onboarding impact (items 1 to 3 and 5)
+
+None.
+- `collection-mark-all` stays on `MarkAll`'s `div` (14.2), and no target is added, moved, renamed
+  or duplicated.
+- Share is never in a guide (practice ids).
+- The join prompt and the reload carry no target.
+- `steps.test.ts`, `targets.test.ts` and `guides/guides.test.ts` must pass unchanged.
+
+### 14.6 Test plan (static)
+
+**`src/components/collection/joinedCards.test.ts` (update and extend):**
+- **Labels (item 1):** an owned, open, finished, non-practice card shows "Share with members" with
+  `aria-label="Share Bali Trip with members"`. History detail shows "Share with members". The
+  existing "Invite members" expectations become these.
+- **No old label (item 1, and the PR 3 check):** the sources of `CollectionCard.tsx`,
+  `HistoryDetailPage.tsx` and `InviteMembersDialog.tsx` contain no `Invite members`.
+- **Row (item 2):** in an Outstanding owned card's markup:
+  - the `div` with `data-tour="collection-mark-all"` contains "Mark all as paid" and then "Share
+    with members", in that order;
+  - `data-tour="collection-mark-all"` appears exactly once.
+- **Share alone:** a Settled owned card has Share and no `collection-mark-all`.
+- **Practice (item 2):** a `practice_` card's Mark all `div` contains only "Mark all as paid".
+- The target scan (two targets in `CollectionCard.tsx`) still passes.
+
+**`src/lib/joinedSessions.test.ts` (extend):**
+- `joinSharedLine` returns the same strings as before, for a name and for null.
+- `JOIN_SHARED_REST` is that sentence's tail.
+- `stateText`:
+  - identical input gives identical text;
+  - `activityAt` doesn't change it;
+  - each of these changes it: adding or removing a payment, editing a record's item, removing a
+    session, renaming, adding or removing a participant.
+  - **D1:** two raw sessions that differ only in a payment between two **other** members give the
+    same text after `participantView` as Ben.
+
+**`src/lib/sessionsListApi.test.ts` (new; the fake `_shared.js` pattern of
+`sessionSaveApi.test.ts`):**
+- the full GET sets `X-Hati-State`;
+- `check=1` answers `{ state }` equal to that header, for the same data, and sends no array;
+- without `joined=1`, the state is computed over owned sessions only.
+
+**`src/lib/apiValidation.test.ts`:** `parseCheckFlag` is true only for `'1'`.
+
+**`src/lib/writeQueue.test.ts`:** `CHECK_INTERVAL_MS` is 15,000. `checksForChanges({ visible, canReload, state, checking })`
+(pure, used by the tick) is true only when the page is visible, it can reload, a state is known
+and no check is in flight.
+
+**Unchanged and must pass:** `steps.test.ts`, `targets.test.ts`, `guides/guides.test.ts`.
+
+**ui-ux-tester:**
+- **Item 1:** the labels on the card, History detail and the dialog title. A screen reader reads
+  "Share Bali Trip with members".
+- **Item 2:** Mark all at the left and Share (primary) at the right of one row. At 390px, both on
+  one row; at 320px, stacked. Settled: Share alone at the right. Run the Collection guide end to
+  end: C6's spotlight is as before, and no Share appears.
+- **Item 3:** the organizer's name bold and in the accent colour.
+- **Item 5:**
+  - two windows side by side as A and B: B's "Record payment" on A's line shows in A's window
+    within about 15 seconds, without a click;
+  - clicking into a window reloads (after 30 seconds);
+  - an undo, a remove, a deleted session and a rename each show up within about 15 seconds;
+  - in the network log, `check=1` every 15 seconds while visible, none while hidden, and a full
+    `GET` only after a change;
+  - with the network blocked: no banner.
+
+### 14.7 Tasks (in order)
+
+1. **Item 1:** the copy in 14.1, with `joinedCards.test.ts` updated first.
+2. **Item 2:**
+   - `MarkAll`'s `extra`;
+   - the `share`, `markAllShown` and `shareRow` structure;
+   - the CSS, removing `.invite`;
+   - History detail's `variant="primary"`;
+   - the row and practice tests.
+3. **Item 3:** `JOIN_SHARED_REST`, the `JoinFlow` line and `.sharer`.
+4. **Item 5:**
+   - `parseCheckFlag`, then `stateText` and `sessionsState`, then the GET's header and `check=1`,
+     with `sessionsListApi.test.ts`;
+   - in `useServerSessions`: `focus`, the state ref, the 15-second check, and
+     `CHECK_INTERVAL_MS` / `checksForChanges` in `writeQueue.ts`.
+5. **Checks:** `npm run lint`, `npx tsc -b`, `npm test`, `npm run build`, including the three
+   onboarding tests. Push, then merge into `joined-sessions-2` and `joined-sessions-3` (14.1).
+
+### 14.8 Risks
+
+| Risk | Guard |
+|---|---|
+| The tour target moves with the new row. | The attribute stays on `MarkAll`'s `div`, with no wrapper. Only rows with Share get `.withShare`, and practice never has Share. Tests pin the attribute count and contents. |
+| Polling keeps the Neon `main` compute awake while any tab is visible, because autosuspend never idles it. | Accepted with the owner's choice. A check stops while the tab is hidden. A change stamp (schema) is the later fix if cost shows. |
+| Self-made writes cause one extra quiet reload, about 15 seconds later. | Harmless. `mergeLoaded` keeps anything still in flight. |
+| PR 3's merge keeps an old label. | The source check fails the build's tests. |
