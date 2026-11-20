@@ -199,53 +199,167 @@ describe('an organizer on Collection (AC-1.2, AC-1.9)', () => {
   });
 });
 
-describe('History', () => {
+/** The organizer's session with every line paid, so it is settled for her. */
+const settledOwn = (over: Partial<Session> = {}) =>
+  finished('session_own', {
+    payments: [pay('p1', 'Ben', 'Ana'), pay('p2', 'Carla', 'Ana')],
+    ...over,
+  });
+/** Ben's view, joined, with his one line to Ana paid. */
+const settledJoined = (over: Partial<Session> = {}) =>
+  joined({ payments: [pay('p1', 'Ben', 'Ana')], ...over });
+
+const detail = (session: Session, props: Record<string, unknown> = {}) =>
+  wrap(
+    [session],
+    createElement(HistoryDetailPage, {
+      sessionId: session.id,
+      back: 'history',
+      onBack: () => {},
+      ...props,
+    }),
+  );
+
+describe('History lists what is settled (PR 4)', () => {
+  const history = (sessions: Session[]) =>
+    wrap(sessions, createElement(HistoryPage, { onOpenSession: () => {} }));
+
+  it('lists only settled sessions under "Settled sessions", and not one that still has something left', () => {
+    const markup = history([settledOwn(), finished('session_open', { name: 'Open Trip' })]);
+    expect(markup).toContain('Settled sessions');
+    expect(markup).toContain('Bali Trip');
+    expect(markup).not.toContain('Open Trip');
+  });
+
   it("marks a joined session 'Shared by' and gives it no bin (AC-11.1)", () => {
-    const markup = wrap([joined()], createElement(HistoryPage, { onOpenSession: () => {} }));
+    const markup = history([settledJoined()]);
     expect(markup).toContain('Shared by Ana');
     expect(markup).not.toContain('Delete session');
   });
 
   it('keeps the bin on an owned session', () => {
-    const markup = wrap(
-      [finished('session_own')],
-      createElement(HistoryPage, { onOpenSession: () => {} }),
-    );
+    const markup = history([settledOwn()]);
     expect(markup).toContain('Delete session Bali Trip');
     expect(markup).not.toContain('Shared by');
   });
 
-  it('shows a joined session its header line, the SOA and Stop tracking (AC-11.2)', () => {
-    const markup = wrap(
-      [joined()],
-      createElement(HistoryDetailPage, { sessionId: 'session_joined', onBack: () => {} }),
+  it('gives each card its status, and the note while others still owe each other (AC-H3.1, AC-H3.2)', () => {
+    // Ana's own line is paid, but Carla still owes Ben: here, only Ben→Ana is paid and Carla→Ana is
+    // not, so make Ana's lines paid and add a pair she isn't on.
+    const session = finished('session_own', {
+      members: ['Ana', 'Ben', 'Carla'],
+      records: [
+        record('r1', 'Ana', 200, ['Ana', 'Ben']),
+        record('r2', 'Ben', 200, ['Ben', 'Carla']),
+      ],
+      payments: [pay('p1', 'Ben', 'Ana')],
+    });
+    const markup = history([session]);
+    expect(markup).toMatch(/Settled [A-Z][a-z]+ \d+, \d{4}/);
+    expect(markup).toContain('Some members still owe each other');
+    const all = history([settledOwn()]);
+    expect(all).not.toContain('Some members still owe each other');
+  });
+
+  it('says so when nothing has settled yet (AC-H2.5)', () => {
+    const markup = history([finished('session_open')]);
+    expect(markup).toContain('Nothing settled yet');
+    expect(markup).toContain(
+      'When a finished session is paid in full, it moves here from Collection.',
     );
+  });
+
+  it('never lists a draft (AC-H2.7)', () => {
+    const draft = finished('session_draft', {
+      status: 'draft',
+      closedAt: null,
+      name: 'Draft Trip',
+    });
+    expect(history([draft])).not.toContain('Draft Trip');
+  });
+});
+
+describe('History detail', () => {
+  it('shows a joined session its header line, the SOA and Stop tracking (AC-11.2)', () => {
+    const markup = detail(settledJoined());
     expect(markup).toContain('Shared by Ana · You joined as Ben');
     expect(markup).toContain('↓ Download SOA');
     expect(markup).toContain('aria-label="Stop tracking Bali Trip"');
     expect(markup).not.toContain('Share with members');
   });
 
-  it('shows no Share on History detail once the session is settled (round 5)', () => {
-    const settled = finished('session_own', {
-      payments: [pay('p1', 'Ben', 'Ana'), pay('p2', 'Carla', 'Ana')],
-    });
-    const markup = wrap(
-      [settled],
-      createElement(HistoryDetailPage, { sessionId: 'session_own', onBack: () => {} }),
+  it('names where it came from on the back button, and keeps Not found reachable (BR-D1, EH-9)', () => {
+    expect(detail(settledOwn())).toContain('← History');
+    expect(detail(settledOwn(), { back: 'collection' })).toContain('← Collection');
+    expect(detail(settledOwn(), { sessionId: 'gone', back: 'collection' })).toContain(
+      '← Collection',
     );
-    expect(markup).toContain('Download SOA');
+  });
+
+  it('shows "Your payments" with Undo, the YouAre row and no record action, for a settled session (AC-H5.1, AC-H5.2, AC-H5.6)', () => {
+    const markup = detail(settledOwn({ me: 'Ana' }));
+    expect(markup).toContain('Your payments');
+    expect(markup).toContain('Undo');
+    expect(markup).toContain('You are');
+    expect(markup).toContain('aria-label="Change who you are in Bali Trip"');
+    for (const absent of ['Record payment', 'I paid', 'Mark fully paid', 'Mark all as paid']) {
+      expect(markup, absent).not.toContain(absent);
+    }
+  });
+
+  it('offers Undo only on the Owed to you payments of a joined session (AC-H5.2)', () => {
+    // Ben owes Ana, so his payment is on a You owe line: no Undo.
+    expect(detail(settledJoined())).not.toContain('Undo');
+  });
+
+  it('offers Undo "Already settled" on a session marked settled before Collection (AC-H5.4)', () => {
+    const markup = detail(settledOwn({ finishedWithCollection: false }));
+    expect(markup).toContain('Undo “Already settled”');
+  });
+
+  it('has no "Your payments" for an Outstanding session opened from a card (AC-H4.2, AC-H5.8)', () => {
+    const markup = detail(finished('session_open'), { back: 'collection' });
+    expect(markup).toContain('← Collection');
+    expect(markup).not.toContain('Your payments');
+  });
+
+  it('says there is nothing to do when an arrival lands on a settled session (AC-H9.2)', () => {
+    const markup = detail(settledOwn(), { notice: 'nothingToDo' });
+    expect(markup).toContain(
+      "There's nothing for you to collect or pay in “Bali Trip”, so it's in History.",
+    );
+  });
+
+  it('says the link no longer works, with no Share, for a fully paid session (AC-H11.1, AC-H11.2)', () => {
+    const markup = detail(settledOwn());
+    expect(markup).toContain('Everyone has paid, so the invite link no longer works.');
     expect(markup).not.toContain('Share with members');
   });
 
-  it('shows the organizer Share with members beside the SOA (AC-1.1)', () => {
-    const markup = wrap(
-      [finished('session_own')],
-      createElement(HistoryDetailPage, { sessionId: 'session_own', onBack: () => {} }),
-    );
+  it('keeps Share when the organizer is settled but others still owe each other (BR-L3)', () => {
+    const session = finished('session_own', {
+      members: ['Ana', 'Ben', 'Carla'],
+      records: [
+        record('r1', 'Ana', 200, ['Ana', 'Ben']),
+        record('r2', 'Ben', 200, ['Ben', 'Carla']),
+      ],
+      payments: [pay('p1', 'Ben', 'Ana')],
+    });
+    const markup = detail(session);
+    expect(markup).toContain('Share with members');
+    expect(markup).not.toContain('the invite link no longer works');
+  });
+
+  it('shows the organizer Share with members beside the SOA while a line is unpaid (AC-1.1)', () => {
+    const markup = detail(finished('session_own'));
     expect(markup).toContain('Share with members');
     expect(markup.indexOf('Share with members')).toBeGreaterThan(markup.indexOf('Download SOA'));
     expect(markup).not.toContain('Stop tracking');
+  });
+
+  it('gives the organizer Delete session, labelled, and a joined member none (AC-H10.2, AC-H10.5)', () => {
+    expect(detail(settledOwn())).toContain('aria-label="Delete session Bali Trip"');
+    expect(detail(settledJoined())).not.toContain('Delete session');
   });
 });
 
@@ -659,5 +773,108 @@ describe('the waiting highlight stays readable (restyle)', () => {
       expect(source, path).toContain('z-index: -1');
       expect(source, path).toContain('pointer-events: none');
     }
+  });
+});
+
+describe('Collection holds what is active (PR 4)', () => {
+  const page = (sessions: Session[], props: Record<string, unknown> = {}) =>
+    wrap(sessions, createElement(CollectionPage, { canAsk: false, ...props }));
+  const MARK_ALL = 'data-tour="collection-mark-all"';
+  // Nobody in it is "Ana", the practice profile's name, so Hati can't place the viewer.
+  const unplaced = () =>
+    finished('session_setup', {
+      me: null,
+      name: 'Setup Trip',
+      members: ['Ben', 'Zed'],
+      records: [record('r_setup', 'Zed', 300, ['Ben', 'Zed'])],
+    });
+
+  it('has no Settled section, whatever the sessions (BR-H7)', () => {
+    const markup = page([settledOwn(), finished('session_open', { name: 'Open Trip' })]);
+    expect(markup).not.toContain('Settled (');
+    expect(markup).not.toContain('collection-settled');
+    expect(markup).toContain('Outstanding (1)');
+  });
+
+  it('with Needs setup only, shows Outstanding (0) and the done line, the new guide target (AC-H1.4)', () => {
+    const markup = page([unplaced()]);
+    expect(markup).toContain('Outstanding (0)');
+    expect(markup).toContain('Nothing outstanding. Sessions that are paid in full are in History.');
+    expect(count(markup, 'data-tour="collection-done"')).toBe(1);
+    expect(markup).not.toContain('Everything is settled');
+  });
+
+  it('with no cards and a settled session, says All settled (AC-H1.6)', () => {
+    const markup = page([settledOwn()]);
+    expect(markup).toContain('All settled');
+    expect(markup).toContain('Everything is paid. Settled sessions are in History.');
+  });
+
+  it('with nothing at all, says Nothing to collect yet (AC-H1.5)', () => {
+    expect(page([])).toContain('Nothing to collect yet');
+  });
+
+  describe('View details and the card export', () => {
+    const open = (session: Session) =>
+      page([session], { openSessionId: session.id, onViewDetails: () => {} });
+
+    it("puts View details and Download SOA after Mark all's row, outside the tour target (AC-H4.1)", () => {
+      const markup = open(finished('session_own'));
+      expect(count(markup, MARK_ALL)).toBe(1);
+      const start = markup.indexOf(MARK_ALL);
+      const rowEnd = markup.indexOf('</div>', start);
+      const markAllRow = markup.slice(start, rowEnd);
+      expect(markAllRow).not.toContain('View details');
+      expect(markAllRow).not.toContain('Download SOA');
+      const after = markup.slice(rowEnd);
+      expect(after).toContain('aria-label="View details of Bali Trip"');
+      expect(after).toContain('↓ Download SOA');
+    });
+
+    it('gives a joined card the same two buttons (AC-H4.5)', () => {
+      const markup = open(joined());
+      expect(markup).toContain('aria-label="View details of Bali Trip"');
+      expect(markup).toContain('↓ Download SOA');
+    });
+
+    it('gives a Needs setup card View details only (AC-H4.6, Q2)', () => {
+      const markup = open(unplaced());
+      expect(markup).toContain('aria-label="View details of Setup Trip"');
+      expect(markup).not.toContain('Download SOA');
+    });
+
+    it('gives a practice card neither (AC-H4.7)', () => {
+      const markup = open(finished('practice_own'));
+      expect(markup).not.toContain('View details');
+      expect(markup).not.toContain('Download SOA');
+    });
+
+    it('has neither without onViewDetails, as in a guide', () => {
+      const markup = page([finished('session_own')], { openSessionId: 'session_own' });
+      expect(markup).not.toContain('View details');
+    });
+  });
+});
+
+describe('the onboarding targets after PR 4', () => {
+  const source = (path: string) => readFileSync(resolve(__dirname, path), 'utf8');
+
+  it('declares collection-done once on the page and no collection-settled anywhere', () => {
+    expect(
+      source('../../pages/CollectionPage.tsx').match(/data-tour="collection-done"/g),
+    ).toHaveLength(1);
+    for (const path of ['../../pages/CollectionPage.tsx', './CollectionCard.tsx']) {
+      expect(source(path), path).not.toContain('collection-settled');
+    }
+  });
+
+  it('gives View details and the card export no target of their own', () => {
+    const card = source('./CollectionCard.tsx');
+    const row = card.slice(
+      card.indexOf('styles.detailsRow'),
+      card.indexOf('styles.detailsRow') + 800,
+    );
+    expect(row).not.toContain('data-tour');
+    expect(card.match(/data-tour/g)).toHaveLength(2);
   });
 });

@@ -80,3 +80,43 @@
     min-height: 44px;
   }
 }
+
+/* Delete is a quiet, destructive action beside the others. */
+.delete {
+  color: var(--danger-text);
+}
+
+/* A notice that the session moved, or why it is in History: like Collection's move notice. */
+.notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 1rem;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-bg);
+  color: var(--accent-text);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.notice > p {
+  flex: 1 1 16rem;
+  margin: 0;
+}
+
+/* The viewer's own lines, above the breakdown. */
+.yourPayments {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 1rem;
+}
+
+.sectionHeading {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
