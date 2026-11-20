@@ -229,6 +229,7 @@ export function InviteMembersDialog({ session, onClose }: Props) {
         <RemoveParticipantDialog
           participant={removing}
           title={title}
+          hasPending={(session.claims ?? []).some((c) => c.debtor === removing.member)}
           onCancel={() => setRemoving(null)}
           onConfirm={(alsoReset) => void confirmRemove(removing, alsoReset)}
         />
@@ -245,11 +246,14 @@ export function InviteMembersDialog({ session, onClose }: Props) {
 function RemoveParticipantDialog({
   participant,
   title,
+  hasPending,
   onCancel,
   onConfirm,
 }: {
   participant: Participant;
   title: string;
+  /** That account has said they paid something that is still waiting, which removing them withdraws. */
+  hasPending: boolean;
   onCancel: () => void;
   onConfirm: (alsoReset: boolean) => void;
 }) {
@@ -266,7 +270,7 @@ function RemoveParticipantDialog({
         <h2 id="remove-participant-title" className={confirmStyles.title}>
           Remove {participant.member}?
         </h2>
-        <p className={confirmStyles.message}>{removeMessage(participant, title)}</p>
+        <p className={confirmStyles.message}>{removeMessage(participant, title, hasPending)}</p>
         <label className={pickerStyles.option}>
           <input
             type="checkbox"

@@ -314,6 +314,7 @@ export function CollectionPage({
         }}
         placed={placedId === id}
         onLeft={(title) => setAnnouncement(`Stopped tracking ${title}.`)}
+        onAnnounce={setAnnouncement}
       />
     );
   };

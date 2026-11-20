@@ -7,16 +7,29 @@ import {
   claimedMembers,
   formatCents,
   isJoined,
+  joinedMarkAll,
   markAllMessage,
+  membersWithAccount,
   nicknamePrompt,
   openLinePayments,
   rememberOffer,
   type CollectionCard as Card,
   type CollectionLine,
 } from '../../lib/collection';
-import { formatLocalDate } from '../../lib/format';
+import type { Claim } from '../../types';
+import { formatLocalDate, formatLocalDateTime } from '../../lib/format';
 import { createId } from '../../lib/id';
-import { sharedByLine } from '../../lib/joinedSessions';
+import {
+  confirmOthersMessage,
+  declineMessage,
+  deciderName,
+  joinedMarkAllMessage,
+  notOnHatiLine,
+  saysTheyPaidOtherLine,
+  sharedByLine,
+  toConfirmCountLine,
+  waitingSummaryLine,
+} from '../../lib/joinedSessions';
 import { isPracticeId } from '../../lib/practiceId';
 import { sessionDisplayTitle } from '../../lib/sessionLabel';
 import { ChangeMeDialog } from './ChangeMeDialog';
@@ -44,6 +57,8 @@ type Props = {
   placed: boolean;
   /** Called once a joined session has been left, so the page can announce it. */
   onLeft: (title: string) => void;
+  /** Says something to a screen reader on the page's live region, which outlives a card that moves. */
+  onAnnounce: (text: string) => void;
 };
 
 /** Rotates with the card's open state; the header's `aria-expanded` carries the meaning. */
@@ -76,10 +91,21 @@ const everyonesPaid = (card: Card): boolean =>
  * money figures show only while collapsed: expanded, every line shows its own.
  */
 function summaryDetail(card: Card, expanded: boolean): string[] {
+  // What is waiting on a claim shows on any card, in any section, beside the figures it isn't part of
+  // (AC-23.4, AC-28.1).
+  return [
+    ...baseSummaryDetail(card, expanded),
+    card.waitingCents > 0 ? waitingSummaryLine(card.waitingCents) : '',
+    card.toConfirmCount > 0 ? toConfirmCountLine(card.toConfirmCount) : '',
+  ];
+}
+
+function baseSummaryDetail(card: Card, expanded: boolean): string[] {
   const { owedToYou, youOwe } = card;
   if (card.bucket === 'needsSetup') return [];
   if (card.bucket === 'outstanding') {
-    return [`${card.settledLineCount} of ${card.lineCount} settled`];
+    // A card with no lines of its own, open only for claims to confirm, has no "0 of 0 settled".
+    return card.lineCount === 0 ? [] : [`${card.settledLineCount} of ${card.lineCount} settled`];
   }
   // A fully paid session where the user has no lines on screen: nobody owes
   // anybody, which is true whether they're not in it or Hati doesn't know who
@@ -154,6 +180,7 @@ export function CollectionCard({
   onPlaced,
   placed,
   onLeft,
+  onAnnounce,
 }: Props) {
   const { session } = card;
   const title = sessionDisplayTitle(session);
@@ -172,7 +199,14 @@ export function CollectionCard({
   // that has it but no lines still opens, to show just that.
   const allPaid = everyonesPaid(card);
   // A joined card always opens, for Stop tracking (BR-V5).
-  const expandable = joined || setup || card.lineCount > 0 || hasLine || card.presettled || allPaid;
+  const expandable =
+    joined ||
+    setup ||
+    card.lineCount > 0 ||
+    hasLine ||
+    card.presettled ||
+    allPaid ||
+    card.forOthers.length > 0;
 
   const summary = (
     <span className={styles.titles}>
@@ -260,12 +294,14 @@ export function CollectionCard({
 
       {expandable && expanded && setup && (
         <div id={bodyId} className={styles.body}>
+          <ForOthers card={card} title={title} onPaid={onPaid} onAnnounce={onAnnounce} />
           <NeedsSetup card={card} onPlaced={onPlaced} extra={alreadySettled('md')} />
         </div>
       )}
 
       {expandable && expanded && !setup && (
         <div id={bodyId} className={styles.body}>
+          <ForOthers card={card} title={title} onPaid={onPaid} onAnnounce={onAnnounce} />
           {joined ? (
             <div className={styles.youAre}>
               <span>
@@ -296,7 +332,13 @@ export function CollectionCard({
                     failed={failed(line.key)}
                     onFailed={(f) => onFailed(line.key, f)}
                     onPaid={onPaid}
-                    readOnly={joined}
+                    joined={joined}
+                    decider={deciderName(
+                      line.creditor,
+                      membersWithAccount(session),
+                      session.organizerName ?? null,
+                    )}
+                    onAnnounce={onAnnounce}
                   />
                 ))}
               </section>
@@ -304,9 +346,10 @@ export function CollectionCard({
           {allPaid && (
             <p className={styles.detail}>Every line in this session is marked as paid.</p>
           )}
-          {!joined && card.bucket === 'outstanding' && (
-            <MarkAll card={card} title={title} onPaid={onPaid} />
-          )}
+          {(joined || card.bucket === 'outstanding') &&
+            card.owedToYouOpenCents + card.youOweOpenCents > 0 && (
+              <MarkAll card={card} title={title} onPaid={onPaid} joined={joined} />
+            )}
           {!joined && card.presettled && <UndoSettled card={card} title={title} />}
           {!joined && !isPracticeId(session.id) && (
             <div className={styles.invite}>
@@ -452,6 +495,112 @@ function UndoSettled({ card, title }: { card: Card; title: string }) {
 }
 
 /**
+ * "To confirm for others": the organizer's claims to decide for creditors who have no account, so
+ * their lines are on no card (BR-C2). It is the first thing in the open body, whether or not the
+ * organizer has been placed, because an unanswered claim is the first thing to do. Confirming asks
+ * first and has no undo here, since these lines aren't on this card (Q3); declining asks too.
+ */
+function ForOthers({
+  card,
+  title,
+  onPaid,
+  onAnnounce,
+}: {
+  card: Card;
+  title: string;
+  onPaid: (ok: boolean) => void;
+  onAnnounce: (text: string) => void;
+}) {
+  const { decideClaim } = useSessionsStore();
+  const [asking, setAsking] = useState<{ claim: Claim; decision: 'confirm' | 'decline' } | null>(
+    null,
+  );
+  const [errors, setErrors] = useState(new Map<string, string>());
+  if (card.forOthers.length === 0) return null;
+
+  const decide = (claim: Claim, decision: 'confirm' | 'decline') => {
+    setErrors(new Map());
+    decideClaim(card.session.id, claim.id, decision, (result) => {
+      onPaid(result.ok);
+      if (result.ok) {
+        if (decision === 'confirm') onAnnounce('Payment confirmed.');
+        return;
+      }
+      // A refusal is shown on its entry, while it is still there; anything else is the banner's.
+      if (result.code === undefined) return false;
+      setErrors((current) => new Map(current).set(claim.id, result.message));
+      return true;
+    });
+  };
+
+  return (
+    <section className={styles.group}>
+      <h4 className={styles.groupHeading}>To confirm for others</h4>
+      {card.forOthers.map((claim) => (
+        <div key={claim.id} className={styles.other}>
+          <span className={styles.otherText}>
+            <span>{saysTheyPaidOtherLine(claim.debtor, claim.creditor, claim.amountCents)}</span>
+            <span className={styles.otherMeta}>{formatLocalDateTime(claim.createdAt)}</span>
+            <span className={styles.otherMeta}>{notOnHatiLine(claim.creditor)}</span>
+            {errors.get(claim.id) && (
+              <span role="alert" className={styles.otherError}>
+                {errors.get(claim.id)}
+              </span>
+            )}
+          </span>
+          <span className={styles.otherActions}>
+            <Button
+              size="sm"
+              aria-label={`Confirm ${formatCents(claim.amountCents)} from ${claim.debtor} to ${claim.creditor}`}
+              onClick={() => setAsking({ claim, decision: 'confirm' })}
+            >
+              Confirm
+            </Button>
+            <Button
+              size="sm"
+              aria-label={`Decline ${formatCents(claim.amountCents)} from ${claim.debtor} to ${claim.creditor}`}
+              onClick={() => setAsking({ claim, decision: 'decline' })}
+            >
+              Decline
+            </Button>
+          </span>
+        </div>
+      ))}
+      <ConfirmDialog
+        open={asking !== null}
+        title={asking?.decision === 'decline' ? 'Decline this payment?' : 'Confirm this payment?'}
+        message={
+          asking === null
+            ? ''
+            : asking.decision === 'decline'
+              ? declineMessage(
+                  asking.claim.debtor,
+                  asking.claim.creditor,
+                  asking.claim.amountCents,
+                  asking.claim.createdAt,
+                  false,
+                )
+              : confirmOthersMessage(
+                  asking.claim.debtor,
+                  asking.claim.creditor,
+                  asking.claim.amountCents,
+                  title,
+                )
+        }
+        confirmLabel={asking?.decision === 'decline' ? 'Decline' : 'Confirm'}
+        destructive={asking?.decision === 'decline'}
+        onCancel={() => setAsking(null)}
+        onConfirm={() => {
+          const answer = asking;
+          setAsking(null);
+          if (answer) decide(answer.claim, answer.decision);
+        }}
+      />
+    </section>
+  );
+}
+
+/**
  * Records what is left on every open line at once, one payment per line, all
  * or nothing (US-8b). It confirms first, because one tap can write many
  * payments; each can still be undone on its own.
@@ -460,12 +609,14 @@ function MarkAll({
   card,
   title,
   onPaid,
+  joined,
 }: {
   card: Card;
   title: string;
   onPaid: (ok: boolean) => void;
+  joined: boolean;
 }) {
-  const { addPayments } = useSessionsStore();
+  const { addClaims, addPayments } = useSessionsStore();
   const [confirming, setConfirming] = useState(false);
   const row = useRef<HTMLDivElement>(null);
   return (
@@ -476,7 +627,13 @@ function MarkAll({
       <ConfirmDialog
         open={confirming}
         title="Mark everything as paid?"
-        message={confirming ? markAllMessage(card) : ''}
+        message={
+          !confirming
+            ? ''
+            : joined
+              ? joinedMarkAllMessage(title, card.owedToYouOpenCents, card.youOweOpenCents)
+              : markAllMessage(card)
+        }
         confirmLabel="Mark all as paid"
         onCancel={() => {
           setConfirming(false);
@@ -486,12 +643,20 @@ function MarkAll({
         }}
         onConfirm={() => {
           setConfirming(false);
-          addPayments(
-            card.session.id,
-            openLinePayments(card).map((p) => ({ ...p, id: createId('pay') })),
-            // The refusal itself is bannered by the store; this only reports the ending.
-            (result) => onPaid(result.ok),
-          );
+          const withIds = <T extends object>(list: T[]) =>
+            list.map((p) => ({ ...p, id: createId('pay') }));
+          // The refusal itself is bannered by the store; this only reports the ending.
+          const ended = (result: { ok: boolean }) => onPaid(result.ok);
+          if (joined) {
+            // What a member owes is only said, so it goes as claims; what is owed to them is
+            // recorded. Two requests, each all or nothing, so each stands or falls on its own
+            // (AC-27.4).
+            const { claims, payments } = joinedMarkAll(card);
+            if (claims.length > 0) void addClaims(card.session.id, withIds(claims), ended);
+            if (payments.length > 0) void addPayments(card.session.id, withIds(payments), ended);
+          } else {
+            addPayments(card.session.id, withIds(openLinePayments(card)), ended);
+          }
         }}
       />
     </div>

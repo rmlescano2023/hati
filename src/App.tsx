@@ -547,31 +547,22 @@ export default function App() {
         message={
           <span className={onboardingStyles.points}>
             <span>
-              <strong>Receipts, item by item.</strong> In Custom Amounts, type a receipt the way
-              it&apos;s printed: what each person had, dishes people shared, discounts like PWD or
-              senior, and service charges. Hati works out each person&apos;s share.
+              <strong>Joined sessions.</strong> On a finished session, tap Invite members and share
+              the link. Each person signs in, picks who they are, and follows what they owe or are
+              owed in their own Collection.
             </span>
             <span>
-              <strong>Guides.</strong> Tap “Need help?” on Expenses or Collection for a quick
-              practice run, or open Tutorials in your account menu.
+              <strong>&ldquo;I&apos;ve paid.&rdquo;</strong> Members who joined can tell you
+              they&apos;ve paid. It waits until you confirm or decline it, so you both end up with
+              the same figures.
             </span>
           </span>
         }
         onDismiss={closeWhatsNew}
       >
-        <Button variant="ghost" onClick={closeWhatsNew}>
+        {/* No guide covers joined sessions, so there is no "Show me how" to point at the wrong thing. */}
+        <Button variant="primary" onClick={closeWhatsNew}>
           Got it
-        </Button>
-        <Button
-          variant="primary"
-          onClick={() => {
-            // A previewed What's new writes nothing, so neither does the guide it starts.
-            const mark = !whatsNewPreview;
-            closeWhatsNew();
-            startTutorial('expenses', 'menu', mark);
-          }}
-        >
-          Show me how
         </Button>
       </OnboardingDialog>
       {offer && (

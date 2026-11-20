@@ -104,6 +104,12 @@
   color: var(--danger-text);
 }
 
+/* What is waiting on a claim, under the figures it is never part of. */
+.pending {
+  font-size: 12px;
+  color: var(--warn-text);
+}
+
 .history {
   display: flex;
   flex-direction: column;
@@ -119,6 +125,17 @@
   gap: 10px;
   font-size: 12px;
   color: var(--text2);
+}
+
+/* A refusal on an entry takes its own line under the entry's text. */
+.entryError {
+  flex: 0 0 100%;
+}
+
+/* Confirm and Decline, kept together. */
+.entryActions {
+  display: flex;
+  gap: 8px;
 }
 
 .entryText {
@@ -141,5 +158,14 @@
   /* Undo drops under the payment's text when the row is too narrow for both. */
   .entry {
     flex-wrap: wrap;
+  }
+
+  /* Confirm and Decline drop under the text together, sharing the row (E2-11). */
+  .entryActions {
+    width: 100%;
+  }
+
+  .entryActions > button {
+    flex: 1 1 auto;
   }
 }

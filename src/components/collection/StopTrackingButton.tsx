@@ -41,7 +41,11 @@ export function StopTrackingButton({ session, variant, className, onLeft }: Prop
       <ConfirmDialog
         open={confirming}
         title={`Stop tracking “${title}”?`}
-        message={stopTrackingMessage(session.organizerName ?? null)}
+        // Said only when something is waiting: what the member said they paid is withdrawn with them (AC-29.2).
+        message={stopTrackingMessage(
+          session.organizerName ?? null,
+          (session.claims ?? []).some((c) => c.mine && c.status === 'pending'),
+        )}
         confirmLabel="Stop tracking"
         destructive
         onCancel={() => {

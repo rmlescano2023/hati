@@ -203,6 +203,36 @@
   border-top: 1px solid var(--border);
 }
 
+/* One claim the organizer decides for someone with no account: text on the left, actions at the end. */
+.other {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--text2);
+}
+
+.otherText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.otherMeta {
+  color: var(--text3);
+}
+
+.otherError {
+  color: var(--danger-text);
+}
+
+.otherActions {
+  display: flex;
+  gap: 8px;
+}
+
 .markAll + .invite {
   padding-top: 0;
   border-top: none;
@@ -226,5 +256,20 @@
      the shell's 38px. */
   .youAre [data-stop-tracking] {
     min-height: 44px;
+  }
+}
+
+@media (max-width: 640px) {
+  /* Confirm and Decline drop under the text together, sharing the row (E2-11). */
+  .other {
+    flex-wrap: wrap;
+  }
+
+  .otherActions {
+    width: 100%;
+  }
+
+  .otherActions > button {
+    flex: 1 1 auto;
   }
 }
