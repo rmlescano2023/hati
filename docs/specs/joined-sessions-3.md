@@ -1,6 +1,6 @@
 # Spec: joined sessions, PR 3 (the invite QR on screen and on the organizer's SOA)
 
-Status: **draft, waiting for the owner's approval.** Branch `joined-sessions-3`, from
+Status: **approved by the owner on 2026-11-20** (see section 12). Branch `joined-sessions-3`, from
 `origin/joined-sessions-1` at `232aa81` (PR 1 with the owner's round 2 decisions). PR 3 builds on
 PR 1's `InviteMembersDialog`, `useInvites` and `inviteUrl`; once PR 1 merges into `main`, this branch
 is rebased onto `main`.
@@ -935,13 +935,18 @@ For the documentation-engineer, when the owner asks:
 **Effort: medium.** About 350 lines of encoder, 250 of tests, 30KB of generated data, and small
 changes in five UI and PDF files. No data risk.
 
-## 12. Decisions for the user
+## 12. Decisions
 
-1. **Where the QR goes in Invite members.** The requirements disagree: AC-30.1 says the QR is
-   "above Copy link", BR-O2 lists it after Copy link.
-   - **(a) Recommended:** QR and caption, then the link text, then Copy link. The link stays next to
-     its Copy button, and the QR, the thing most people will use, comes first.
+Approved by the owner on 2026-11-20.
+
+1. **The spec is approved.**
+2. **Assumptions A1 to A7 (section 1) are accepted.**
+3. **Where the QR goes in Invite members: option (a).** QR and caption, then the link text, then
+   Copy link. The requirements disagreed: AC-30.1 says the QR is "above Copy link", BR-O2 lists it
+   after Copy link.
+   - **(a) Chosen:** QR and caption, then the link text, then Copy link. The link stays next to its
+     Copy button, and the QR, the thing most people will use, comes first.
    - (b) The link text, then the QR and caption, then Copy link (AC-30.1 read literally).
    - (c) The link text, Copy link, then the QR and caption (BR-O2).
 
-Nothing else is open. Assumptions A1 to A7 (section 1) stand unless vetoed.
+Nothing else is open.
