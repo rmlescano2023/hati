@@ -10,6 +10,7 @@ import {
   joinFlowReady,
   joinPreselect,
   joinReadOnlyLine,
+  JOIN_SHARED_REST,
   joinSharedLine,
   joinStage,
   joinedRowLine,
@@ -285,6 +286,13 @@ describe('copy builders', () => {
     expect(joinedRowLine({ member: 'Ben', name: null, joinedAt })).toBe(
       `No name set · joined ${formatLocalDate(joinedAt)}`,
     );
+  });
+
+  it('JOIN_SHARED_REST is the tail of the shared line after the name', () => {
+    expect(JOIN_SHARED_REST).toBe(
+      ' shared this session. Pick who you are, and your share of it shows up in your Collection.',
+    );
+    expect(joinSharedLine('Ana')).toBe(`Ana${JOIN_SHARED_REST}`);
   });
 
   it('joinSharedLine', () => {

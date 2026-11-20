@@ -156,8 +156,17 @@ export const recordsPaymentsLine = (name: string | null): string =>
 export const joinedRowLine = (p: Participant): string =>
   `${p.name ?? 'No name set'} · joined ${formatLocalDate(p.joinedAt)}`;
 
+/**
+ * What follows the organizer's name in the join prompt's first line. The prompt sets the name apart
+ * in the accent colour, so the line is built from the name and this tail rather than as one string.
+ */
+export const JOIN_SHARED_REST =
+  ' shared this session. Pick who you are, and your share of it shows up in your Collection.';
+
 export const joinSharedLine = (name: string | null): string =>
-  `${name === null ? "You've been invited to this session." : `${name} shared this session.`} Pick who you are, and your share of it shows up in your Collection.`;
+  name === null
+    ? "You've been invited to this session. Pick who you are, and your share of it shows up in your Collection."
+    : `${name}${JOIN_SHARED_REST}`;
 
 export const joinReadOnlyLine = (name: string | null): string =>
   `You can see the whole session, but only ${org(name, false)} can change it. ${org(name, true)} will see your Hati name and when you joined.`;

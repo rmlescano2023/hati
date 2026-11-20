@@ -24,7 +24,7 @@ const noop = () => {};
 
 /**
  * One closed session in full: its read-only breakdown and its own SOA export. The organizer also
- * gets Invite members here; a member who joined gets Stop tracking in its place.
+ * gets Share with members here; a member who joined gets Stop tracking in its place.
  */
 export function HistoryDetailPage({ sessionId, onBack, onLeft = noop }: Props) {
   const { sessions } = useSessionsStore();
@@ -83,8 +83,13 @@ export function HistoryDetailPage({ sessionId, onBack, onLeft = noop }: Props) {
               onLeft={onLeft}
             />
           ) : (
-            <Button size="lg" className={styles.secondary} onClick={() => setInviting(true)}>
-              Invite members
+            <Button
+              variant="primary"
+              size="lg"
+              className={styles.secondary}
+              onClick={() => setInviting(true)}
+            >
+              Share with members
             </Button>
           )}
         </div>
@@ -92,12 +97,7 @@ export function HistoryDetailPage({ sessionId, onBack, onLeft = noop }: Props) {
       {inviting && <InviteMembersDialog session={session} onClose={() => setInviting(false)} />}
 
       {groupRecordsForBreakdown(session.records, sortNames(session.members)).map((group) => (
-        <BreakdownGroup
-          key={group.key}
-          group={group}
-          members={members}
-          editable={false}
-        />
+        <BreakdownGroup key={group.key} group={group} members={members} editable={false} />
       ))}
     </>
   );

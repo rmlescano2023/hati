@@ -174,6 +174,21 @@ export function CollectionCard({
   // A joined card always opens, for Stop tracking (BR-V5).
   const expandable = joined || setup || card.lineCount > 0 || hasLine || card.presettled || allPaid;
 
+  // Placed in Mark all's row when that row shows, or in its own row when it doesn't. A practice
+  // session never shows it (AC-1.9), so the Collection guide's Mark all row is exactly as it was.
+  const share =
+    !joined && !isPracticeId(session.id) ? (
+      <Button
+        variant="primary"
+        className={styles.share}
+        aria-label={`Share ${title} with members`}
+        onClick={() => setInviting(true)}
+      >
+        Share with members
+      </Button>
+    ) : null;
+  const markAllShown = !joined && card.bucket === 'outstanding';
+
   const summary = (
     <span className={styles.titles}>
       <span className={styles.title}>{title}</span>
@@ -307,20 +322,11 @@ export function CollectionCard({
           {allPaid && (
             <p className={styles.detail}>Every line in this session is marked as paid.</p>
           )}
-          {!joined && card.bucket === 'outstanding' && (
-            <MarkAll card={card} title={title} onPaid={onPaid} />
-          )}
+          {markAllShown && <MarkAll card={card} title={title} onPaid={onPaid} extra={share} />}
           {!joined && card.presettled && <UndoSettled card={card} title={title} />}
-          {!joined && !isPracticeId(session.id) && (
-            <div className={styles.invite}>
-              <Button aria-label={`Invite members to ${title}`} onClick={() => setInviting(true)}>
-                Invite members
-              </Button>
-              {inviting && (
-                <InviteMembersDialog session={session} onClose={() => setInviting(false)} />
-              )}
-            </div>
-          )}
+          {share !== null && !markAllShown && <div className={styles.shareRow}>{share}</div>}
+          {/* Outside both rows, so it is never a flex item and never inside the tour target. */}
+          {inviting && <InviteMembersDialog session={session} onClose={() => setInviting(false)} />}
         </div>
       )}
     </article>
@@ -463,19 +469,27 @@ function MarkAll({
   card,
   title,
   onPaid,
+  extra,
 }: {
   card: Card;
   title: string;
   onPaid: (ok: boolean) => void;
+  /** Share, when it goes in this row: straight after Mark all, which stays the row's first button. */
+  extra?: ReactNode;
 }) {
   const { addPayments } = useSessionsStore();
   const [confirming, setConfirming] = useState(false);
   const row = useRef<HTMLDivElement>(null);
   return (
-    <div ref={row} className={styles.markAll} data-tour="collection-mark-all">
+    <div
+      ref={row}
+      className={`${styles.markAll} ${extra ? styles.withShare : ''}`}
+      data-tour="collection-mark-all"
+    >
       <Button aria-label={`Mark all as paid in ${title}`} onClick={() => setConfirming(true)}>
         Mark all as paid
       </Button>
+      {extra}
       <ConfirmDialog
         open={confirming}
         title="Mark everything as paid?"

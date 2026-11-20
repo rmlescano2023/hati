@@ -12,3 +12,11 @@
   color: var(--danger-text);
   overflow-wrap: anywhere;
 }
+
+/* The person who shared the session, in the accent colour and bold, so it reads at a glance
+   (round 3). Weight as well as colour, so it doesn't depend on colour alone. */
+.sharer {
+  color: var(--accent-text);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
