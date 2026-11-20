@@ -1908,7 +1908,9 @@ it (it only keeps a pick off a joined member), so it is unchanged.
 - **Confirm**, when the joiner's profile name, or failing that a nickname, matches exactly one
   claimable member (`joinMatch`; an ambiguous name, the organizer's member and a member already
   joined never match). Title `Join “{title}” as {member}?`, the same date and count line, the
-  highlighted sharer line and the read-only line, the Remember checkbox where `rememberOffer`
+  highlighted sharer line, which here reads "{Sharer} shared this session. Confirm it's you, and your
+  share of it shows up in your Collection." (the list view keeps "Pick who you are…"), the
+  read-only line, the Remember checkbox where `rememberOffer`
   applies, Cancel and a primary Join (reads "Joining…" in flight), and under them a quiet link
   `Not {member}?` (its `aria-label` is `Not {member}? Choose another member`). Focus starts on Join.
 - **List**, for no match, an ambiguous match, or after "Not you?" (nothing preselected), and again

@@ -52,12 +52,16 @@ describe('the join prompt (round 4)', () => {
   it('keeps the highlighted sharer, the date and the member count (the organizer included)', () => {
     const markup = render();
     expect(markup).toMatch(/<strong class="[^"]*sharer[^"]*">Rina<\/strong> shared this session\./);
+    expect(markup).toContain("Confirm it's you, and your share of it shows up in your Collection.");
+    expect(markup).not.toContain('Pick who you are, and your share');
     expect(markup).toContain('· 4 members');
   });
 
   it('shows the list after "Not you?", with nothing selected', () => {
     const markup = render({}, { startWithList: true });
     expect(markup).toContain('Join “Bali Trip”?');
+    expect(markup).toContain('Pick who you are, and your share of it shows up in your Collection.');
+    expect(markup).not.toContain('Confirm it');
     expect(markup).toContain('Which one are you?');
     expect(markup).toContain('type="radio"');
     expect(markup).not.toContain('checked');
