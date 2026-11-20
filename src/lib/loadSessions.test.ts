@@ -72,6 +72,7 @@ beforeEach(() => {
     {
       ...row('joined_1', { me: undefined }),
       organizer_me: 'Ana',
+      organizer_nicknames: [],
       member: 'Ben',
       organizer_name: 'Ana',
     },
@@ -243,6 +244,27 @@ describe('loadSessions', () => {
       expect(joined.withAccount).toEqual(['Ana', 'Ben', 'Carla']);
       expect(JSON.stringify(joined)).not.toContain('organizer_me');
       expect(joined.me).toBe('Ben');
+    });
+
+    it('counts an organizer placed only by profile name as having an account (round 4)', async () => {
+      db.joined = [
+        {
+          ...row('joined_1', { me: undefined }),
+          organizer_me: null,
+          organizer_nicknames: [],
+          member: 'Ben',
+          organizer_name: 'Ana',
+        },
+      ];
+      db.claimed = [{ session_id: 'joined_1', member: 'Ben' }];
+      const [joined] = (await loadSessions('user_b', null, true)).filter(
+        (s) => s.id === 'joined_1',
+      );
+      expect(joined.withAccount).toEqual(['Ana', 'Ben']);
+      // A nickname-only match is no account.
+      db.joined = [{ ...db.joined[0], organizer_name: 'Zed', organizer_nicknames: ['Ana'] }];
+      const [nick] = (await loadSessions('user_b', null, true)).filter((s) => s.id === 'joined_1');
+      expect(nick.withAccount).toEqual(['Ben']);
     });
 
     it('asks which members are claimed over the joined ids only', async () => {

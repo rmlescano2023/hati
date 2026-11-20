@@ -1339,3 +1339,13 @@ The waiting line and entries, the "N to confirm" pill and the Collection tab bad
 soft green gradient panel with a thin glowing outline and a 3px accent bar, and a glossy accent
 pill and badge, each with a gentle light sweep (at most 10% white, behind the text, off under reduced
 motion). CSS only; text stays at 4.5:1 or better at the sweep's peak.
+
+### 14.7 Owner feedback round 4 (2026-11-20): A2 is replaced
+
+PR 1's round 4 (`docs/specs/joined-sessions.md`, 14.10) works out the organizer's effective member as
+Collection does: the stored pick, or their profile-name match when there is none (a nickname-only
+match doesn't count). **This replaces assumption A2, "the organizer's member means the stored pick
+only".** `withAccount` is now the members someone joined as plus that effective member, worked out on
+the server from the organizer's `display_name` and `nicknames`, loaded in the same joined-sessions
+query. It is still never a label and never names the organizer. On the organizer's own screen
+nothing changes: a claim to a profile-placed organizer is on their own line, as A2 already said.

@@ -1,6 +1,6 @@
 import { useId, type ReactNode } from 'react';
 import { useProfile } from '../../context/ProfileContext';
-import { NOT_IN_SESSION, rememberOffer } from '../../lib/collection';
+import { NOT_IN_SESSION, rememberOffer, type RememberOffer } from '../../lib/collection';
 import { sortNames } from '../../lib/format';
 import styles from './MePicker.module.css';
 
@@ -84,19 +84,35 @@ export function MePicker({
       </fieldset>
       {afterMembers}
       {offer !== null && (
-        <label className={styles.option}>
-          <input
-            type="checkbox"
-            checked={remember}
-            onChange={(e) => onRememberChange(e.target.checked)}
-          />
-          <span className={styles.optionLabel}>
-            {offer === 'name'
-              ? 'Remember as my name'
-              : `Remember “${value}” as another name for me`}
-          </span>
-        </label>
+        <RememberOption
+          offer={offer}
+          value={value}
+          checked={remember}
+          onChange={onRememberChange}
+        />
       )}
     </div>
+  );
+}
+
+/** The "Remember" checkbox a picker offers for its selection; the caller decides when to show it. */
+export function RememberOption({
+  offer,
+  value,
+  checked,
+  onChange,
+}: {
+  offer: RememberOffer;
+  value: string | null;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <label className={styles.option}>
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      <span className={styles.optionLabel}>
+        {offer === 'name' ? 'Remember as my name' : `Remember “${value}” as another name for me`}
+      </span>
+    </label>
   );
 }

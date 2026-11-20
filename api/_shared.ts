@@ -5,7 +5,7 @@ import { verifyToken } from '@clerk/backend';
 import {
   participantView,
   stateText,
-  unavailableMembers,
+  organizerMember,
   visibleLedger,
   type ClaimRow,
 } from '../src/lib/joinedSessions.js';
@@ -91,8 +91,9 @@ export const iso = (v: Date | string): string => (v instanceof Date ? v.toISOStr
 type JoinedRow = Omit<SessionRow, 'me'> & {
   member: string;
   organizer_name: string | null;
-  /** Only ever an argument to `unavailableMembers`, for `withAccount`; never put on a session. */
+  /** With the organizer's name and nicknames, only to work out `withAccount`; never put on a session. */
   organizer_me: string | null;
+  organizer_nicknames: string[] | null;
 };
 
 type ClaimDbRow = {
@@ -274,14 +275,14 @@ export async function loadSessions(
     where user_id = ${userId} and (${only}::text is null or id = ${only})
     order by created_at`;
 
-  // The organizer's own pick is selected only as `organizer_me`, to work out `withAccount`: a
-  // participant is never sent it.
+  // The organizer's own pick and nicknames are selected only to work out which member the
+  // organizer is, for `withAccount`: a participant is never sent them.
   const joinedRows = joined
     ? (
         await pool.sql<JoinedRow>`
           select s.id, s.status, s.created_at, s.closed_at, s.members, s.name, s.activity_at,
                  s.finished_with_collection, p.member, u.display_name as organizer_name,
-                 s.me as organizer_me
+                 s.me as organizer_me, u.nicknames as organizer_nicknames
           from session_participants p
           join expense_sessions s on s.id = p.session_id
           join users u on u.id = s.user_id
@@ -327,11 +328,18 @@ export async function loadSessions(
         content.claims.get(s.id) ?? [],
         userId,
       );
+      // Who has an account: the members someone joined as, and the organizer's member as
+      // Collection places them, by pick or by profile name (round 4, replacing A2).
+      const claimed = content.claimed.get(s.id) ?? [];
+      const organizer = organizerMember({ me: s.organizer_me, members: s.members }, claimed, {
+        displayName: s.organizer_name,
+        nicknames: s.organizer_nicknames ?? [],
+      });
       return participantView(
         { ...base(s, null), payments: ledger.payments, claims: ledger.claims },
         s.member,
         s.organizer_name ?? null,
-        unavailableMembers(s.members, s.organizer_me, content.claimed.get(s.id) ?? []),
+        s.members.filter((m) => claimed.includes(m) || m === organizer),
       );
     }),
   ];
