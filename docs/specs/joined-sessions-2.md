@@ -1349,3 +1349,12 @@ only".** `withAccount` is now the members someone joined as plus that effective 
 the server from the organizer's `display_name` and `nicknames`, loaded in the same joined-sessions
 query. It is still never a label and never names the organizer. On the organizer's own screen
 nothing changes: a claim to a profile-placed organizer is on their own line, as A2 already said.
+
+### 14.8 Owner feedback round 5 (2026-11-21)
+
+PR 1's round 5 (`docs/specs/joined-sessions.md`, 14.11) applies here. The one PR 2 item is the
+reset control on Collection's amount boxes: the "I've paid" amount is the same box as the
+record-payment amount, in `LineRow`, so it takes `ClearableInput` with the circular-arrow reset
+icon, labelled "Clear amount paid to {name}" for a debtor and "Clear amount received from {name}"
+for a creditor. Share is Outstanding-only here too, so a card with claims waiting still shows it
+only while Outstanding.

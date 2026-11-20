@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
@@ -114,12 +116,32 @@ describe('the join prompt (round 4)', () => {
     expect(render({ members: ['Ben', 'Carla'] })).not.toMatch(/centred/);
   });
 
-  it('keeps the two body paragraphs left-aligned while the rest is centred', () => {
-    const markup = render();
-    expect(markup).toMatch(
-      /<p class="[^"]*bodyText[^"]*"><strong[^>]*>Rina<\/strong> shared this session\./,
+  it('centres only the buttons and the link, so the title and the text stay left-aligned (round 5)', () => {
+    const css = readFileSync(resolve(__dirname, './JoinFlow.module.css'), 'utf8');
+    const centred = css.slice(
+      css.indexOf('.centred {'),
+      css.indexOf('}', css.indexOf('.centred {')),
     );
-    expect(markup).toMatch(/<p class="[^"]*bodyText[^"]*">You can see the whole session/);
-    expect((markup.match(/bodyText/g) ?? []).length).toBe(2);
+    expect(centred).not.toContain('text-align');
+    expect(css).toMatch(/\.centred > \.actionsCentred \{[^}]*justify-content: center/);
+    expect(css).toMatch(/\.centred > \.notYou \{[^}]*align-self: center/);
+    expect(css).not.toContain('bodyText');
+    expect(css).not.toContain('rememberRow');
+  });
+
+  it('offers Back, not Cancel, on the list reached through Not you (round 5)', () => {
+    const viaNotYou = render({}, { startWithList: true });
+    expect(viaNotYou).toContain('>Back<');
+    expect(viaNotYou).not.toContain('>Cancel<');
+  });
+
+  it('keeps Cancel on the list shown because nothing matched', () => {
+    const noMatch = render({ members: ['Ben', 'Carla'] });
+    expect(noMatch).toContain('>Cancel<');
+    expect(noMatch).not.toContain('>Back<');
+  });
+
+  it('keeps Cancel on the confirm view', () => {
+    expect(render()).toContain('>Cancel<');
   });
 });

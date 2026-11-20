@@ -5,9 +5,10 @@ import { Button } from '../components/shared/Button';
 import { InviteMembersDialog } from '../components/collection/InviteMembersDialog';
 import { StopTrackingButton } from '../components/collection/StopTrackingButton';
 import { ExportSoaButton } from '../components/summary/ExportSoaButton';
+import { useProfile } from '../context/ProfileContext';
 import { useSessionsStore } from '../context/SessionsStoreContext';
 import { groupRecordsForBreakdown } from '../lib/calculations';
-import { isJoined } from '../lib/collection';
+import { buildCard, isJoined } from '../lib/collection';
 import { compareNames, formatLongDate, joinNames, sortNames } from '../lib/format';
 import { sharedByLine } from '../lib/joinedSessions';
 import { sessionDisplayTitle, sessionTitle } from '../lib/sessionLabel';
@@ -24,10 +25,12 @@ const noop = () => {};
 
 /**
  * One closed session in full: its read-only breakdown and its own SOA export. The organizer also
- * gets Share with members here; a member who joined gets Stop tracking in its place.
+ * gets Share with members here while the session is Outstanding; a member who joined gets Stop
+ * tracking in its place.
  */
 export function HistoryDetailPage({ sessionId, onBack, onLeft = noop }: Props) {
   const { sessions } = useSessionsStore();
+  const profile = useProfile();
   const [inviting, setInviting] = useState(false);
   const session = sessions.find((s) => s.id === sessionId);
 
@@ -42,6 +45,13 @@ export function HistoryDetailPage({ sessionId, onBack, onLeft = noop }: Props) {
   const closedOn = (session.closedAt ?? session.createdAt).slice(0, 10);
   const members = [...session.members].sort(compareNames);
   const joined = isJoined(session);
+  // Share is offered only while the session is Outstanding on the organizer's Collection, the same
+  // rule as the card (round 5), so it needs the profile to place the organizer.
+  const outstanding =
+    !joined &&
+    profile.status === 'ready' &&
+    buildCard(session, { displayName: profile.displayName, nicknames: profile.nicknames })
+      .bucket === 'outstanding';
 
   return (
     <>
@@ -82,7 +92,7 @@ export function HistoryDetailPage({ sessionId, onBack, onLeft = noop }: Props) {
               className={styles.secondary}
               onLeft={onLeft}
             />
-          ) : (
+          ) : outstanding ? (
             <Button
               variant="primary"
               size="lg"
@@ -91,7 +101,7 @@ export function HistoryDetailPage({ sessionId, onBack, onLeft = noop }: Props) {
             >
               Share with members
             </Button>
-          )}
+          ) : null}
         </div>
       </header>
       {inviting && <InviteMembersDialog session={session} onClose={() => setInviting(false)} />}

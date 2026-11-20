@@ -26,16 +26,11 @@
   align-self: flex-start;
 }
 
-/* The confirm view only: every line, the Remember row, the buttons and the link are centred, on
-   phone and desktop alike. The list view keeps its left-aligned radios, and the two paragraphs of body text stay left-aligned
-   because they read as sentences. */
+/* The confirm view only: the Cancel and Join group and the "Not Ben?" link are centred, on phone
+   and desktop alike. The title and every line of text stay left-aligned, and so does the list
+   view (round 5). */
 .centred {
-  text-align: center;
-}
-
-.centred > .rememberRow {
-  display: flex;
-  justify-content: center;
+  min-width: 0;
 }
 
 .centred > .actionsCentred {
@@ -44,8 +39,4 @@
 
 .centred > .notYou {
   align-self: center;
-}
-
-.centred > .bodyText {
-  text-align: left;
 }

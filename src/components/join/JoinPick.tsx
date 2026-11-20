@@ -71,7 +71,7 @@ export function JoinPick({ preview, busy, error, onJoin, onCancel, startWithList
       <p className={confirm.message}>
         Finished {formatLocalDate(preview.closedAt)} · {pluralize(preview.memberCount, 'member')}
       </p>
-      <p className={`${confirm.message} ${styles.bodyText}`}>
+      <p className={confirm.message}>
         {preview.organizerName === null ? (
           view === 'confirm' ? (
             joinConfirmLine(null)
@@ -85,9 +85,7 @@ export function JoinPick({ preview, busy, error, onJoin, onCancel, startWithList
           </>
         )}
       </p>
-      <p className={`${confirm.message} ${styles.bodyText}`}>
-        {joinReadOnlyLine(preview.organizerName)}
-      </p>
+      <p className={confirm.message}>{joinReadOnlyLine(preview.organizerName)}</p>
 
       {view === 'list' && (
         <div className={styles.members}>
@@ -109,14 +107,7 @@ export function JoinPick({ preview, busy, error, onJoin, onCancel, startWithList
         </div>
       )}
       {view === 'confirm' && offer !== null && (
-        <div className={styles.rememberRow}>
-          <RememberOption
-            offer={offer}
-            value={selected}
-            checked={remember}
-            onChange={setRemember}
-          />
-        </div>
+        <RememberOption offer={offer} value={selected} checked={remember} onChange={setRemember} />
       )}
 
       {error !== null && (
@@ -129,7 +120,13 @@ export function JoinPick({ preview, busy, error, onJoin, onCancel, startWithList
           view === 'confirm' ? `${confirm.actions} ${styles.actionsCentred}` : confirm.actions
         }
       >
-        <Button onClick={onCancel}>Cancel</Button>
+        {/* A list reached through "Not Ben?" steps back to the confirm; one shown because nothing
+            matched has no confirm to go back to, so it cancels. Escape closes either way. */}
+        {view === 'list' && match !== null ? (
+          <Button onClick={() => setWantsList(false)}>Back</Button>
+        ) : (
+          <Button onClick={onCancel}>Cancel</Button>
+        )}
         <Button
           data-join=""
           variant="primary"
