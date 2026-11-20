@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   NOT_IN_SESSION,
   announcesSettled,
+  autoOpenTarget,
+  waitingForMeCount,
   buildCard,
   buildCollection,
   claimedMembers,
@@ -1230,5 +1232,88 @@ describe('newClaims', () => {
         mine: true,
       },
     ]);
+  });
+});
+
+describe('waitingForMeCount and autoOpenTarget (round 3)', () => {
+  // Ben owes Ana ₱500 and Carla ₱300. The viewer is Ana, the organizer, so a claim to Ana is on
+  // her own line, and one to Carla (no account) is hers to decide for others.
+  const organizer = (id: string, claims: Claim[], over: Partial<Session> = {}) =>
+    finished(
+      id,
+      ['Ana', 'Ben', 'Carla'],
+      [
+        purchase(`${id}_a`, 'Ana', 1000, ['Ana', 'Ben']),
+        purchase(`${id}_c`, 'Carla', 600, ['Ben', 'Carla']),
+      ],
+      { me: 'Ana', participants: [{ member: 'Ben', name: null, joinedAt: 'x' }], claims, ...over },
+    );
+  const names_ = names('Ana');
+
+  it("counts the claims on the viewer's own lines and the ones for others", () => {
+    const c = buildCollection(
+      [
+        organizer('s1', [
+          claim('c1', 'Ben', 'Ana', 10000),
+          claim('c2', 'Ben', 'Ana', 5000),
+          claim('c3', 'Ben', 'Carla', 5000),
+        ]),
+      ],
+      names_,
+    );
+    expect(waitingForMeCount(c)).toBe(3);
+  });
+
+  it("does not count a debtor's own pending claims, declined claims or a participant creditor's claim", () => {
+    const joinedDebtor = finished(
+      's2',
+      ['Ana', 'Ben', 'Carla'],
+      [purchase('s2_a', 'Ana', 1000, ['Ana', 'Ben'])],
+      {
+        role: 'participant',
+        me: 'Ben',
+        organizerName: 'Ana',
+        participants: [],
+        withAccount: ['Ana'],
+        claims: [claim('c4', 'Ben', 'Ana', 10000, { mine: true })],
+      },
+    );
+    const declinedOnly = organizer('s3', [claim('c5', 'Ben', 'Ana', 100, { status: 'declined' })]);
+    const toParticipant = organizer('s4', [claim('c6', 'Ben', 'Carla', 100)], {
+      participants: [
+        { member: 'Ben', name: null, joinedAt: 'x' },
+        { member: 'Carla', name: null, joinedAt: 'x' },
+      ],
+    });
+    expect(
+      waitingForMeCount(buildCollection([joinedDebtor, declinedOnly, toParticipant], names_)),
+    ).toBe(0);
+  });
+
+  it('opens the first waiting card in page order, and nothing when there is nothing to open', () => {
+    const waiting = organizer('s_wait', [claim('c1', 'Ben', 'Ana', 10000)]);
+    const quiet = organizer('s_quiet', []);
+    const collection = buildCollection([quiet, waiting], names_);
+    expect(autoOpenTarget(collection, { openSessionId: undefined, autoOpen: true })).toBe('s_wait');
+    expect(autoOpenTarget(collection, { openSessionId: undefined, autoOpen: false })).toBeNull();
+    expect(autoOpenTarget(collection, { openSessionId: 's_quiet', autoOpen: true })).toBeNull();
+    expect(
+      autoOpenTarget(buildCollection([quiet], names_), {
+        openSessionId: undefined,
+        autoOpen: true,
+      }),
+    ).toBeNull();
+  });
+
+  it('picks Needs setup before Outstanding', () => {
+    const outstanding = organizer('s_out', [claim('c1', 'Ben', 'Ana', 10000)]);
+    // The organizer is unplaced (no pick, no name match), so the card is in Needs setup with a
+    // claim for others.
+    const setup = organizer('s_setup', [claim('c2', 'Ben', 'Carla', 100)], { me: null });
+    const collection = buildCollection([outstanding, setup], names('Zed'));
+    expect(collection.needsSetup.map((c) => c.session.id)).toEqual(['s_setup']);
+    expect(autoOpenTarget(collection, { openSessionId: undefined, autoOpen: true })).toBe(
+      's_setup',
+    );
   });
 });

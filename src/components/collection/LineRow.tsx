@@ -232,7 +232,10 @@ export function LineRow({
   const orphanErrors = [...entryErrors].filter(([id]) => !shownIds.has(id));
 
   return (
-    <div className={styles.line}>
+    <div
+      className={styles.line}
+      data-to-confirm={owedToYou && line.claims.length > 0 ? '' : undefined}
+    >
       <div className={styles.top}>
         <span className={styles.name}>{other}</span>
         <span className={styles.amount}>{formatCents(line.amountCents)}</span>
@@ -361,6 +364,7 @@ export function LineRow({
                 </span>
                 <span className={styles.entryActions}>
                   <Button
+                    variant="primary"
                     size="sm"
                     aria-label={`Confirm ${formatCents(claim.amountCents)} from ${other}`}
                     onClick={() => confirmClaim(claim)}

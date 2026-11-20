@@ -96,7 +96,6 @@ function summaryDetail(card: Card, expanded: boolean): string[] {
   return [
     ...baseSummaryDetail(card, expanded),
     card.waitingCents > 0 ? waitingSummaryLine(card.waitingCents) : '',
-    card.toConfirmCount > 0 ? toConfirmCountLine(card.toConfirmCount) : '',
   ];
 }
 
@@ -237,6 +236,12 @@ export function CollectionCard({
           </span>
         ))}
       {card.bucket === 'outstanding' && !expanded && <MoneySummary card={card} />}
+      {card.toConfirmCount > 0 && (
+        <span className={styles.toConfirm}>
+          <span aria-hidden="true">{card.toConfirmCount} to confirm</span>
+          <span className="visually-hidden">{toConfirmCountLine(card.toConfirmCount)}</span>
+        </span>
+      )}
     </span>
   );
 
@@ -551,7 +556,7 @@ function ForOthers({
     <section className={styles.group}>
       <h4 className={styles.groupHeading}>To confirm for others</h4>
       {card.forOthers.map((claim) => (
-        <div key={claim.id} className={styles.other}>
+        <div key={claim.id} className={styles.other} data-to-confirm="">
           <span className={styles.otherText}>
             <span>{saysTheyPaidOtherLine(claim.debtor, claim.creditor, claim.amountCents)}</span>
             <span className={styles.otherMeta}>{formatLocalDateTime(claim.createdAt)}</span>
@@ -564,6 +569,7 @@ function ForOthers({
           </span>
           <span className={styles.otherActions}>
             <Button
+              variant="primary"
               size="sm"
               aria-label={`Confirm ${formatCents(claim.amountCents)} from ${claim.debtor} to ${claim.creditor}`}
               onClick={() => setAsking({ claim, decision: 'confirm' })}

@@ -6,6 +6,13 @@
   border-top: 1px solid var(--border);
 }
 
+/* Waiting for this account to confirm (round 3): an accent tint, inside the card's padding. */
+.line[data-to-confirm] {
+  background: var(--accent-bg);
+  border-radius: var(--radius-sm);
+  padding: 8px;
+}
+
 .top {
   display: flex;
   align-items: baseline;

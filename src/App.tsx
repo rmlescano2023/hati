@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Header } from './components/layout/Header';
 import { NavTabs, type TabId } from './components/layout/NavTabs';
 import { PageShell } from './components/layout/PageShell';
@@ -27,6 +27,7 @@ import onboardingStyles from './components/onboarding/OnboardingDialog.module.cs
 import type { ScreenShape } from './components/onboarding/steps';
 import { useOnboarding } from './hooks/useOnboarding';
 import { guideOfferDue, type Guide } from './lib/guideOffer';
+import { buildCollection, waitingForMeCount } from './lib/collection';
 import { joinFlowReady } from './lib/joinedSessions';
 import { browserStorage, clearJoin, peekJoin } from './lib/joinLink';
 import { showsEmptyState } from './lib/writeQueue';
@@ -415,10 +416,22 @@ export default function App() {
   );
   const showNewSession = !(screen.kind === 'home' && homeIsEmpty);
 
+  // Claims waiting for this account's answer, from the same cards Collection shows. Hidden during
+  // the first-run tour, whose step spotlights that tab, and while the profile is loading, because
+  // without it the organizer's own lines can't be placed.
+  const waitingCount = useMemo(
+    () =>
+      profile.status === 'ready' && phase !== 'running'
+        ? waitingForMeCount(buildCollection(sessions, profile))
+        : 0,
+    [sessions, profile, phase],
+  );
+
   const nav = !TOP_LEVEL.has(screen.kind) ? null : (
     <NavTabs
       active={screen.kind as TabId}
       onChange={(tab) => setScreen({ kind: tab })}
+      counts={{ collection: waitingCount }}
       actions={
         showNewSession && (
           <Button
@@ -653,6 +666,7 @@ export default function App() {
           previewSettled={screen.previewSettled}
           onHelp={phase === 'running' ? undefined : () => startTutorial('collection', 'help')}
           onOfferClear={setCollectionClear}
+          autoOpen={phase !== 'running'}
         />
       )}
       {screen.kind === 'history' && (

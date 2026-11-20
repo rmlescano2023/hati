@@ -470,6 +470,33 @@ export function buildCollection(sessions: Session[], names: KnownNames): Collect
   };
 }
 
+/**
+ * How many claims are waiting for this account's answer across every card: the ones it is offered
+ * Confirm and Decline for (BR-C2). A waiting card is never in Settled (BR-C15), but it is summed
+ * for safety.
+ */
+export const waitingForMeCount = (collection: Collection): number =>
+  [...collection.needsSetup, ...collection.outstanding, ...collection.settled].reduce(
+    (sum, card) => sum + card.toConfirmCount,
+    0,
+  );
+
+/**
+ * The card Collection opens on arrival: the first with a claim waiting, in page order (Needs setup,
+ * Outstanding, then Settled). None when the page was reached for a particular session (Finish, a
+ * join), which wins, or when the caller doesn't want it, as in a guide.
+ */
+export function autoOpenTarget(
+  collection: Collection,
+  options: { openSessionId: string | undefined; autoOpen: boolean },
+): string | null {
+  if (!options.autoOpen || options.openSessionId !== undefined) return null;
+  const first = [...collection.needsSetup, ...collection.outstanding, ...collection.settled].find(
+    (card) => card.toConfirmCount > 0,
+  );
+  return first?.session.id ?? null;
+}
+
 export type ParsedAmount = { ok: true; cents: number } | { ok: false; message: string };
 
 /**

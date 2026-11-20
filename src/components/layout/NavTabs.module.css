@@ -131,3 +131,33 @@
     margin: 0 auto;
   }
 }
+
+/* A count on a tab, such as the payments waiting for this account's answer (round 3). */
+.count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  margin-left: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--bg);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  /* The floating pill's tabs are icon over label, so the count sits on the icon's corner. */
+  .tab {
+    position: relative;
+  }
+
+  .count {
+    position: absolute;
+    top: 2px;
+    right: 6px;
+    margin-left: 0;
+  }
+}

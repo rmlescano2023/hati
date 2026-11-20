@@ -11,6 +11,7 @@ import { useProfile } from '../context/ProfileContext';
 import { useSessionsStore } from '../context/SessionsStoreContext';
 import {
   announcesSettled,
+  autoOpenTarget,
   buildCollection,
   formatCents,
   pairPaymentIds,
@@ -35,6 +36,12 @@ type Props = {
    * is neither due nor asked this visit (BR-TG8, BR-TG9). False again on unmount.
    */
   onOfferClear?: (clear: boolean) => void;
+  /**
+   * Open the first card with a claim waiting for this account when the page is reached. Off by
+   * default, so a guide never opens one; a page reached for a particular session (Finish, a join)
+   * opens that one instead.
+   */
+  autoOpen?: boolean;
 };
 
 /**
@@ -48,6 +55,7 @@ export function CollectionPage({
   previewSettled = false,
   onHelp,
   onOfferClear,
+  autoOpen = false,
 }: Props) {
   const { sessions, settleSessions, isPaying, sync } = useSessionsStore();
   const profile = useProfile();
@@ -117,18 +125,31 @@ export function CollectionPage({
   const [announcement, setAnnouncement] = useState('');
   const settledToggle = useRef<HTMLButtonElement>(null);
 
-  // Landing from Finish: once the profile has placed the session, open the
-  // Settled section if that is where it landed, then scroll to its card.
-  const [landing, setLanding] = useState(openSessionId !== undefined);
+  // Landing from Finish, or on the first card with a claim waiting: once the profile has placed the
+  // session, open the Settled section if that is where it landed, then scroll to its card.
+  const [landingId, setLandingId] = useState<string | null>(openSessionId ?? null);
   useEffect(() => {
-    if (!landing || profile.status !== 'ready') return;
-    if (!settledOpen && collection.settled.some((c) => c.session.id === openSessionId)) {
+    if (landingId === null || profile.status !== 'ready') return;
+    if (!settledOpen && collection.settled.some((c) => c.session.id === landingId)) {
       setSettledOpen(true);
       return;
     }
-    document.getElementById(`collection-${openSessionId}`)?.scrollIntoView({ block: 'start' });
-    setLanding(false);
-  }, [collection, landing, openSessionId, profile.status, settledOpen]);
+    document.getElementById(`collection-${landingId}`)?.scrollIntoView({ block: 'start' });
+    setLandingId(null);
+  }, [collection, landingId, profile.status, settledOpen]);
+
+  // Arriving opens the first card with a claim waiting, once, when the profile has placed them. A
+  // claim that arrives while the page is already open changes the badge and the count, and opens
+  // nothing: only an arrival does (round 3).
+  const autoOpened = useRef(false);
+  useEffect(() => {
+    if (autoOpened.current || profile.status !== 'ready') return;
+    autoOpened.current = true;
+    const id = autoOpenTarget(collection, { openSessionId, autoOpen });
+    if (id === null) return;
+    setOpenId(id);
+    setLandingId(id);
+  }, [autoOpen, collection, openSessionId, profile.status]);
 
   // Confirming a Needs setup card moves it to another section, possibly far down
   // the page or into the collapsed Settled section. Once it has moved, bring the

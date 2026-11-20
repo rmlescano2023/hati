@@ -11,6 +11,7 @@ import { HistoryPage } from '../../pages/HistoryPage';
 import { buildCard } from '../../lib/collection';
 import { PracticeProfileProvider } from '../../context/ProfileContext';
 import { PracticeSessionsProvider } from '../../context/SessionsStoreContext';
+import { collectionScenes } from '../onboarding/guides/collectionScenes';
 import type { Claim, Session } from '../../types';
 
 /**
@@ -531,5 +532,54 @@ describe('Stop tracking and Remove with something waiting (AC-29.2, AC-29.3)', (
 
   it("decides Remove's from the pending claims of that member", () => {
     expect(source('./InviteMembersDialog.tsx')).toContain('c.debtor === removing.member');
+  });
+});
+
+describe('a claim waiting for you stands out (round 3)', () => {
+  const organizer = (claims: Claim[]) =>
+    finished('session_wait', {
+      members: ['Ana', 'Ben', 'Carla'],
+      records: [
+        record('rec_a', 'Ana', 1000, ['Ana', 'Ben']),
+        record('rec_c', 'Carla', 600, ['Ben', 'Carla']),
+      ],
+      me: 'Ana',
+      participants: [{ member: 'Ben', name: null, joinedAt: 'x' }],
+      claims,
+    });
+
+  it('shows a "1 to confirm" badge on the collapsed card, read as "1 payment to confirm"', () => {
+    const markup = collection([organizer([claim({ creditor: 'Ana', mine: false })])]);
+    expect(markup).toContain('aria-hidden="true">1 to confirm<');
+    expect(markup).toMatch(/visually-hidden">1 payment to confirm</);
+    // No longer a plain detail line.
+    expect(count(markup, '1 payment to confirm')).toBe(1);
+  });
+
+  it('tints a creditor line with a pending claim and gives Confirm the primary style', () => {
+    const markup = openCard(organizer([claim({ creditor: 'Ana', mine: false })]));
+    expect(markup).toContain('data-to-confirm=""');
+    expect(markup).toMatch(/<button[^>]*primary[^>]*aria-label="Confirm ₱200.00 from Ben"/);
+  });
+
+  it("does not tint a debtor's line for their own pending claim", () => {
+    expect(openCard(owing({ claims: [claim()] }))).not.toContain('data-to-confirm');
+  });
+
+  it('tints every To confirm for others entry', () => {
+    const markup = openCard(
+      organizer([
+        claim({ id: 'pay_a', creditor: 'Carla', mine: false }),
+        claim({ id: 'pay_b', creditor: 'Carla', mine: false }),
+      ]),
+    );
+    expect(count(markup, 'data-to-confirm=""')).toBeGreaterThanOrEqual(2);
+    expect(markup).toMatch(/aria-label="Confirm ₱200.00 from Ben to Carla"/);
+  });
+
+  it('has no claims in any guide scene, so none of this can show there', () => {
+    for (const scene of Object.values(collectionScenes(new Date(2026, 10, 17, 9, 0)))) {
+      for (const session of scene.sessions) expect(session.claims ?? []).toEqual([]);
+    }
   });
 });

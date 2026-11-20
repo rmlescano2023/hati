@@ -106,6 +106,18 @@
   color: var(--text3);
 }
 
+/* A claim waiting for this account's answer, visible on the collapsed card (round 3). */
+.toConfirm {
+  align-self: flex-start;
+  display: inline-flex;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-bg);
+  color: var(--accent-text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
 .detail {
   font-size: 13px;
   color: var(--text2);
@@ -229,6 +241,13 @@
   gap: 10px;
   font-size: 12px;
   color: var(--text2);
+}
+
+/* Waiting for this account to confirm (round 3): the same accent tint as a line. */
+.other[data-to-confirm] {
+  background: var(--accent-bg);
+  border-radius: var(--radius-sm);
+  padding: 8px;
 }
 
 .otherText {
