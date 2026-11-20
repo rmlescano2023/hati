@@ -27,7 +27,8 @@
 }
 
 /* The confirm view only: every line, the Remember row, the buttons and the link are centred, on
-   phone and desktop alike. The list view keeps its left-aligned radios. */
+   phone and desktop alike. The list view keeps its left-aligned radios, and the two paragraphs of body text stay left-aligned
+   because they read as sentences. */
 .centred {
   text-align: center;
 }
@@ -43,4 +44,8 @@
 
 .centred > .notYou {
   align-self: center;
+}
+
+.centred > .bodyText {
+  text-align: left;
 }
