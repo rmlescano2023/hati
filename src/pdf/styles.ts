@@ -65,6 +65,22 @@ export const styles = StyleSheet.create({
     color: palette.text,
   },
 
+  /* ------------------------------- invite -------------------------------- */
+  invite: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: palette.border,
+    borderRadius: 6,
+    padding: 12,
+    marginBottom: 20,
+    backgroundColor: palette.white, // the QR's quiet zone must stay white
+  },
+  inviteText: { flexDirection: 'column', marginLeft: 16, flexShrink: 1 },
+  inviteTitle: { fontSize: 11, fontWeight: 700, color: palette.text },
+  inviteSub: { fontSize: 9, color: palette.text2, marginTop: 3 },
+  inviteUrl: { fontFamily: 'DM Mono', fontSize: 8, color: palette.accent, marginTop: 6 },
+
   /* ------------------------------ sections ------------------------------- */
   section: { marginBottom: 20 },
   sectionTitle: {

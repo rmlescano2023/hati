@@ -19,6 +19,8 @@ type Props = {
   onBack: () => void;
   /** Called once a joined session has been left from here, so the app can go back and announce it. */
   onLeft?: (title: string) => void;
+  /** The organizer's invite link for a session, or null when it can't be had. Absent in tests. */
+  inviteUrlFor?: (sessionId: string) => Promise<string | null>;
 };
 
 const noop = () => {};
@@ -28,7 +30,7 @@ const noop = () => {};
  * gets Share with members here while the session is Outstanding; a member who joined gets Stop
  * tracking in its place.
  */
-export function HistoryDetailPage({ sessionId, onBack, onLeft = noop }: Props) {
+export function HistoryDetailPage({ sessionId, onBack, onLeft = noop, inviteUrlFor }: Props) {
   const { sessions } = useSessionsStore();
   const profile = useProfile();
   const [inviting, setInviting] = useState(false);
@@ -84,6 +86,7 @@ export function HistoryDetailPage({ sessionId, onBack, onLeft = noop }: Props) {
             records={session.records}
             name={session.name}
             fileNameSuffix={closedOn}
+            getInviteUrl={joined || !inviteUrlFor ? undefined : () => inviteUrlFor(session.id)}
           />
           {joined ? (
             <StopTrackingButton

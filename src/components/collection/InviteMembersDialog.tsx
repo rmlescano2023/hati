@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '../shared/Button';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { ModalDialog } from '../shared/ModalDialog';
+import { QrCode } from './QrCode';
 import { useInvites } from '../../hooks/useInvites';
 import { useSessionsStore } from '../../context/SessionsStoreContext';
 import { compareNames } from '../../lib/format';
@@ -158,6 +159,12 @@ export function InviteMembersDialog({ session, onClose }: Props) {
           )}
           {link !== null && !loading && (
             <>
+              <figure className={styles.qrFigure}>
+                <QrCode text={link} label={`QR code for the invite link to ${title}`} />
+                <figcaption className={styles.qrCaption}>
+                  Scan with a phone camera to join.
+                </figcaption>
+              </figure>
               <p ref={linkEl} className={styles.link}>
                 {link}
               </p>
@@ -218,7 +225,7 @@ export function InviteMembersDialog({ session, onClose }: Props) {
       <ConfirmDialog
         open={resetting}
         title="Reset the invite link?"
-        message="The current link will stop working. Members who already joined keep tracking. You'll get a new link to share."
+        message="The current link, and the QR on any statement you've already shared, will stop working. Members who already joined keep tracking. You'll get a new link to share."
         confirmLabel="Reset link"
         destructive
         onCancel={() => setResetting(false)}

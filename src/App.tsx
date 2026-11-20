@@ -25,11 +25,12 @@ import { PracticeExpenses } from './components/onboarding/guides/PracticeExpense
 import { JoinFlow } from './components/join/JoinFlow';
 import onboardingStyles from './components/onboarding/OnboardingDialog.module.css';
 import type { ScreenShape } from './components/onboarding/steps';
+import { useInvites } from './hooks/useInvites';
 import { useOnboarding } from './hooks/useOnboarding';
 import { guideOfferDue, type Guide } from './lib/guideOffer';
 import { buildCollection, waitingForMeCount } from './lib/collection';
 import { joinFlowReady } from './lib/joinedSessions';
-import { browserStorage, clearJoin, peekJoin } from './lib/joinLink';
+import { browserStorage, clearJoin, inviteUrl, peekJoin } from './lib/joinLink';
 import { showsEmptyState } from './lib/writeQueue';
 import type { PaidByPicks } from './lib/staging';
 import styles from './App.module.css';
@@ -60,6 +61,17 @@ const TOP_LEVEL = new Set<Screen['kind']>(['home', 'collection', 'history']);
 export default function App() {
   const { sessions, createSession, deleteSession, recordOpen, sync } = useSessionsStore();
   const profile = useProfile();
+  const { getLink } = useInvites();
+  // The SOA's invite link, fetched fresh at each export so it's never one a reset has replaced
+  // (BR-Q2). It lives here rather than in History detail because the request needs Clerk, which
+  // App always runs under.
+  const inviteUrlFor = useCallback(
+    async (sessionId: string) => {
+      const link = await getLink(sessionId, false);
+      return link ? inviteUrl(window.location.origin, link.token) : null;
+    },
+    [getLink],
+  );
   const [screen, setScreen] = useState<Screen>({ kind: 'home' });
   /** The invite link waiting to be checked, from `main.tsx`'s stash; `started` once its dialog runs. */
   const [join, setJoin] = useState<{ raw: string; started: boolean } | null>(() => {
@@ -678,6 +690,7 @@ export default function App() {
         <HistoryDetailPage
           sessionId={screen.sessionId}
           onBack={() => setScreen({ kind: 'history' })}
+          inviteUrlFor={inviteUrlFor}
           onLeft={(title) => {
             setScreen({ kind: 'history' });
             setAnnouncement(`Stopped tracking ${title}.`);

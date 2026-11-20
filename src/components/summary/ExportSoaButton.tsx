@@ -19,6 +19,11 @@ type Props = {
    * explanatory text under a footer CTA, not beside a back link.
    */
   layout?: 'block' | 'inline';
+  /**
+   * Only the organizer's export of a finished session passes this (BR-Q4). It's asked for the
+   * invite link at each export; null means the SOA goes out without the invite block, and says so.
+   */
+  getInviteUrl?: () => Promise<string | null>;
 };
 
 export function ExportSoaButton({
@@ -28,15 +33,31 @@ export function ExportSoaButton({
   fileNameSuffix,
   hint,
   layout = 'block',
+  getInviteUrl,
 }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [note, setNote] = useState('');
 
   const handleClick = async () => {
     setBusy(true);
     setError('');
+    setNote('');
     try {
-      await downloadSoa({ members, records, fileNameSuffix, name });
+      // It resolves null on any failure, so a link that can't be had never stops the statement.
+      const inviteUrl = getInviteUrl ? await getInviteUrl() : null;
+      await downloadSoa({
+        members,
+        records,
+        fileNameSuffix,
+        name,
+        inviteUrl: inviteUrl ?? undefined,
+      });
+      if (getInviteUrl && inviteUrl === null) {
+        setNote(
+          "Downloaded without the invite QR, because the link couldn't be loaded. Download again to include it.",
+        );
+      }
     } catch (err) {
       // The generator's own message is about its internals, so the user gets a
       // plain line and the cause goes to the console in development.
@@ -57,6 +78,11 @@ export function ExportSoaButton({
         <Button variant="primary" size="lg" onClick={handleClick} disabled={disabled}>
           {busy ? 'Preparing SOA…' : '↓ Download SOA'}
         </Button>
+        {note && (
+          <p role="status" className={styles.note}>
+            {note}
+          </p>
+        )}
         {error && <p className={styles.error}>{error}</p>}
       </div>
     );
@@ -70,6 +96,11 @@ export function ExportSoaButton({
       <p className={styles.hint}>
         {hint ?? 'A paginated PDF statement — settlement, balances and every item.'}
       </p>
+      {note && (
+        <p role="status" className={styles.note}>
+          {note}
+        </p>
+      )}
       {error && <p className={styles.error}>{error}</p>}
     </div>
   );

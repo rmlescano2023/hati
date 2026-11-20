@@ -1,4 +1,4 @@
-import { Document, Page, Text, View } from '@react-pdf/renderer';
+import { Document, Link, Page, Path, Svg, Text, View } from '@react-pdf/renderer';
 import { styles, palette } from './styles';
 import { SettlementSection, NetBalancesSection } from './SettlementSection';
 import { TransactionTable } from './TransactionTable';
@@ -21,6 +21,7 @@ import {
   todayIso,
 } from '../lib/format';
 import { EPSILON } from '../lib/money';
+import { encodeQr, qrPath } from '../lib/qr';
 import { PDF_HEADING_WORD_MAX, breakLongWords, printableSessionName } from '../lib/soaName';
 import type { OwedMatrix, PurchaseRecord } from '../types';
 
@@ -29,6 +30,8 @@ export type SoaProps = {
   records: PurchaseRecord[];
   /** The session's name; null when it has none. */
   name: string | null;
+  /** The organizer's invite link, on a finished session's export from History only (BR-Q4). */
+  inviteUrl?: string;
 };
 
 function DocHeader({
@@ -67,6 +70,37 @@ function DocHeader({
         <Text style={styles.headerValue}>{members.join(', ')}</Text>
         <Text style={[styles.headerLabel, { marginTop: 8 }]}>Grand Total</Text>
         <Text style={styles.grandTotal}>{formatPdfMoney(grandTotal)}</Text>
+      </View>
+    </View>
+  );
+}
+
+/** Side of the printed QR in points, quiet zone included (A5). */
+const INVITE_QR_PT = 96;
+/** DM Mono 8pt is 4.8pt a character, so 72 fit well inside the text column beside the QR. */
+const INVITE_URL_LINE_CHARS = 72;
+
+/**
+ * Page 1's invite block: the QR on the left, and how to use it beside it (AC-31.1). Both the QR
+ * and the printed link are links, so a tap in a PDF viewer opens the invite (AC-31.2).
+ */
+export function InviteBlock({ url }: { url: string }) {
+  const matrix = encodeQr(url);
+  const units = matrix.length + 8;
+  return (
+    <View style={styles.invite} wrap={false}>
+      <Link src={url}>
+        <Svg width={INVITE_QR_PT} height={INVITE_QR_PT} viewBox={`0 0 ${units} ${units}`}>
+          <Path d={qrPath(matrix)} fill="#000000" />
+        </Svg>
+      </Link>
+      <View style={styles.inviteText}>
+        <Text style={styles.inviteTitle}>Track what you owe on Hati</Text>
+        <Text style={styles.inviteSub}>Scan with your phone camera, or open:</Text>
+        <Link src={url}>
+          {/* Hyphenation is off and a link has no spaces, so it's cut by hand to stay in the column. */}
+          <Text style={styles.inviteUrl}>{breakLongWords(url, INVITE_URL_LINE_CHARS)}</Text>
+        </Link>
       </View>
     </View>
   );
@@ -135,7 +169,7 @@ function Footer() {
   );
 }
 
-export function SoaDocument({ members, records, name }: SoaProps) {
+export function SoaDocument({ members, records, name, inviteUrl }: SoaProps) {
   const sortedMembers = sortNames(members);
   const groups = groupRecordsForBreakdown(records, sortedMembers, 'asc');
   const raw = getRawOwedMatrix(records, sortedMembers);
@@ -173,6 +207,7 @@ export function SoaDocument({ members, records, name }: SoaProps) {
           periodTo={periodTo}
           generatedOn={generatedOn}
         />
+        {inviteUrl !== undefined && <InviteBlock url={inviteUrl} />}
         <SettlementSection settlements={settlements} />
         <NetBalancesSection balances={balances} />
         <Footer />

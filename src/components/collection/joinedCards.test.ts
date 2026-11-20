@@ -295,6 +295,7 @@ describe('no new onboarding targets (BR-G7, BR-G8)', () => {
     for (const path of [
       '../join/JoinFlow.tsx',
       './InviteMembersDialog.tsx',
+      './QrCode.tsx',
       './StopTrackingButton.tsx',
       '../layout/SignedOutScreen.tsx',
       './LineRow.tsx',
@@ -327,6 +328,18 @@ describe('no new onboarding targets (BR-G7, BR-G8)', () => {
     expect(card.split(target)).toHaveLength(2);
     expect(card.split('data-tour="collection-mark-all"')).toHaveLength(2);
     expect(card.match(/data-tour/g)).toHaveLength(2);
+  });
+
+  it('restores the Reset clause about statements already shared (AC-3.1)', () => {
+    expect(source('./InviteMembersDialog.tsx')).toContain(
+      "The current link, and the QR on any statement you've already shared, will stop working. Members who already joined keep tracking. You'll get a new link to share.",
+    );
+  });
+
+  it('puts the QR before the link text and Copy link (A1)', () => {
+    const dialog = source('./InviteMembersDialog.tsx');
+    expect(dialog).toContain('<QrCode');
+    expect(dialog.indexOf('<QrCode')).toBeLessThan(dialog.indexOf('ref={linkEl}'));
   });
 });
 
