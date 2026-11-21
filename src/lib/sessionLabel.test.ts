@@ -221,3 +221,27 @@ describe('deleteSessionMessage with members tracking it (AC-13.1 to AC-13.3)', (
     );
   });
 });
+
+describe('deleteSessionMessage by where the session is (QA B4)', () => {
+  const closedBali = session({
+    status: 'closed',
+    closedAt: '2026-05-02T08:00:00.000Z',
+    name: 'Bali Trip',
+    records: [record('2026-04-24')],
+  });
+
+  it('says it will leave Collection only for a session that is in Collection', () => {
+    expect(deleteSessionMessage(closedBali)).toContain('and it will leave Collection.');
+    expect(deleteSessionMessage(closedBali, 'collection')).toContain(
+      'and it will leave Collection.',
+    );
+  });
+
+  it('does not mention Collection for a session that is in History', () => {
+    const message = deleteSessionMessage(closedBali, 'history');
+    expect(message).toBe(
+      '“Bali Trip” and its 1 purchase will be deleted, and its statement can no longer be downloaded. This cannot be undone.',
+    );
+    expect(message).not.toContain('Collection');
+  });
+});

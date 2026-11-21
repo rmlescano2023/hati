@@ -183,7 +183,7 @@ export function HistoryDetailPage({
       <ConfirmDialog
         open={deleting}
         title="Delete this session?"
-        message={deleting ? deleteSessionMessage(session) : ''}
+        message={deleting ? deleteSessionMessage(session, bucket === 'settled' ? 'history' : 'collection') : ''}
         confirmLabel="Delete Session"
         destructive
         onCancel={() => setDeleting(false)}
@@ -229,7 +229,12 @@ export function HistoryDetailPage({
       )}
 
       {groupRecordsForBreakdown(session.records, sortNames(session.members)).map((group) => (
-        <BreakdownGroup key={group.key} group={group} members={members} editable={false} />
+        <BreakdownGroup
+          key={group.key}
+          group={group}
+          members={members}
+          editable={false}
+        />
       ))}
     </>
   );

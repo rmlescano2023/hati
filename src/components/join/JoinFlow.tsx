@@ -169,20 +169,25 @@ export function JoinFlow({ raw, onClose }: Props) {
     );
   }
   if (answer?.outcome === 'own') {
-    return simple('own', 'This is your session', ownMessage(answer.title), [
-      { label: 'Close', onClick: stay },
-      {
-        label: openLabel(answer.sessionId),
-        primary: true,
-        onClick: () => close({ openSessionId: answer.sessionId, arrival: 'open' }),
-      },
-    ]);
+    return simple(
+      'own',
+      'This is your session',
+      ownMessage(answer.title, placeOf(answer.sessionId)),
+      [
+        { label: 'Close', onClick: stay },
+        {
+          label: openLabel(answer.sessionId),
+          primary: true,
+          onClick: () => close({ openSessionId: answer.sessionId, arrival: 'open' }),
+        },
+      ],
+    );
   }
   if (answer?.outcome === 'already') {
     return simple(
       'already',
       "You're already tracking this session",
-      alreadyMessage(answer.title, answer.member),
+      alreadyMessage(answer.title, answer.member, placeOf(answer.sessionId)),
       [
         { label: 'Close', onClick: stay },
         {

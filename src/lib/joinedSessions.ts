@@ -276,11 +276,25 @@ export const nameTakenLine = (name: string | null): string =>
 export const takenMessage = (member: string): string =>
   `Someone else just joined as ${member}. Pick who you are again.`;
 
-export const alreadyMessage = (title: string, member: string): string =>
-  `“${title}” is in your Collection. You joined as ${member}.`;
+/** `place` is where the session is for this viewer, so the sentence agrees with the dialog's button. */
+export const alreadyMessage = (
+  title: string,
+  member: string,
+  place: 'collection' | 'history' = 'collection',
+): string =>
+  `“${title}” is in your ${place === 'history' ? 'History' : 'Collection'}. You joined as ${member}.`;
 
-export const ownMessage = (title: string): string =>
-  `You're the organizer of “${title}”, so it's already in your Collection. Share this link with the others so they can track their own payments.`;
+/**
+ * Said to the organizer opening their own link. In Collection they can still share it, so it says
+ * so; once the session has settled for them it is in History and the sharing line goes.
+ */
+export const ownMessage = (
+  title: string,
+  place: 'collection' | 'history' = 'collection',
+): string =>
+  place === 'history'
+    ? `You're the organizer of “${title}”, so it's already in your History.`
+    : `You're the organizer of “${title}”, so it's already in your Collection. Share this link with the others so they can track their own payments.`;
 
 export const everyoneJoinedMessage = (title: string, name: string | null): string =>
   `Every member of “${title}” is already on Hati. If one of them is you, ask ${org(name, false)} to remove that member, then open the link again.`;

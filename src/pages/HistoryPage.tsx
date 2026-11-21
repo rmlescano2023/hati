@@ -92,7 +92,7 @@ export function HistoryPage({ onOpenSession }: Props) {
       <ConfirmDialog
         open={pendingDelete !== null}
         title="Delete this session?"
-        message={pendingDelete ? deleteSessionMessage(pendingDelete) : ''}
+        message={pendingDelete ? deleteSessionMessage(pendingDelete, 'history') : ''}
         confirmLabel="Delete Session"
         destructive
         onCancel={() => setPendingDeleteId(null)}

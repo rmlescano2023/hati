@@ -816,3 +816,28 @@ No other open questions. The requirements and the owner's answers Q1 to Q5 settl
 
 Recorded when the owner approved the spec (2026-11-21):
 - **D-A:** assumptions A1 to A4 (section 1) are accepted as written.
+
+## 14. Fix round after review and QA (2026-11-21)
+
+- **Review:** History detail's `BreakdownGroup` block is back in its original five-line form; the
+  `membersWithAccount` comment no longer names the removed `unavailableMembers`; `PATCH /api/claims`
+  checks who may decide before the claim's state, so a related participant who isn't the creditor
+  always gets 403 `not_decider`, and a stranger gets the same 404 as a claim that isn't there.
+- **QA B1:** the moved-to-History notice also shows in the empty states, so the last card to move is
+  still announced; focus goes to its Open button (or the notice) when no card is left.
+- **QA B2 and B5:** a load reads the server at one moment and answers at another. A session created
+  in between (the first-run tour's) isn't in the answer, and one deleted in between still is, and by
+  then neither write is in flight to hold it. The first made the tour's session vanish ("Session not
+  found"); the second brought a deleted card back until the next 15-second check. The store now
+  remembers what was created or removed while a load was out.
+- **QA B3, copy by where the session is for the viewer** (the same rule as the dialog's button):
+  - joined, already tracking: "“{title}” is in your Collection. You joined as {member}." in
+    Collection, and "“{title}” is in your History. You joined as {member}." in History;
+  - the organizer's own link: "You're the organizer of “{title}”, so it's already in your Collection.
+    Share this link with the others so they can track their own payments." in Collection, and
+    "You're the organizer of “{title}”, so it's already in your History." in History (the sharing
+    line goes with it).
+- **QA B4, the delete confirmation:** for a finished session with purchases and no payments, in
+  Collection: "…and its statement can no longer be downloaded, and it will leave Collection. This
+  cannot be undone."; in History: "…and its statement can no longer be downloaded. This cannot be
+  undone." Every other variant is unchanged.

@@ -41,10 +41,14 @@ export function sessionDisplayTitle(session: Titled): string {
  * The delete confirmation's message, shared by Home and History so both say the
  * same thing. Only a closed session with purchases warns about its statement:
  * one with no purchases never had a statement to download. A closed session
- * also leaves Collection, and takes every recorded payment with it, shown there
- * or not, so it names them and says they can't be recovered (BR-19).
+ * also leaves Collection while it is there, and takes every recorded payment with it, shown there
+ * or not, so it names them and says they can't be recovered (BR-19). A session already in History
+ * (`place`) has nothing in Collection to leave, so that clause goes.
  */
-export function deleteSessionMessage(session: Session): string {
+export function deleteSessionMessage(
+  session: Session,
+  place: 'collection' | 'history' = 'collection',
+): string {
   const n = session.records.length;
   const m = session.members.length;
   if (n > 0) {
@@ -63,6 +67,9 @@ export function deleteSessionMessage(session: Session): string {
     }
     if (t > 0) {
       return `“${title}” and its ${purchases} will be deleted, and its statement can no longer be downloaded. ${tracking} This cannot be undone.`;
+    }
+    if (place === 'history') {
+      return `“${title}” and its ${purchases} will be deleted, and its statement can no longer be downloaded. This cannot be undone.`;
     }
     return `“${title}” and its ${purchases} will be deleted, and its statement can no longer be downloaded, and it will leave Collection. This cannot be undone.`;
   }

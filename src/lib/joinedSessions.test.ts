@@ -388,8 +388,15 @@ describe('copy builders', () => {
   it('takenMessage, alreadyMessage and ownMessage', () => {
     expect(takenMessage('Ben')).toBe('Someone else just joined as Ben. Pick who you are again.');
     expect(alreadyMessage('Bali', 'Ben')).toBe('“Bali” is in your Collection. You joined as Ben.');
+    expect(alreadyMessage('Bali', 'Ben', 'collection')).toBe(alreadyMessage('Bali', 'Ben'));
+    expect(alreadyMessage('Bali', 'Ben', 'history')).toBe(
+      '“Bali” is in your History. You joined as Ben.',
+    );
     expect(ownMessage('Bali')).toBe(
       "You're the organizer of “Bali”, so it's already in your Collection. Share this link with the others so they can track their own payments.",
+    );
+    expect(ownMessage('Bali', 'history')).toBe(
+      "You're the organizer of “Bali”, so it's already in your History.",
     );
   });
 
