@@ -236,10 +236,12 @@ export type CollectionCard = {
 };
 
 /**
- * The members who have an account on the session: someone joined as them, or they are the
- * organizer's stored pick. It decides whose name a claim waits on (BR-C19). On an owned session it
- * is worked out here, the same rule the server uses for a participant's `withAccount`; it isn't
- * `unavailableMembers`, because that file imports this one.
+ * The members who have an account on the session, as far as this file can tell: someone joined as
+ * them, or they are the organizer's stored pick. It decides whose name a claim waits on (BR-C19).
+ * A joined session is sent the server's own list, which also counts an organizer placed only by
+ * their profile name (`organizerMember`). That function lives in `joinedSessions.ts`, which imports
+ * this file, so an owned session can't call it here and uses the stored pick alone: it only
+ * matters on the organizer's own screen, where a claim to their own line is already on that line.
  */
 export function membersWithAccount(
   session: Pick<Session, 'role' | 'members' | 'me' | 'participants' | 'withAccount'>,

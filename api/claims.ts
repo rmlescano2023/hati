@@ -220,10 +220,17 @@ async function patch(userId: string, req: VercelRequest, res: VercelResponse) {
 
   return transaction(async (client) => {
     const access = await lockSessionRole(client, userId, sessionId);
+    // No relation answers exactly as a claim that isn't there, so the answer never says which.
     if (access === null) {
       await client.sql`rollback`;
-      return res.status(404).json({ error: 'No such session.' });
+      return res.status(404).json(NOT_PENDING);
     }
+    const notDecider = async () => {
+      await client.sql`rollback`;
+      return res
+        .status(403)
+        .json({ error: 'Only the person who was paid can confirm this.', code: 'not_decider' });
+    };
 
     // Everything below is decided on what is read now, under the lock.
     const { rows } = await client.sql<{
@@ -238,12 +245,22 @@ async function patch(userId: string, req: VercelRequest, res: VercelResponse) {
       from payment_claims where id = ${id} and session_id = ${sessionId}`;
     const claim = rows[0];
 
+    // Who may decide comes first, whatever state the claim is in: a participant who isn't the one
+    // paid is refused before they can learn whether it is pending, declined or confirmed (BR-C2).
+    // The organizer may decide any claim.
+    if (claim && access.role === 'participant' && claim.creditor !== access.member) {
+      return notDecider();
+    }
+
     if (!claim) {
-      const { rows: confirmed } = await client.sql`
-        select id from session_payments where id = ${id} and session_id = ${sessionId}`;
+      const { rows: confirmed } = await client.sql<{ creditor: string }>`
+        select creditor from session_payments where id = ${id} and session_id = ${sessionId}`;
       if (confirmed.length === 0) {
         await client.sql`rollback`;
         return res.status(404).json(NOT_PENDING);
+      }
+      if (access.role === 'participant' && confirmed[0].creditor !== access.member) {
+        return notDecider();
       }
       // Someone else confirmed it first. A replayed confirm is safe; a decline is too late.
       if (decision === 'confirm') {
@@ -261,15 +278,6 @@ async function patch(userId: string, req: VercelRequest, res: VercelResponse) {
         code: 'not_pending',
       });
     }
-    // The organizer may decide any claim. A participant only the ones paid to them, which keeps
-    // the debtor from confirming their own (BR-C2).
-    if (access.role === 'participant' && claim.creditor !== access.member) {
-      await client.sql`rollback`;
-      return res
-        .status(403)
-        .json({ error: 'Only the person who was paid can confirm this.', code: 'not_decider' });
-    }
-
     if (decision === 'decline') {
       await client.sql`
         update payment_claims set status = 'declined', decided_at = now() where id = ${id}`;

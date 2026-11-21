@@ -17,6 +17,7 @@ import {
   pairPaymentIds,
   type CollectionCard as Card,
 } from '../lib/collection';
+import { MovedNotice, type Moved } from '../components/collection/MovedNotice';
 import { movedManyLine, movedToHistoryLine } from '../lib/joinedSessions';
 import { sessionDisplayTitle } from '../lib/sessionLabel';
 import { showsEmptyState } from '../lib/writeQueue';
@@ -144,9 +145,7 @@ export function CollectionPage({
   }, [isLive]);
   const [announcement, setAnnouncement] = useState('');
   /** A card the viewer's own action just moved to History, said at the top of Outstanding (US-H8). */
-  const [moved, setMoved] = useState<{ id: string; title: string } | { count: number } | null>(
-    null,
-  );
+  const [moved, setMoved] = useState<Moved | null>(null);
   // The cards each section held on the previous render, so the move can tell where a card was and
   // what is now at that place. Updated last in the render's effects, after the ones that read it.
   const lastLists = useRef({ needsSetup: [] as string[], outstanding: [] as string[] });
@@ -173,9 +172,12 @@ export function CollectionPage({
     const index = before[section].indexOf(ids[0]);
     requestAnimationFrame(() => {
       const next = latestLists.current[section][index];
+      // With no card left, focus goes to the notice's Open button, or the notice itself.
       const target = next
         ? document.querySelector<HTMLElement>(`#collection-${next} [aria-expanded]`)
-        : document.getElementById('collection-outstanding-heading');
+        : (document.getElementById('collection-outstanding-heading') ??
+          document.querySelector<HTMLElement>('#collection-moved button') ??
+          document.getElementById('collection-moved'));
       target?.focus();
     });
   };
@@ -404,11 +406,18 @@ export function CollectionPage({
     );
   };
 
+  const movedNotice =
+    moved !== null && onOpenInHistory ? (
+      <MovedNotice moved={moved} onOpenInHistory={onOpenInHistory} />
+    ) : null;
+
   return (
     <>
       {total === 0 ? (
         <>
           <div className={styles.helpRow}>{help}</div>
+          {/* The card that moved may have been the last one, so its notice is here too. */}
+          {movedNotice}
           {/* After a failed load the banner speaks instead of an empty state. */}
           {showsEmptyState(sync.loaded, total) &&
             (settled.length > 0 ? (
@@ -464,24 +473,7 @@ export function CollectionPage({
               tabIndex={-1}
               className={homeStyles.heading}
             >{`Outstanding (${outstanding.length})`}</h2>
-            {moved !== null && onOpenInHistory && (
-              <div className={styles.moved}>
-                {'id' in moved ? (
-                  <>
-                    <p>{movedToHistoryLine(moved.title)}</p>
-                    <Button
-                      size="sm"
-                      aria-label={`Open ${moved.title} in History`}
-                      onClick={() => onOpenInHistory(moved.id)}
-                    >
-                      Open
-                    </Button>
-                  </>
-                ) : (
-                  <p>{movedManyLine(moved.count)}</p>
-                )}
-              </div>
-            )}
+            {movedNotice}
             {outstanding.length > 0 ? (
               <div className={homeStyles.list} data-tour="collection-outstanding">
                 {outstanding.map(renderCard)}

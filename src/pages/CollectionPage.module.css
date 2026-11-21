@@ -101,25 +101,6 @@
   color: var(--text2);
 }
 
-/* A card the viewer's own action just moved to History, at the top of Outstanding. */
-.moved {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  border-radius: var(--radius-sm);
-  background: var(--accent-bg);
-  color: var(--accent-text);
-  font-size: 13px;
-  overflow-wrap: anywhere;
-}
-
-.moved > p {
-  flex: 1 1 16rem;
-  margin: 0;
-}
-
 /* Read by screen readers, never seen: the announcement that a session settled. */
 .srOnly {
   position: absolute;

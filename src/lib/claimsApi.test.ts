@@ -371,7 +371,7 @@ describe('PATCH /api/claims', () => {
 
   it('answers 200 to a replayed confirm', async () => {
     db.claimRow = [];
-    db.paymentRow = [{ id: 'pay_c1' }];
+    db.paymentRow = [{ id: 'pay_c1', creditor: 'Ana' }];
     const res = await decide('confirm');
     expect(res.statusCode).toBe(200);
     expect(sent('insert into session_payments')).toHaveLength(0);
@@ -398,7 +398,7 @@ describe('PATCH /api/claims', () => {
     db.claimRow = [];
     db.paymentRow = [];
     expect((await decide('confirm')).statusCode).toBe(404);
-    db.paymentRow = [{ id: 'pay_c1' }];
+    db.paymentRow = [{ id: 'pay_c1', creditor: 'Ana' }];
     const res = await decide('decline');
     expect(res.statusCode).toBe(409);
     expect(res.body).toMatchObject({ code: 'already_confirmed' });
@@ -415,6 +415,64 @@ describe('PATCH /api/claims', () => {
     expect(names[names.indexOf('begin') + 1]).toBe('lockSessionRole');
     as(null);
     expect((await decide('decline')).statusCode).toBe(404);
+  });
+});
+
+describe('PATCH /api/claims: who may decide, and what it reveals (review fix)', () => {
+  const decide = (decision: string) => call('PATCH', { body: { id: 'pay_c1', decision } });
+  const row = (over: Record<string, unknown> = {}) => ({
+    id: 'pay_c1',
+    debtor: 'Ben',
+    creditor: 'Ana',
+    amount_cents: 20000,
+    status: 'pending',
+    created_at: new Date('2026-11-03T00:00:00.000Z'),
+    ...over,
+  });
+  const CARLA: Access = { role: 'participant', member: 'Carla' };
+
+  beforeEach(() => {
+    db.claimSession = [{ session_id: 'session_1' }];
+    db.claimRow = [row()];
+  });
+
+  it('refuses a participant who is not the creditor with 403 whatever the claim state', async () => {
+    as(CARLA, 'user_c');
+    for (const status of ['pending', 'declined']) {
+      db.claimRow = [row({ status })];
+      const res = await decide('confirm');
+      expect(res.statusCode, status).toBe(403);
+      expect(res.body).toMatchObject({ code: 'not_decider' });
+    }
+    // Already confirmed into a payment owed to Ana: still 403 for Carla, never 409 or 200.
+    db.claimRow = [];
+    db.paymentRow = [{ id: 'pay_c1', creditor: 'Ana' }];
+    for (const decision of ['confirm', 'decline']) {
+      const res = await decide(decision);
+      expect(res.statusCode, decision).toBe(403);
+      expect(res.body).toMatchObject({ code: 'not_decider' });
+    }
+    expect(sent('insert into session_payments')).toHaveLength(0);
+    expect(sent('update payment_claims')).toHaveLength(0);
+  });
+
+  it('still tells the real creditor a declined claim is not pending', async () => {
+    as(ANA, 'user_a');
+    db.claimRow = [row({ status: 'declined' })];
+    const res = await decide('confirm');
+    expect(res.statusCode).toBe(409);
+    expect(res.body).toMatchObject({ code: 'not_pending' });
+  });
+
+  it('answers a stranger exactly as it answers a claim that is not there', async () => {
+    db.claimSession = [];
+    const missing = await decide('confirm');
+    db.claimSession = [{ session_id: 'session_1' }];
+    as(null, 'user_x');
+    const stranger = await decide('confirm');
+    expect(missing.statusCode).toBe(404);
+    expect(stranger.statusCode).toBe(404);
+    expect(stranger.body).toEqual(missing.body);
   });
 });
 

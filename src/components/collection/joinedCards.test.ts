@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { CollectionCard } from './CollectionCard';
 import { MePicker } from './MePicker';
+import { MovedNotice } from './MovedNotice';
 import { CollectionPage } from '../../pages/CollectionPage';
 import { HistoryDetailPage } from '../../pages/HistoryDetailPage';
 import { HistoryPage } from '../../pages/HistoryPage';
@@ -876,5 +877,35 @@ describe('the onboarding targets after PR 4', () => {
     );
     expect(row).not.toContain('data-tour');
     expect(card.match(/data-tour/g)).toHaveLength(2);
+  });
+});
+
+describe('the moved-to-History notice (QA B1)', () => {
+  const notice = (moved: { id: string; title: string } | { count: number }) =>
+    wrap([], createElement(MovedNotice, { moved, onOpenInHistory: () => {} }));
+
+  it('says a session moved, with an Open button that names it', () => {
+    const markup = notice({ id: 'session_own', title: 'Bali Trip' });
+    expect(markup).toContain('“Bali Trip” is paid in full and has moved to History.');
+    expect(markup).toContain('aria-label="Open Bali Trip in History"');
+    expect(markup).toContain('id="collection-moved"');
+  });
+
+  it('says how many moved when several did, with no button', () => {
+    const markup = notice({ count: 3 });
+    expect(markup).toContain('3 sessions are settled and have moved to History.');
+    expect(markup).not.toContain('<button');
+  });
+
+  it('is shown in the empty state too, so the last card to move is still announced', () => {
+    const page = readFileSync(resolve(__dirname, '../../pages/CollectionPage.tsx'), 'utf8');
+    expect(page.match(/\{movedNotice\}/g)).toHaveLength(2);
+    const empty = page.slice(
+      page.indexOf('total === 0 ?'),
+      page.indexOf('Finish a session and it will show up here'),
+    );
+    expect(empty).toContain('{movedNotice}');
+    // With no card left, focus falls back to the Open button, then to the notice.
+    expect(page).toContain("'#collection-moved button'");
   });
 });
