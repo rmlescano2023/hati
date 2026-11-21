@@ -169,6 +169,35 @@ export function mergeLoaded<S extends { id: string }>(
 }
 
 /**
+ * Which sessions were created or removed on screen while a load was out. A load reads the server
+ * at one moment and answers at another, so a session created after the read isn't in its answer
+ * even though the server has it by then, and one deleted after the read still is. Neither the
+ * in-flight create nor the in-flight delete is still "in flight" by the time the answer lands, so
+ * without this the load drops the new session (a tour's "Session not found") or brings back the
+ * deleted card for a while. Everything is forgotten when the next load begins.
+ */
+export function createLoadGuard(): {
+  begin(): void;
+  created(id: string): void;
+  removed(id: string): void;
+  wasCreated(id: string): boolean;
+  wasRemoved(id: string): boolean;
+} {
+  const created = new Set<string>();
+  const removed = new Set<string>();
+  return {
+    begin() {
+      created.clear();
+      removed.clear();
+    },
+    created: (id) => void created.add(id),
+    removed: (id) => void removed.add(id),
+    wasCreated: (id) => created.has(id),
+    wasRemoved: (id) => removed.has(id),
+  };
+}
+
+/**
  * `list` with `session` back at `index`, where it was before a delete that
  * failed took it off the screen. It is left alone if it is there already, and
  * the index is clamped, since the list may have changed while the delete ran.

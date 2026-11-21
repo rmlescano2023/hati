@@ -11,6 +11,7 @@ import {
   SIGNED_OUT,
   WHOLE_SESSION,
   DELETED_ELSEWHERE_MANY,
+  createLoadGuard,
   createPendingWrites,
   createSaveConfirmations,
   createSaveQueue,
@@ -1347,5 +1348,48 @@ describe('the "anything changed?" check (round 3, item 5)', () => {
         lastInputAt: ready.lastInputAt + IDLE_PAUSE_MS + 59_000,
       }),
     ).toBe(true);
+  });
+});
+
+describe('createLoadGuard (QA B2 and B5: a load that read the server before a local change)', () => {
+  type S = { id: string };
+  const merge = (server: S[], local: S[], guard: ReturnType<typeof createLoadGuard>): S[] =>
+    mergeLoaded(
+      server,
+      local,
+      (id) => guard.wasCreated(id),
+      (id) => guard.wasRemoved(id),
+    );
+
+  it('keeps a session created while the load was out, though the load never saw it (B2)', () => {
+    const guard = createLoadGuard();
+    guard.begin();
+    // The tour creates its session after the load's read and before its answer lands.
+    guard.created('tour');
+    const merged = merge([{ id: 'a' }], [{ id: 'a' }, { id: 'tour' }], guard);
+    expect(merged.map((s) => s.id)).toEqual(['a', 'tour']);
+  });
+
+  it('keeps a session deleted while the load was out gone, though the load still had it (B5)', () => {
+    const guard = createLoadGuard();
+    guard.begin();
+    guard.removed('b');
+    // The delete has already landed, so nothing is "in flight" to hold it, but this load read first.
+    const merged = merge([{ id: 'a' }, { id: 'b' }], [{ id: 'a' }], guard);
+    expect(merged.map((s) => s.id)).toEqual(['a']);
+  });
+
+  it('forgets everything when the next load begins, so only a load that overlaps a change is held back', () => {
+    const guard = createLoadGuard();
+    guard.begin();
+    guard.created('tour');
+    guard.removed('b');
+    guard.begin();
+    expect(guard.wasCreated('tour')).toBe(false);
+    expect(guard.wasRemoved('b')).toBe(false);
+    // Without the guard, a load that began after the change is the truth, as before.
+    expect(merge([{ id: 'a' }], [{ id: 'a' }, { id: 'tour' }], guard).map((s) => s.id)).toEqual([
+      'a',
+    ]);
   });
 });

@@ -23,6 +23,7 @@ import {
   WHOLE_SESSION,
   addFailure,
   authorisedFetch,
+  createLoadGuard,
   createPendingWrites,
   createWriteOrder,
   createSaveConfirmations,
@@ -412,6 +413,8 @@ export function useServerSessions(): SessionsBackend {
    * what makes this window reachable.
    */
   const settledDuringLoad = useRef(new Set<string>());
+  /** Sessions created or removed while a load was out; see `createLoadGuard`. */
+  const [loadGuard] = useState(() => createLoadGuard());
 
   // Signing out unmounts the provider, possibly mid-save, and the prompt must
   // not outlive it.
@@ -441,6 +444,7 @@ export function useServerSessions(): SessionsBackend {
       loadRunning.current = true;
       lastLoadAt.current = Date.now();
       settledDuringLoad.current.clear();
+      loadGuard.begin();
       try {
         // The deadline covers the body too, so a late result is never applied.
         const { body, state } = await withDeadline(WRITE_TIMEOUT_MS, async (signal) => {
@@ -474,8 +478,11 @@ export function useServerSessions(): SessionsBackend {
                   queue.isBusy(id) ||
                   creating.current.has(id) ||
                   paying.current.has(id) ||
+                  // Created after this load read the server: not in its answer, but real.
+                  loadGuard.wasCreated(id) ||
                   (settledDuringLoad.current.has(id) && !rollingBack(id)),
-                (id) => deleting.current.has(id),
+                // Deleted after this load read the server: still in its answer, but gone.
+                (id) => deleting.current.has(id) || loadGuard.wasRemoved(id),
               ),
               before,
               rollingBack,
@@ -517,7 +524,7 @@ export function useServerSessions(): SessionsBackend {
     return () => {
       cancelled = true;
     };
-  }, [authedFetch, commit, fail, isLoaded, isSignedIn, queue, reloads]);
+  }, [authedFetch, commit, fail, isLoaded, isSignedIn, loadGuard, queue, reloads]);
 
   // Coming back to the tab after a while reloads quietly, so a joined member sees the payments the
   // organizer has recorded since (D2). It waits for a settled screen: while the first load or a
@@ -722,6 +729,7 @@ export function useServerSessions(): SessionsBackend {
   const addSession = useCallback(
     (session: Session, onDiscarded?: () => void) => {
       commit([...sessionsRef.current, session]);
+      loadGuard.created(session.id);
       // The caller has already navigated into it, so this catches up rather
       // than being awaited.
       const create = (async () => {
@@ -795,7 +803,7 @@ export function useServerSessions(): SessionsBackend {
       creating.current.set(session.id, create);
       pending.track(create);
     },
-    [authedFetch, commit, fail, pending, queue],
+    [authedFetch, commit, fail, loadGuard, pending, queue],
   );
 
   const removeSession = useCallback(
@@ -805,6 +813,7 @@ export function useServerSessions(): SessionsBackend {
       const removed = sessionsRef.current[index];
       commit(sessionsRef.current.filter((s) => s.id !== sessionId));
       deleting.current.add(sessionId);
+      loadGuard.removed(sessionId);
       const remove = (async () => {
         try {
           await creating.current.get(sessionId);
@@ -845,7 +854,7 @@ export function useServerSessions(): SessionsBackend {
       })();
       pending.track(remove);
     },
-    [authedFetch, commit, fail, pending, queue],
+    [authedFetch, commit, fail, loadGuard, pending, queue],
   );
 
   const recordOpen = useCallback(
@@ -1797,6 +1806,7 @@ export function useServerSessions(): SessionsBackend {
       const title = sessionDisplayTitle(left);
       commit(sessionsRef.current.filter((s) => s.id !== sessionId));
       deleting.current.add(sessionId);
+      loadGuard.removed(sessionId);
       const leave = (async () => {
         try {
           await withDeadline(WRITE_TIMEOUT_MS, async (signal) => {
@@ -1825,7 +1835,7 @@ export function useServerSessions(): SessionsBackend {
       })();
       pending.track(leave);
     },
-    [authedFetch, commit, fail, pending],
+    [authedFetch, commit, fail, loadGuard, pending],
   );
 
   const removeParticipant = useCallback(
