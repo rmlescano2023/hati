@@ -909,3 +909,98 @@ describe('the moved-to-History notice (QA B1)', () => {
     expect(page).toContain("'#collection-moved button'");
   });
 });
+
+describe('owner UX picks (2026-11-21)', () => {
+  const css = (path: string) => readFileSync(resolve(__dirname, path), 'utf8');
+  /** The text of every `@media (max-width: 640px)` block in a stylesheet. */
+  const phoneRules = (source: string) =>
+    [...source.matchAll(/@media \(max-width: 640px\) \{([\s\S]*?)\n\}/g)]
+      .map((m) => m[1])
+      .join('\n');
+
+  it('makes the answer, share, details and export buttons 44px tall on a phone only', () => {
+    const checks: [string, string[]][] = [
+      ['./LineRow.module.css', ['.entryActions > button', '.entry [data-undo]']],
+      [
+        './CollectionCard.module.css',
+        ['.otherActions > button', '.withShare > button', '.detailsRow button'],
+      ],
+      ['../../pages/HistoryDetailPage.module.css', ['.header .actions button']],
+    ];
+    for (const [path, selectors] of checks) {
+      const source = css(path);
+      const phone = phoneRules(source);
+      for (const selector of selectors) {
+        const rule = phone.slice(phone.indexOf(selector));
+        expect(phone, `${path} ${selector}`).toContain(selector);
+        expect(rule.slice(0, rule.indexOf('}')), `${path} ${selector}`).toContain(
+          'min-height: 44px',
+        );
+      }
+      // Nothing outside the phone blocks asks for 44px.
+      const outside = source.replace(/@media \(max-width: 640px\) \{[\s\S]*?\n\}/g, '');
+      expect(outside, path).not.toContain('min-height: 44px');
+    }
+  });
+
+  it('gives the History card bin a 44 by 44 hit area on a phone, keeping its label and icon size', () => {
+    const source = css('../sessions/SessionCard.module.css');
+    const phone = phoneRules(source);
+    expect(phone).toContain('.delete {');
+    expect(phone).toMatch(/\.delete \{[^}]*min-width: 44px[^}]*min-height: 44px/);
+    expect(source).toContain('width: 15px;');
+    const markup = wrap([settledOwn()], createElement(HistoryPage, { onOpenSession: () => {} }));
+    expect(markup).toContain('aria-label="Delete session Bali Trip"');
+  });
+
+  it('makes Share with members the one primary button on History detail', () => {
+    const markup = wrap(
+      [finished('session_own')],
+      createElement(HistoryDetailPage, {
+        sessionId: 'session_own',
+        back: 'history',
+        onBack: () => {},
+      }),
+    );
+    const button = (label: string) => {
+      const at = markup.indexOf(label);
+      return markup.slice(markup.lastIndexOf('<button', at), at);
+    };
+    expect(button('↓ Download SOA')).not.toContain('primary');
+    expect(button('Share with members')).toContain('primary');
+  });
+
+  it('leaves the card details row with default buttons beside no primary', () => {
+    const card = css('./CollectionCard.tsx');
+    const row = card.slice(
+      card.indexOf('styles.detailsRow'),
+      card.indexOf('styles.detailsRow') + 900,
+    );
+    expect(row).not.toContain('variant="primary"');
+  });
+
+  it("has one Stop tracking on a joined session's History detail, in the header only", () => {
+    const markup = wrap(
+      [settledJoined()],
+      createElement(HistoryDetailPage, {
+        sessionId: 'session_joined',
+        back: 'history',
+        onBack: () => {},
+      }),
+    );
+    expect(markup).toContain('Your payments');
+    expect(markup).toContain('You joined as <strong>Ben</strong>');
+    expect(count(markup, 'aria-label="Stop tracking Bali Trip"')).toBe(1);
+  });
+
+  it('says Resetting… and dims the old link while a reset runs', () => {
+    const dialog = css('./InviteMembersDialog.tsx');
+    expect(dialog).toContain("updating ? 'Resetting…' : 'Reset link'");
+    expect(dialog).toContain('disabled={busy || updating || link === null}');
+    expect(dialog).toContain('aria-busy={updating}');
+    expect(css('./InviteMembersDialog.module.css')).toMatch(/\.updating \{[^}]*opacity: 0\.45/);
+    // Both ways to reset go through the one function that sets it.
+    expect(dialog).toContain('if (alsoReset) await reset();');
+    expect(dialog).toContain('setUpdating(true);');
+  });
+});

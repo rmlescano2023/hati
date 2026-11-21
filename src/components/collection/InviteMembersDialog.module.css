@@ -101,3 +101,18 @@
     flex-wrap: wrap;
   }
 }
+
+/* The link, its QR and Copy, kept as one block so they can be marked together. */
+.linkBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* While a new link is on its way, the old one is shown but dimmed and can't be tapped. */
+.updating {
+  opacity: 0.45;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}

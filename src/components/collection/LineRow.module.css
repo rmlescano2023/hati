@@ -235,5 +235,12 @@
 
   .entryActions > button {
     flex: 1 1 auto;
+    /* Confirm and Decline are answers to someone's payment: a full 44px target (round 5 UX). */
+    min-height: 44px;
+  }
+
+  /* Undo is a destructive control too, so it is a full 44px target on a phone. */
+  .entry [data-undo] {
+    min-height: 44px;
   }
 }

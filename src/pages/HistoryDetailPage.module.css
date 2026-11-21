@@ -73,6 +73,8 @@
 
   .header .actions button {
     width: 100%;
+    /* Download SOA and Share with members are full 44px targets on a phone (round 5 UX). */
+    min-height: 44px;
   }
 
   /* Stop tracking is a destructive control: a full 44px target on a phone. */

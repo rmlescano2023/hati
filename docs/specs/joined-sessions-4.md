@@ -841,3 +841,20 @@ Recorded when the owner approved the spec (2026-11-21):
   Collection: "…and its statement can no longer be downloaded, and it will leave Collection. This
   cannot be undone."; in History: "…and its statement can no longer be downloaded. This cannot be
   undone." Every other variant is unchanged.
+
+## 15. Owner UX picks (2026-11-21)
+
+From the QA list, decided by the owner:
+1. **44px tap targets on a phone** (inside `@media (max-width: 640px)` only; desktop is unchanged):
+   Confirm and Decline (on a line and in "To confirm for others"), Undo, Share with members (the
+   card's row and History detail), View details and ↓ Download SOA (the card's row and History
+   detail) are at least 44px tall. The History card's bin keeps its 15px icon and `aria-label` and
+   gets a 44 by 44px hit area.
+2. **One primary button on History detail:** Share with members stays primary and ↓ Download SOA
+   takes the default style there (`ExportSoaButton`'s new `variant`). The card's details row has
+   two default buttons and no primary, so it has no clash and is unchanged.
+3. **One Stop tracking on a joined session's History detail:** the header's stays; "Your payments"
+   shows only "You joined as {member}".
+4. **Resetting…:** while Reset link runs, including Remove with "Also reset the invite link" ticked,
+   the Reset button reads "Resetting…" and is disabled, and the old link, QR and Copy are dimmed and
+   marked `aria-busy` until the new link arrives (or the reset fails, which restores them).

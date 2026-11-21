@@ -139,3 +139,18 @@
   height: 15px;
   display: block;
 }
+
+@media (max-width: 640px) {
+  /* The bin keeps its 15px icon but gets a 44 by 44px hit area, centred where the icon was, so it
+     is a real tap target on a phone. The count line leaves room for it. */
+  .delete {
+    min-width: 44px;
+    min-height: 44px;
+    right: 4px;
+    bottom: 4px;
+  }
+
+  .count {
+    padding-right: 48px;
+  }
+}

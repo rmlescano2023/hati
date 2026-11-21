@@ -141,6 +141,7 @@ export function HistoryDetailPage({
         <div className={styles.actions}>
           <ExportSoaButton
             layout="inline"
+            variant="default"
             members={sortNames(session.members)}
             records={session.records}
             name={session.name}

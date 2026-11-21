@@ -20,6 +20,8 @@ type Props = {
    * for an open Collection card's last row, with its notes under it and no fixed width.
    */
   layout?: 'block' | 'inline' | 'card';
+  /** The button's style. History detail passes 'default' so Share with members is its one primary. */
+  variant?: 'primary' | 'default';
   /**
    * Only the organizer's export of a finished session passes this (BR-Q4). It's asked for the
    * invite link at each export; null means the SOA goes out without the invite block, and says so.
@@ -34,6 +36,7 @@ export function ExportSoaButton({
   fileNameSuffix,
   hint,
   layout = 'block',
+  variant = 'primary',
   getInviteUrl,
 }: Props) {
   const [busy, setBusy] = useState(false);
@@ -92,7 +95,7 @@ export function ExportSoaButton({
   if (layout === 'inline') {
     return (
       <div className={styles.inline}>
-        <Button variant="primary" size="lg" onClick={handleClick} disabled={disabled}>
+        <Button variant={variant} size="lg" onClick={handleClick} disabled={disabled}>
           {busy ? 'Preparing SOA…' : '↓ Download SOA'}
         </Button>
         {note && (
@@ -107,7 +110,7 @@ export function ExportSoaButton({
 
   return (
     <div className={styles.wrap}>
-      <Button variant="primary" size="lg" onClick={handleClick} disabled={disabled}>
+      <Button variant={variant} size="lg" onClick={handleClick} disabled={disabled}>
         {busy ? 'Preparing SOA…' : '↓ Download SOA'}
       </Button>
       <p className={styles.hint}>

@@ -420,8 +420,13 @@ export function CollectionCardBody({
           <span>
             You joined as <strong>{session.me}</strong>
           </span>
-          <span aria-hidden="true">·</span>
-          <StopTrackingButton session={session} variant="link" onLeft={onLeft} />
+          {/* History detail has Stop tracking in its header, so the lines don't repeat it. */}
+          {!inHistory && (
+            <>
+              <span aria-hidden="true">·</span>
+              <StopTrackingButton session={session} variant="link" onLeft={onLeft} />
+            </>
+          )}
         </div>
       ) : (
         hasLine && <YouAre card={card} title={title} onChanged={onChanged} />

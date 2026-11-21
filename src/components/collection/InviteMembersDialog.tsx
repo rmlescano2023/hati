@@ -45,6 +45,8 @@ export function InviteMembersDialog({ session, onClose }: Props) {
   // Shown by the Copy button it is about, not down with the other errors.
   const [copyError, setCopyError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // True while a new link is being fetched, so the old link and QR read as updating.
+  const [updating, setUpdating] = useState(false);
   const [copied, setCopied] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [removing, setRemoving] = useState<Participant | null>(null);
@@ -99,8 +101,10 @@ export function InviteMembersDialog({ session, onClose }: Props) {
 
   /** Replaces the link. Resolves whether it worked, and says so itself when it didn't. */
   const reset = async (): Promise<boolean> => {
+    setUpdating(true);
     const result = await getLink(session.id, true);
     if (!alive.current) return false;
+    setUpdating(false);
     if (!result) {
       setError("Couldn't reset the link. Try again.");
       return false;
@@ -158,7 +162,10 @@ export function InviteMembersDialog({ session, onClose }: Props) {
             </div>
           )}
           {link !== null && !loading && (
-            <>
+            <div
+              className={updating ? `${styles.linkBlock} ${styles.updating}` : styles.linkBlock}
+              aria-busy={updating}
+            >
               <figure className={styles.qrFigure}>
                 <QrCode text={link} label={`QR code for the invite link to ${title}`} />
                 <figcaption className={styles.qrCaption}>
@@ -169,14 +176,16 @@ export function InviteMembersDialog({ session, onClose }: Props) {
                 {link}
               </p>
               <div>
-                <Button onClick={() => void copy()}>{copied ? 'Copied' : 'Copy link'}</Button>
+                <Button disabled={updating} onClick={() => void copy()}>
+                  {copied ? 'Copied' : 'Copy link'}
+                </Button>
               </div>
               {copyError !== null && (
                 <p role="alert" className={styles.error}>
                   {copyError}
                 </p>
               )}
-            </>
+            </div>
           )}
 
           <h3 className={styles.heading}>Tracking on Hati</h3>
@@ -209,8 +218,8 @@ export function InviteMembersDialog({ session, onClose }: Props) {
             </p>
           )}
           <div className={confirmStyles.actions}>
-            <Button disabled={busy || link === null} onClick={() => setResetting(true)}>
-              Reset link
+            <Button disabled={busy || updating || link === null} onClick={() => setResetting(true)}>
+              {updating ? 'Resetting…' : 'Reset link'}
             </Button>
             <Button variant="primary" onClick={onClose}>
               Done
