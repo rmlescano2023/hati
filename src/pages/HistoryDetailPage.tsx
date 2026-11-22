@@ -184,7 +184,11 @@ export function HistoryDetailPage({
       <ConfirmDialog
         open={deleting}
         title="Delete this session?"
-        message={deleting ? deleteSessionMessage(session, bucket === 'settled' ? 'history' : 'collection') : ''}
+        message={
+          deleting
+            ? deleteSessionMessage(session, bucket === 'settled' ? 'history' : 'collection')
+            : ''
+        }
         confirmLabel="Delete Session"
         destructive
         onCancel={() => setDeleting(false)}

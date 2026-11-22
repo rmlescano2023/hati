@@ -127,6 +127,9 @@ export function InviteMembersDialog({ session, onClose }: Props) {
     setRemoving(null);
     setError(null);
     setBusy(true);
+    // The whole remove-then-reset reads as one "Resetting…", not only the second request, so the
+    // old link is dimmed for the seconds the removal takes too.
+    if (alsoReset) setUpdating(true);
     if (await removeParticipant(session.id, participant.member)) {
       if (!alive.current) return;
       setList((current) =>
@@ -136,6 +139,8 @@ export function InviteMembersDialog({ session, onClose }: Props) {
       // gone and the dialog says so.
       if (alsoReset) await reset();
     } else if (alive.current) {
+      // The link was never replaced, so it is shown as it was.
+      if (alsoReset) setUpdating(false);
       setError(`Couldn't remove ${participant.member}. Try again.`);
     }
     if (alive.current) setBusy(false);
