@@ -24,6 +24,7 @@ import {
   addFailure,
   authorisedFetch,
   createLoadGuard,
+  createQuietReload,
   createPendingWrites,
   createWriteOrder,
   createSaveConfirmations,
@@ -313,7 +314,7 @@ export function useServerSessions(): SessionsBackend {
    * state and says nothing when it fails: nothing the user did has failed, and the next return
    * tries again (A4).
    */
-  const quietLoad = useRef(false);
+  const [quietReload] = useState(() => createQuietReload());
   /** The server's fingerprint of the last load, or null (none yet, or an older server). */
   const loadedState = useRef<string | null>(null);
   /** When the user last did anything (pointer, key or touch); the check pauses when it is long ago. */
@@ -436,8 +437,7 @@ export function useServerSessions(): SessionsBackend {
     if (!isLoaded || !isSignedIn) return;
     let cancelled = false;
 
-    const quiet = quietLoad.current;
-    quietLoad.current = false;
+    const quiet = quietReload.take();
 
     (async () => {
       if (!quiet) setLoading(true);
@@ -524,7 +524,7 @@ export function useServerSessions(): SessionsBackend {
     return () => {
       cancelled = true;
     };
-  }, [authedFetch, commit, fail, isLoaded, isSignedIn, loadGuard, queue, reloads]);
+  }, [authedFetch, commit, fail, isLoaded, isSignedIn, loadGuard, queue, quietReload, reloads]);
 
   // Coming back to the tab after a while reloads quietly, so a joined member sees the payments the
   // organizer has recorded since (D2). It waits for a settled screen: while the first load or a
@@ -534,9 +534,8 @@ export function useServerSessions(): SessionsBackend {
 
   /** Starts the quiet reload, which the load effect then runs; never over a load already running. */
   const reloadQuietly = useCallback(() => {
-    quietLoad.current = true;
-    setReloads((n) => n + 1);
-  }, []);
+    if (quietReload.request()) setReloads((n) => n + 1);
+  }, [quietReload]);
 
   /**
    * Asks the server whether anything this account can see has changed, and reloads quietly if so.
@@ -751,6 +750,8 @@ export function useServerSessions(): SessionsBackend {
           // A failed create has nothing left to report once another one lands.
           setFailures((f) => resolveFailure(f, 'create', null));
         } catch (err) {
+          // The server has no such session, so a load that read it must not be made to keep one.
+          loadGuard.createFailed(session.id);
           const timedOut = err instanceof TimeoutError;
           if (
             discardsFailedCreate({
@@ -840,6 +841,8 @@ export function useServerSessions(): SessionsBackend {
           // than only after "Try again". `deleting` still holds it up to here,
           // so a load landing meanwhile can't fight the restore.
           if (removed) commit(restoreAt(sessionsRef.current, removed, index));
+          // Put back, so a load already out with it must not filter it off the screen again.
+          loadGuard.restored(sessionId);
           fail({
             kind: 'delete',
             sessionId,
@@ -1824,6 +1827,7 @@ export function useServerSessions(): SessionsBackend {
           leavingFailed.current.add(sessionId);
           // Still tracking it on the server, so it comes back at once, as a failed delete's does.
           commit(restoreAt(sessionsRef.current, left, index));
+          loadGuard.restored(sessionId);
           fail({
             kind: 'delete',
             sessionId,

@@ -12,6 +12,7 @@ import {
   WHOLE_SESSION,
   DELETED_ELSEWHERE_MANY,
   createLoadGuard,
+  createQuietReload,
   createPendingWrites,
   createSaveConfirmations,
   createSaveQueue,
@@ -1379,17 +1380,101 @@ describe('createLoadGuard (QA B2 and B5: a load that read the server before a lo
     expect(merged.map((s) => s.id)).toEqual(['a']);
   });
 
-  it('forgets everything when the next load begins, so only a load that overlaps a change is held back', () => {
+  it('keeps an entry through the load that began after it and forgets it at the one after, so only loads that overlap a change are held back', () => {
     const guard = createLoadGuard();
     guard.begin();
     guard.created('tour');
     guard.removed('b');
+    // The next load overlaps the change, so it is still held back.
+    guard.begin();
+    expect(guard.wasCreated('tour')).toBe(true);
+    expect(guard.wasRemoved('b')).toBe(true);
+    // A load that began after both loads, so after the change had landed, is the truth, as before.
     guard.begin();
     expect(guard.wasCreated('tour')).toBe(false);
     expect(guard.wasRemoved('b')).toBe(false);
-    // Without the guard, a load that began after the change is the truth, as before.
     expect(merge([{ id: 'a' }], [{ id: 'a' }, { id: 'tour' }], guard).map((s) => s.id)).toEqual([
       'a',
     ]);
+  });
+
+  it('holds back a load for a create that began before it and finished while it was out', () => {
+    const guard = createLoadGuard();
+    guard.begin();
+    // The create starts while load 1 is out, and load 2 begins before it finishes.
+    guard.created('tour');
+    guard.begin();
+    // Load 2 read the server before the create landed, and the create has finished by its answer.
+    const merged = merge([{ id: 'a' }], [{ id: 'a' }, { id: 'tour' }], guard);
+    expect(merged.map((s) => s.id)).toEqual(['a', 'tour']);
+  });
+
+  it('holds back a load for a delete that began before it and finished while it was out', () => {
+    const guard = createLoadGuard();
+    guard.begin();
+    guard.removed('b');
+    guard.begin();
+    const merged = merge([{ id: 'a' }, { id: 'b' }], [{ id: 'a' }], guard);
+    expect(merged.map((s) => s.id)).toEqual(['a']);
+  });
+
+  it('shows a card whose delete failed when the load that was out answers with it (restored)', () => {
+    const guard = createLoadGuard();
+    guard.begin();
+    guard.removed('b');
+    // The delete failed and the card was put back, though the load is still out.
+    guard.restored('b');
+    const merged = merge([{ id: 'a' }, { id: 'b' }], [{ id: 'a' }, { id: 'b' }], guard);
+    expect(merged.map((s) => s.id)).toEqual(['a', 'b']);
+    expect(guard.wasRemoved('b')).toBe(false);
+  });
+
+  it('believes a load about a create that failed, so a session the server lacks is not kept (createFailed)', () => {
+    const guard = createLoadGuard();
+    guard.begin();
+    guard.created('tour');
+    guard.createFailed('tour');
+    expect(guard.wasCreated('tour')).toBe(false);
+    expect(merge([{ id: 'a' }], [{ id: 'a' }, { id: 'tour' }], guard).map((s) => s.id)).toEqual([
+      'a',
+    ]);
+  });
+
+  it('undoes only the entry it names', () => {
+    const guard = createLoadGuard();
+    guard.begin();
+    guard.removed('b');
+    guard.removed('c');
+    guard.created('x');
+    guard.restored('b');
+    expect(guard.wasRemoved('c')).toBe(true);
+    expect(guard.wasCreated('x')).toBe(true);
+  });
+});
+
+describe('createQuietReload (N1: visibilitychange and focus together on a tab return)', () => {
+  it('starts one reload for the two events of a return, and that load is quiet', () => {
+    const reload = createQuietReload();
+    let bumps = 0;
+    // visibilitychange, then focus, both before the load effect has run.
+    for (let event = 0; event < 2; event++) if (reload.request()) bumps += 1;
+    expect(bumps).toBe(1);
+    // The one load that starts is the quiet one, so it never shows the loading page.
+    expect(reload.take()).toBe(true);
+  });
+
+  it('is not left waiting once its load has started, so the next return reloads again', () => {
+    const reload = createQuietReload();
+    expect(reload.request()).toBe(true);
+    expect(reload.take()).toBe(true);
+    expect(reload.request()).toBe(true);
+  });
+
+  it('is not quiet for a load nobody asked to be quiet, such as the first or a retry', () => {
+    const reload = createQuietReload();
+    expect(reload.take()).toBe(false);
+    reload.request();
+    reload.take();
+    expect(reload.take()).toBe(false);
   });
 });

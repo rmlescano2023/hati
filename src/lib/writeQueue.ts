@@ -174,24 +174,40 @@ export function mergeLoaded<S extends { id: string }>(
  * even though the server has it by then, and one deleted after the read still is. Neither the
  * in-flight create nor the in-flight delete is still "in flight" by the time the answer lands, so
  * without this the load drops the new session (a tour's "Session not found") or brings back the
- * deleted card for a while. Everything is forgotten when the next load begins.
+ * deleted card for a while.
+ *
+ * An entry is kept through the one load that begins after it was recorded, and forgotten when the
+ * load after that begins. Forgetting at the very next load would miss a create or delete that
+ * started before that load and finished while it was out, which is the same race one step earlier.
+ * A write that fails undoes its entry, because the card it put on or took off the screen is put
+ * back, and the server's copy is then the truth a load should be believed about.
  */
 export function createLoadGuard(): {
   begin(): void;
   created(id: string): void;
   removed(id: string): void;
+  createFailed(id: string): void;
+  restored(id: string): void;
   wasCreated(id: string): boolean;
   wasRemoved(id: string): boolean;
 } {
-  const created = new Set<string>();
-  const removed = new Set<string>();
+  // The number of loads begun so far when each entry was recorded.
+  let loads = 0;
+  const created = new Map<string, number>();
+  const removed = new Map<string, number>();
+  const expire = (entries: Map<string, number>) => {
+    for (const [id, at] of entries) if (at < loads - 1) entries.delete(id);
+  };
   return {
     begin() {
-      created.clear();
-      removed.clear();
+      loads += 1;
+      expire(created);
+      expire(removed);
     },
-    created: (id) => void created.add(id),
-    removed: (id) => void removed.add(id),
+    created: (id) => void created.set(id, loads),
+    removed: (id) => void removed.set(id, loads),
+    createFailed: (id) => void created.delete(id),
+    restored: (id) => void removed.delete(id),
     wasCreated: (id) => created.has(id),
     wasRemoved: (id) => removed.has(id),
   };
@@ -222,6 +238,35 @@ export const RELOAD_ON_RETURN_MS = 30_000;
  */
 export const reloadsOnReturn = (lastLoadAt: number | null, now: number): boolean =>
   lastLoadAt !== null && now - lastLoadAt >= RELOAD_ON_RETURN_MS;
+
+/**
+ * The pending request for a quiet reload, and the flag that makes the load it starts quiet. A return
+ * to the tab fires `visibilitychange` and `focus` together, and React renders them at different
+ * priorities, so each one bumps the reload counter on its own render. The first render's load
+ * consumes the flag and the second, which the first one cancels, finds it gone and shows the
+ * loading page. So a request made while another is still waiting to start is refused: one return
+ * is one reload, and it is quiet.
+ */
+export function createQuietReload(): {
+  /** Whether to start a reload now; false when one was already asked for and hasn't started. */
+  request(): boolean;
+  /** Called as a load starts: whether it is the quiet one that was asked for. */
+  take(): boolean;
+} {
+  let waiting = false;
+  return {
+    request() {
+      if (waiting) return false;
+      waiting = true;
+      return true;
+    },
+    take() {
+      const quiet = waiting;
+      waiting = false;
+      return quiet;
+    },
+  };
+}
 
 /** How often a visible tab asks the server whether anything it can see has changed. */
 export const CHECK_INTERVAL_MS = 15_000;
