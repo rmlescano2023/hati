@@ -858,3 +858,35 @@ From the QA list, decided by the owner:
 4. **Resetting…:** while Reset link runs, including Remove with "Also reset the invite link" ticked,
    the Reset button reads "Resetting…" and is disabled, and the old link, QR and Copy are dimmed and
    marked `aria-busy` until the new link arrives (or the reset fails, which restores them).
+
+## 16. Fix round 2 (2026-11-22)
+
+From the re-review (SHIP plus one Major) and the re-test.
+1. **Major, the load guard after a failed write:** `createLoadGuard` gains `restored(id)` and
+   `createFailed(id)`. A failed delete (`removeSession`) or stop tracking (`leaveSession`) calls
+   `restored` beside `restoreAt`, so a load that is still out no longer filters the restored card
+   off the screen. A failed create in `addSession` calls `createFailed`, so the guard doesn't hold
+   a session the server doesn't have.
+2. **Minor, what `begin()` clears:** an entry now survives the load that begins after it was
+   recorded and is forgotten when the load after that begins, so a create or delete that started
+   before a load and finished while it was out is covered too. A change small enough to make, so
+   it is made.
+3. **Minor:** the long `message` line in `HistoryDetailPage.tsx` is wrapped as Prettier would, and
+   nothing else in the file is touched.
+4. **N1, the spinner on a tab return:** `visibilitychange` renders at default priority and `focus`
+   at discrete (sync) priority, so a return bumps the reload counter in two renders. The first
+   render's load consumed the one-shot quiet flag, and the second, which cancels the first, found
+   it gone, so it called `setLoading(true)` and App replaced the page with "Loading your
+   sessions…" (on every screen except Collection and the practice). `createQuietReload` (in
+   `writeQueue.ts`) refuses a request made while one is still waiting to start, so a return, a
+   check that found a change, or both, make one reload, and it is quiet.
+5. **N2, the tour restarting:** no cause found in the flag's path (see the report). It is likely
+   linked to N1, whose spinner unmounts the tour and resets its step, and is fixed with it if so.
+   No code change for N2.
+6. **Resetting…:** with "Also reset the invite link" ticked, `InviteMembersDialog` sets `updating`
+   for the whole remove-then-reset, so the button reads "Resetting…" and the link, QR and Copy are
+   dimmed (`aria-busy`) from the first request, and restores them if the removal fails (a failed
+   reset already did).
+
+Tests: `writeQueue.test.ts` covers `restored`, `createFailed`, the longer-lived entries (a create
+and a delete that finish while the next load is out), and `createQuietReload`.
