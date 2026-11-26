@@ -80,14 +80,14 @@ export const TOUR_STEPS: TourStep[] = [
     target: 'nav-collection',
     title: 'Track who has paid',
     content:
-      'Finished sessions show up here. Record payments as they come in, even part payments, and see who still hasn’t paid you.',
+      'Finished sessions show up here until they’re paid in full. Record payments as they come in, even part payments, and see who still hasn’t paid you.',
     screen: { kind: 'collection' },
   },
   {
     target: 'nav-history',
     title: 'Your archive',
     content:
-      'Every session you finish ends up here, read-only, with its own statement to download. That is the whole app — go and add a real one.',
+      'Once everyone has paid you, and you’ve paid everyone, a session moves here from Collection, read-only, with its statement and its payments. That is the whole app — go and add a real one.',
     screen: { kind: 'history' },
   },
 ];

@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   isPracticeSessionId,
+  parseClaimDecision,
+  parseClaimIdQuery,
+  parseClaimsInput,
+  parseInviteInput,
+  parseCheckFlag,
+  parseJoinedFlag,
+  parseParticipantQuery,
   parsePaymentsInput,
   parseProfileInput,
   parseSessionIdQuery,
@@ -219,6 +226,148 @@ describe('isPracticeSessionId', () => {
   it('is false for ordinary ids, a bare prefix word, a different case and nothing', () => {
     for (const id of ['session_ab12', 'practice', 'Practice_x', '']) {
       expect(isPracticeSessionId(id)).toBe(false);
+    }
+  });
+});
+
+describe('parseInviteInput', () => {
+  const token = 'abcdefghijklmnopqrstuv';
+
+  it('reads the link form, with reset absent meaning false', () => {
+    expect(parseInviteInput({ sessionId: 'session_1' })).toEqual({
+      kind: 'link',
+      sessionId: 'session_1',
+      reset: false,
+    });
+    expect(parseInviteInput({ sessionId: 'session_1', reset: true })).toEqual({
+      kind: 'link',
+      sessionId: 'session_1',
+      reset: true,
+    });
+  });
+
+  it('refuses a reset that is not a boolean', () => {
+    expect(parseInviteInput({ sessionId: 'session_1', reset: 'yes' })).toBeNull();
+  });
+
+  it('reads the preview and the join forms', () => {
+    expect(parseInviteInput({ token })).toEqual({ kind: 'preview', token });
+    expect(parseInviteInput({ token, member: 'Ben' })).toEqual({
+      kind: 'join',
+      token,
+      member: 'Ben',
+    });
+  });
+
+  it('refuses anything that mixes the forms or is malformed', () => {
+    expect(parseInviteInput({ token: 'short' })).toBeNull();
+    expect(parseInviteInput({ sessionId: 'session_1', token })).toBeNull();
+    expect(parseInviteInput({ sessionId: 'session_1', member: 'Ben' })).toBeNull();
+    expect(parseInviteInput({ member: 'Ben' })).toBeNull();
+    expect(parseInviteInput({ token, member: '' })).toBeNull();
+    expect(parseInviteInput({ token, member: 'x'.repeat(201) })).toBeNull();
+    expect(parseInviteInput({ token, reset: true })).toBeNull();
+    expect(parseInviteInput({})).toBeNull();
+    expect(parseInviteInput(null)).toBeNull();
+    expect(parseInviteInput('text')).toBeNull();
+    expect(parseInviteInput([token])).toBeNull();
+  });
+});
+
+describe('parseParticipantQuery', () => {
+  it('needs both a session and a member', () => {
+    expect(parseParticipantQuery('session_1', 'Ben')).toEqual({
+      sessionId: 'session_1',
+      member: 'Ben',
+    });
+    expect(parseParticipantQuery('', 'Ben')).toBeNull();
+    expect(parseParticipantQuery('session_1', '')).toBeNull();
+    expect(parseParticipantQuery(undefined, 'Ben')).toBeNull();
+    expect(parseParticipantQuery(['session_1'], 'Ben')).toBeNull();
+    expect(parseParticipantQuery('session_1', ['Ben', 'Ana'])).toBeNull();
+  });
+});
+
+describe('parseJoinedFlag', () => {
+  it('is true only for the exact value 1', () => {
+    expect(parseJoinedFlag('1')).toBe(true);
+    for (const other of [undefined, '', '0', 'true', 1, ['1']]) {
+      expect(parseJoinedFlag(other)).toBe(false);
+    }
+  });
+});
+
+describe('parseClaimsInput', () => {
+  const claim = (over: Record<string, unknown> = {}) => ({
+    id: 'pay_abc123',
+    debtor: 'Ben',
+    creditor: 'Ana',
+    amountCents: 20000,
+    ...over,
+  });
+
+  it('parses one claim, and a batch', () => {
+    expect(parseClaimsInput({ sessionId: 'session_1', claims: [claim()] })).toEqual({
+      sessionId: 'session_1',
+      claims: [claim()],
+    });
+    const two = [claim(), claim({ id: 'pay_def456', creditor: 'Carla' })];
+    expect(parseClaimsInput({ sessionId: 'session_1', claims: two })?.claims).toHaveLength(2);
+  });
+
+  it('refuses what payments refuse', () => {
+    const body = (claims: unknown) => ({ sessionId: 'session_1', claims });
+    expect(parseClaimsInput(null)).toBeNull();
+    expect(parseClaimsInput({ claims: [claim()] })).toBeNull();
+    expect(parseClaimsInput(body([]))).toBeNull();
+    expect(parseClaimsInput(body([claim({ amountCents: 0 })]))).toBeNull();
+    expect(parseClaimsInput(body([claim({ debtor: 'Ana' })]))).toBeNull();
+    expect(parseClaimsInput(body([claim({ id: 'x' })]))).toBeNull();
+    expect(parseClaimsInput(body([claim(), claim({ id: 'pay_zzz999' })]))).toBeNull();
+    expect(parseClaimsInput(body([claim(), claim()]))).toBeNull();
+    const many = Array.from({ length: 201 }, (_, i) =>
+      claim({ id: `pay_${i}`, creditor: `C${i}` }),
+    );
+    expect(parseClaimsInput(body(many))).toBeNull();
+  });
+
+  it('does not read the payments field', () => {
+    expect(parseClaimsInput({ sessionId: 'session_1', payments: [claim()] })).toBeNull();
+  });
+});
+
+describe('parseClaimDecision', () => {
+  it('reads a confirm and a decline', () => {
+    expect(parseClaimDecision({ id: 'pay_abc1', decision: 'confirm' })).toEqual({
+      id: 'pay_abc1',
+      decision: 'confirm',
+    });
+    expect(parseClaimDecision({ id: 'pay_abc1', decision: 'decline' })?.decision).toBe('decline');
+  });
+
+  it('refuses a bad id, a missing decision and anything else', () => {
+    expect(parseClaimDecision({ id: 'abc', decision: 'confirm' })).toBeNull();
+    expect(parseClaimDecision({ id: 'pay_abc1' })).toBeNull();
+    expect(parseClaimDecision({ id: 'pay_abc1', decision: 'accept' })).toBeNull();
+    expect(parseClaimDecision('confirm')).toBeNull();
+  });
+});
+
+describe('parseClaimIdQuery', () => {
+  it('takes one claim id and nothing else', () => {
+    expect(parseClaimIdQuery('pay_abc1')).toBe('pay_abc1');
+    expect(parseClaimIdQuery(['pay_abc1'])).toBeNull();
+    expect(parseClaimIdQuery('abc')).toBeNull();
+    expect(parseClaimIdQuery('')).toBeNull();
+    expect(parseClaimIdQuery(undefined)).toBeNull();
+  });
+});
+
+describe('parseCheckFlag', () => {
+  it('is true only for the exact value 1', () => {
+    expect(parseCheckFlag('1')).toBe(true);
+    for (const other of [undefined, '', '0', 'true', 1, ['1']]) {
+      expect(parseCheckFlag(other)).toBe(false);
     }
   });
 });

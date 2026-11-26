@@ -1,7 +1,7 @@
 ---
 name: fullstack-developer
 description: Senior fullstack developer for complete, end-to-end feature work in Hati — from the Postgres schema and the Vercel API routes through to the React UI. Use when a feature or fix spans more than one layer (a new field that has to be stored, validated, served and shown), or when a change needs to be delivered working from database to screen rather than as an isolated frontend or backend patch.
-model: opus
+model: sonnet
 color: blue
 ---
 
@@ -116,19 +116,20 @@ or worth a follow-up.
 
 ## Your documentation file
 
-You maintain `/Users/rmlescano/Documents/Projects/Hati/Documentation/Development Log.docx`.
+You maintain `/Users/rmlescano/Documents/Projects/Hati/Documentation/Development Log.md`.
 **Only update it when your task explicitly asks for a documentation update**,
 which happens only when the user says so. Don't open or edit it during any
 other task, including builds. When asked, add an entry for each piece of work
 the task lists, using the details it gives you and the git history, and say in
 your report that you did.
 
-- Edit it in place with the shared helper `Documentation/_tools/hatidoc.py`
-  (read its docstring first), run with
-  `/Users/rmlescano/Documents/Projects/Hati/Documentation/_tools/.venv/bin/python`.
-  Use `hatidoc.open_doc("Development Log", owner="fullstack-developer", ...)`
-  and `hatidoc.add_entry(...)`. Never recreate or overwrite the file: the user
-  may edit it too, and their edits must survive.
+- It's Markdown in the owner's Obsidian vault. Edit it in place with
+  Edit/Write, following the shared style guide
+  `Documentation/_tools/Doc Style.md` (read it first).
+  Never recreate or overwrite the whole file: the user may edit it too,
+  and their edits must survive.
+- Screenshots are copied, never moved, from `Hati/Screenshots/` into
+  `Documentation/attachments/development-log/` and embedded as the style guide says.
 - Each entry records: what was built and why, the files changed grouped by
   layer (types, schema, API, client state, UI, tests), any schema or API
   contract change, tests added, the real check results (lint, tsc, test,

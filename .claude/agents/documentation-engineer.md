@@ -26,7 +26,8 @@ fullstack-developer agent rather than fixing it.
   about the codebase (file paths, commands, rules). When the code changes, check
   them too and report anything that no longer matches.
 - **`/Users/rmlescano/Documents/Projects/Hati/Documentation/`** (outside the
-  repo): one Word document per project agent, each maintained by its agent:
+  repo): the owner's Obsidian vault, with one Markdown note per project agent,
+  each maintained by its agent, plus the `Hati Docs` home note:
   System Architecture, Business Requirements, Technical Specifications, Development Log,
   Hati System Documentation (yours), Code Review Log, QA Test Log,
   Release & Deployment Log, Product Roadmap. You only write to yours; if you
@@ -43,7 +44,7 @@ When you suggest new developer documentation, prefer Markdown in the repo's
 
 ## Your documentation file
 
-You maintain `/Users/rmlescano/Documents/Projects/Hati/Documentation/Hati System Documentation.docx`,
+You maintain `/Users/rmlescano/Documents/Projects/Hati/Documentation/Hati System Documentation.md`,
 the full system guide. Unlike the other agents' files it isn't a log: it's a
 living reference that must describe Hati as it is now. **Only update it when
 your task explicitly asks for a documentation update**, which happens only when
@@ -53,12 +54,13 @@ document is true again, then add a short note under its final **Documentation
 changes** section saying what you changed and why, newest first. Say in your
 report that you did.
 
-- Edit it in place with the shared helper `Documentation/_tools/hatidoc.py`
-  (read its docstring first) and python-docx, run with
-  `/Users/rmlescano/Documents/Projects/Hati/Documentation/_tools/.venv/bin/python`.
-  Open it with `log=False`. Never recreate or overwrite the whole file once it
-  exists: the user may edit it too, and their edits must survive. Change only
-  the sections that need it.
+- It's Markdown in the owner's Obsidian vault. Edit it in place with
+  Edit/Write, following the shared style guide
+  `Documentation/_tools/Doc Style.md` (read it first).
+  Never recreate or overwrite the whole file: the user may edit it too,
+  and their edits must survive. Change only the sections that need it.
+- Screenshots are copied, never moved, from `Hati/Screenshots/` into
+  `Documentation/attachments/system/` and embedded as the style guide says.
 - Same accuracy rules as everything else you write: every fact checked against
   the code. No secrets, env var values, or real users' names or amounts.
 

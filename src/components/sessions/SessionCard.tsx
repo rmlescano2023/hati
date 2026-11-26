@@ -9,6 +9,12 @@ type Props = {
   onClick: () => void;
   /** When given, the card offers a delete action. Omitted, it doesn't. */
   onDelete?: () => void;
+  /** Who shared the session, for one the account joined rather than owns: "Shared by Ana". */
+  sharedBy?: string;
+  /** How a settled session ended for this viewer, on History (PR 4). Home passes none. */
+  status?: string;
+  /** A quiet note under the status, such as that others still owe each other. */
+  note?: string;
 };
 
 /** A bin rather than a cross: this removes the whole session, not one row. */
@@ -39,7 +45,7 @@ function TrashIcon() {
  * making the card a div instead would cost the keyboard behaviour a real
  * button gives for free.
  */
-export function SessionCard({ session, onClick, onDelete }: Props) {
+export function SessionCard({ session, onClick, onDelete, sharedBy, status, note }: Props) {
   return (
     <div className={styles.row}>
       <button type="button" className={styles.card} onClick={onClick}>
@@ -53,6 +59,9 @@ export function SessionCard({ session, onClick, onDelete }: Props) {
         <span className={styles.members}>
           {session.members.length > 0 ? joinNames(session.members) : 'No members yet'}
         </span>
+        {sharedBy !== undefined && <span className={styles.shared}>{sharedBy}</span>}
+        {status !== undefined && <span className={styles.status}>{status}</span>}
+        {note !== undefined && <span className={styles.note}>{note}</span>}
         <span className={styles.count}>{pluralize(session.records.length, 'purchase')}</span>
       </button>
       {onDelete && (

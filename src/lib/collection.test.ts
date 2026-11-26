@@ -2,8 +2,20 @@ import { describe, expect, it } from 'vitest';
 import {
   NOT_IN_SESSION,
   announcesSettled,
+  autoOpenTarget,
+  cameBack,
+  everyLinePaid,
+  historyStatus,
+  movesFromCollection,
+  waitingForMeCount,
   buildCard,
   buildCollection,
+  claimedMembers,
+  isJoined,
+  joinedMarkAll,
+  membersWithAccount,
+  newClaims,
+  parseLineAmount,
   isKnownName,
   markAllMessage,
   matchMember,
@@ -22,7 +34,7 @@ import {
   type KnownNames,
 } from './collection';
 import { NICKNAMES_MAX } from './profileName';
-import type { Payment, PurchaseRecord, Session } from '../types';
+import type { Claim, Payment, PurchaseRecord, Session } from '../types';
 
 const names = (displayName: string | null, ...nicknames: string[]): KnownNames => ({
   displayName,
@@ -879,5 +891,607 @@ describe('pairPaymentIds', () => {
     const before = pairPaymentIds([a], 'Ana', 'Renmar');
     expect(pairPaymentIds([a, b], 'Ana', 'Renmar')).not.toBe(before);
     expect(pairPaymentIds([a, other], 'Ana', 'Renmar')).toBe(before);
+  });
+});
+
+describe('a joined session (AC-10.1, BR-V2, BR-V3, BR-V6)', () => {
+  const joinedAs = (me: string, over: Partial<Session> = {}) =>
+    tripA({ role: 'participant', organizerName: 'Renmar', me, participants: [], ...over });
+
+  it('is Outstanding while a line has something left, Settled once every line is paid', () => {
+    const open = buildCard(joinedAs('Ben'), names(null));
+    expect(open.bucket).toBe('outstanding');
+    expect(open.owedToYou.map((l) => [l.other, l.amountCents])).toEqual([['Renmar', 10000]]);
+
+    const paid = buildCard(
+      joinedAs('Ben', { payments: [pay('pay_1', 'Renmar', 'Ben', 10000)] }),
+      names(null),
+    );
+    expect(paid.bucket).toBe('settled');
+  });
+
+  it('is never Needs setup, even with no profile name', () => {
+    expect(buildCard(joinedAs('Ana'), names(null)).bucket).not.toBe('needsSetup');
+  });
+
+  it('is Settled with no lines when the member is even', () => {
+    // Ana paid for herself alone, so nobody owes anybody.
+    const even = finished('session_e', ['Ana', 'Ben'], [purchase('r1', 'Ana', 100, ['Ana'])], {
+      role: 'participant',
+      me: 'Ben',
+    });
+    const card = buildCard(even, names(null));
+    expect(card.lineCount).toBe(0);
+    expect(card.bucket).toBe('settled');
+  });
+
+  it('ignores the names the user has saved', () => {
+    const card = buildCard(joinedAs('Ben'), names('Renmar'));
+    expect(card.me).toEqual({ kind: 'member', name: 'Ben', picked: true });
+  });
+
+  it('is never offered Already settled and never reads as settled before Collection', () => {
+    const card = buildCard(joinedAs('Ben', { finishedWithCollection: false }), names(null));
+    expect(card.allPairsPaid).toBe(false);
+    expect(card.presettled).toBe(false);
+    expect(card.offersAlreadySettled).toBe(false);
+  });
+
+  it('counts in the totals when Outstanding', () => {
+    const collection = buildCollection([joinedAs('Ben')], names(null));
+    expect(collection.owedToYouCents).toBe(10000);
+    expect(collection.youOweCents).toBe(0);
+    expect(collection.alreadySettledOffers).toEqual([]);
+  });
+});
+
+describe('resolveMe with claimed members (AC-14.2, E1-3)', () => {
+  const members = ['Ana', 'Ben'];
+  const participants = [{ member: 'Ben', name: null, joinedAt: '2026-11-05T00:00:00.000Z' }];
+
+  it('does not match the profile name to a member someone has joined as', () => {
+    expect(resolveMe({ me: null, members, participants }, names('Ben'))).toEqual({
+      kind: 'unknown',
+      suggested: null,
+    });
+  });
+
+  it('falls to a nickname suggestion when the profile name is on a claimed member', () => {
+    expect(resolveMe({ me: null, members, participants }, names('Ben', 'Ana'))).toEqual({
+      kind: 'unknown',
+      suggested: 'Ana',
+    });
+  });
+
+  it('leaves an explicit pick alone', () => {
+    expect(resolveMe({ me: 'Ben', members, participants }, names('Ben'))).toEqual({
+      kind: 'member',
+      name: 'Ben',
+      picked: true,
+    });
+  });
+});
+
+describe('isJoined and claimedMembers', () => {
+  it('reads the role and the participants', () => {
+    expect(isJoined(tripA())).toBe(false);
+    expect(isJoined(tripA({ role: 'owner' }))).toBe(false);
+    expect(isJoined(tripA({ role: 'participant' }))).toBe(true);
+    expect(claimedMembers(tripA())).toEqual([]);
+    expect(
+      claimedMembers(tripA({ participants: [{ member: 'Ben', name: null, joinedAt: 'x' }] })),
+    ).toEqual(['Ben']);
+  });
+});
+
+const claim = (
+  id: string,
+  debtor: string,
+  creditor: string,
+  amountCents: number,
+  over: Partial<Claim> = {},
+): Claim => ({
+  id,
+  debtor,
+  creditor,
+  amountCents,
+  createdAt: '2026-11-03T00:00:00.000Z',
+  status: 'pending',
+  decidedAt: null,
+  mine: false,
+  ...over,
+});
+
+describe('claims on lines (BR-C14)', () => {
+  // Ben owes Ana ₱500 (and Carla ₱300), as a joined member of Ana's session.
+  const owes = (claims: Claim[], payments: Payment[] = []) =>
+    finished(
+      'session_c',
+      ['Ana', 'Ben', 'Carla'],
+      [purchase('r1', 'Ana', 1000, ['Ana', 'Ben']), purchase('r2', 'Carla', 600, ['Ben', 'Carla'])],
+      {
+        role: 'participant',
+        organizerName: 'Ana',
+        me: 'Ben',
+        participants: [],
+        withAccount: ['Ana'],
+        claims,
+        payments,
+      },
+    );
+
+  it('shows a pending claim beside the figures and never in them', () => {
+    const card = buildCard(owes([claim('c1', 'Ben', 'Ana', 20000, { mine: true })]), names(null));
+    const line = card.youOwe.find((l) => l.other === 'Ana')!;
+    expect(line.amountCents).toBe(50000);
+    expect([line.paidCents, line.remainingCents, line.status]).toEqual([0, 50000, 'unpaid']);
+    expect([line.pendingCents, line.openCents]).toEqual([20000, 30000]);
+    expect(line.claims.map((c) => c.id)).toEqual(['c1']);
+    expect(card.youOweRemainingCents).toBe(80000);
+    expect(card.waitingCents).toBe(20000);
+    expect(card.youOweOpenCents).toBe(60000);
+  });
+
+  it('is not changed by a declined claim, which only the debtor keeps a note of', () => {
+    const declined = claim('c2', 'Ben', 'Ana', 20000, {
+      status: 'declined',
+      decidedAt: 'd',
+      mine: true,
+    });
+    const line = buildCard(owes([declined]), names(null)).youOwe.find((l) => l.other === 'Ana')!;
+    expect([line.pendingCents, line.openCents]).toEqual([0, 50000]);
+    expect(line.claims).toEqual([]);
+    expect(line.declined.map((c) => c.id)).toEqual(['c2']);
+  });
+
+  it('sums several pending claims on one pair, newest first', () => {
+    const line = buildCard(
+      owes([
+        claim('c1', 'Ben', 'Ana', 10000, { createdAt: '2026-11-03T00:00:00.000Z', mine: true }),
+        claim('c2', 'Ben', 'Ana', 15000, { createdAt: '2026-11-04T00:00:00.000Z', mine: true }),
+      ]),
+      names(null),
+    ).youOwe.find((l) => l.other === 'Ana')!;
+    expect(line.pendingCents).toBe(25000);
+    expect(line.claims.map((c) => c.id)).toEqual(['c2', 'c1']);
+  });
+
+  it('leaves no open amount when pending covers what is left', () => {
+    const line = buildCard(
+      owes([claim('c1', 'Ben', 'Ana', 50000, { mine: true })]),
+      names(null),
+    ).youOwe.find((l) => l.other === 'Ana')!;
+    expect(line.openCents).toBe(0);
+  });
+
+  it('keeps a joined card Outstanding, with the claim waiting on the creditor, until it is confirmed', () => {
+    // Ana's side: she is a participant too here, owed ₱500 by Ben, all of it paid but a claim waits.
+    const mine = finished(
+      'session_d',
+      ['Ana', 'Ben'],
+      [purchase('r1', 'Ana', 1000, ['Ana', 'Ben'])],
+      {
+        role: 'participant',
+        me: 'Ana',
+        organizerName: 'Zed',
+        participants: [],
+        withAccount: ['Ana', 'Ben'],
+        payments: [pay('p1', 'Ben', 'Ana', 50000)],
+        claims: [claim('c1', 'Ben', 'Ana', 1000)],
+      },
+    );
+    const card = buildCard(mine, names(null));
+    expect(card.toConfirmCount).toBe(1);
+    expect(card.bucket).toBe('outstanding');
+    const confirmed = buildCard({ ...mine, claims: [] }, names(null));
+    expect(confirmed.bucket).toBe('settled');
+  });
+});
+
+describe('the organizer and claims to confirm (BR-C2, A2)', () => {
+  const owned = (claims: Claim[], over: Partial<Session> = {}) =>
+    finished(
+      'session_o',
+      ['Ana', 'Ben', 'Carla'],
+      [purchase('r1', 'Ana', 900, ['Ana', 'Ben', 'Carla'])],
+      { me: 'Ana', participants: [{ member: 'Ben', name: null, joinedAt: 'x' }], claims, ...over },
+    );
+
+  it("puts a claim to a creditor with no account in forOthers, and not the organizer's own line's", () => {
+    const toOwn = claim('c_own', 'Ben', 'Ana', 10000);
+    const toCarla = claim('c_carla', 'Ben', 'Carla', 15000);
+    const card = buildCard(owned([toOwn, toCarla]), names(null));
+    expect(card.forOthers.map((c) => c.id)).toEqual(['c_carla']);
+    expect(card.owedToYou.find((l) => l.other === 'Ben')?.claims.map((c) => c.id)).toEqual([
+      'c_own',
+    ]);
+    expect(card.toConfirmCount).toBe(2);
+  });
+
+  it('leaves a claim to a creditor who has joined to that participant', () => {
+    const joinedCarla = owned([claim('c_carla', 'Ben', 'Carla', 15000)], {
+      participants: [
+        { member: 'Ben', name: null, joinedAt: 'x' },
+        { member: 'Carla', name: null, joinedAt: 'x' },
+      ],
+    });
+    expect(buildCard(joinedCarla, names(null)).forOthers).toEqual([]);
+  });
+
+  it('keeps such a card out of Settled, and in Needs setup when the organizer is unplaced', () => {
+    const paid = [pay('p1', 'Ben', 'Ana', 30000), pay('p2', 'Carla', 'Ana', 30000)];
+    const waiting = owned([claim('c_carla', 'Ben', 'Carla', 15000)], { payments: paid });
+    expect(buildCard(waiting, names(null)).bucket).toBe('outstanding');
+    const unplaced = owned([claim('c_carla', 'Ben', 'Carla', 15000)], { me: null, payments: paid });
+    const card = buildCard(unplaced, names(null));
+    expect(card.bucket).toBe('needsSetup');
+    expect(card.forOthers).toHaveLength(1);
+  });
+
+  it('is not offered Already settled while a claim waits (BR-C18)', () => {
+    const before = owned([], { finishedWithCollection: false });
+    expect(buildCard(before, names(null)).offersAlreadySettled).toBe(true);
+    const withClaim = owned([claim('c1', 'Ben', 'Ana', 100)], { finishedWithCollection: false });
+    expect(buildCard(withClaim, names(null)).offersAlreadySettled).toBe(false);
+  });
+
+  it('records only what is open in Mark all (BR-C13)', () => {
+    const card = buildCard(owned([claim('c1', 'Ben', 'Ana', 10000)]), names(null));
+    expect(openLinePayments(card).find((p) => p.debtor === 'Ben')?.amountCents).toBe(20000);
+  });
+});
+
+describe('membersWithAccount', () => {
+  it("is the joined members plus the organizer's stored pick on an owned session", () => {
+    const s = finished('s', ['Ana', 'Ben', 'Carla'], [], {
+      me: 'Ana',
+      participants: [{ member: 'Ben', name: null, joinedAt: 'x' }],
+    });
+    expect(membersWithAccount(s)).toEqual(['Ana', 'Ben']);
+  });
+
+  it("is the server's list on a joined session", () => {
+    const s = finished('s', ['Ana', 'Ben'], [], { role: 'participant', withAccount: ['Ana'] });
+    expect(membersWithAccount(s)).toEqual(['Ana']);
+    expect(membersWithAccount({ ...s, withAccount: undefined })).toEqual([]);
+  });
+});
+
+describe('joinedMarkAll', () => {
+  it('sends a claim per You owe line and a payment per Owed to you line, at the open amounts', () => {
+    const s = finished(
+      's',
+      ['Ana', 'Ben', 'Carla'],
+      [
+        purchase('r1', 'Ana', 900, ['Ana', 'Ben', 'Carla']),
+        purchase('r2', 'Ben', 600, ['Ben', 'Carla']),
+      ],
+      {
+        role: 'participant',
+        me: 'Ben',
+        organizerName: 'Ana',
+        participants: [],
+        withAccount: ['Ana'],
+        claims: [claim('c1', 'Ben', 'Ana', 10000, { mine: true })],
+      },
+    );
+    const { claims, payments } = joinedMarkAll(buildCard(s, names(null)));
+    expect(claims).toEqual([{ debtor: 'Ben', creditor: 'Ana', amountCents: 20000 }]);
+    expect(payments).toEqual([{ debtor: 'Carla', creditor: 'Ben', amountCents: 30000 }]);
+  });
+});
+
+describe('parseLineAmount (AC-20.4, AC-26.2, AC-20.7)', () => {
+  const line = (pendingCents: number, remainingCents = 50000) =>
+    ({
+      remainingCents,
+      pendingCents,
+      openCents: Math.max(0, remainingCents - pendingCents),
+    }) as never;
+
+  it('says what is already waiting when a debtor goes over', () => {
+    expect(parseLineAmount('301', line(20000, 50000), 'debtor')).toEqual({
+      ok: false,
+      message:
+        "That's more than what's left (₱300.00). ₱200.00 is already waiting for confirmation.",
+    });
+  });
+
+  it('says what is waiting on the creditor when they go over', () => {
+    expect(parseLineAmount('301', line(20000, 50000), 'creditor')).toEqual({
+      ok: false,
+      message: "That's more than what's left (₱300.00). ₱200.00 is waiting for you to confirm.",
+    });
+  });
+
+  it("keeps today's messages with nothing pending, and accepts a fit amount", () => {
+    expect(parseLineAmount('501', line(0), 'debtor')).toEqual({
+      ok: false,
+      message: "That's more than what's left (₱500.00).",
+    });
+    expect(parseLineAmount('abc', line(0), 'debtor')).toEqual({
+      ok: false,
+      message: 'Enter a number.',
+    });
+    expect(parseLineAmount('300', line(20000), 'debtor')).toEqual({ ok: true, cents: 30000 });
+  });
+});
+
+describe('newClaims', () => {
+  it('skips ids already on screen and marks the rest as mine and pending', () => {
+    const existing = [claim('c1', 'Ben', 'Ana', 100)];
+    const incoming = [
+      { id: 'c1', debtor: 'Ben', creditor: 'Ana', amountCents: 100 },
+      { id: 'c2', debtor: 'Ben', creditor: 'Ana', amountCents: 200 },
+    ];
+    expect(newClaims(existing, incoming, 'T')).toEqual([
+      {
+        id: 'c2',
+        debtor: 'Ben',
+        creditor: 'Ana',
+        amountCents: 200,
+        createdAt: 'T',
+        status: 'pending',
+        decidedAt: null,
+        mine: true,
+      },
+    ]);
+  });
+});
+
+describe('waitingForMeCount and autoOpenTarget (round 3)', () => {
+  // Ben owes Ana ₱500 and Carla ₱300. The viewer is Ana, the organizer, so a claim to Ana is on
+  // her own line, and one to Carla (no account) is hers to decide for others.
+  const organizer = (id: string, claims: Claim[], over: Partial<Session> = {}) =>
+    finished(
+      id,
+      ['Ana', 'Ben', 'Carla'],
+      [
+        purchase(`${id}_a`, 'Ana', 1000, ['Ana', 'Ben']),
+        purchase(`${id}_c`, 'Carla', 600, ['Ben', 'Carla']),
+      ],
+      { me: 'Ana', participants: [{ member: 'Ben', name: null, joinedAt: 'x' }], claims, ...over },
+    );
+  const names_ = names('Ana');
+
+  it("counts the claims on the viewer's own lines and the ones for others", () => {
+    const c = buildCollection(
+      [
+        organizer('s1', [
+          claim('c1', 'Ben', 'Ana', 10000),
+          claim('c2', 'Ben', 'Ana', 5000),
+          claim('c3', 'Ben', 'Carla', 5000),
+        ]),
+      ],
+      names_,
+    );
+    expect(waitingForMeCount(c)).toBe(3);
+  });
+
+  it("does not count a debtor's own pending claims, declined claims or a participant creditor's claim", () => {
+    const joinedDebtor = finished(
+      's2',
+      ['Ana', 'Ben', 'Carla'],
+      [purchase('s2_a', 'Ana', 1000, ['Ana', 'Ben'])],
+      {
+        role: 'participant',
+        me: 'Ben',
+        organizerName: 'Ana',
+        participants: [],
+        withAccount: ['Ana'],
+        claims: [claim('c4', 'Ben', 'Ana', 10000, { mine: true })],
+      },
+    );
+    const declinedOnly = organizer('s3', [claim('c5', 'Ben', 'Ana', 100, { status: 'declined' })]);
+    const toParticipant = organizer('s4', [claim('c6', 'Ben', 'Carla', 100)], {
+      participants: [
+        { member: 'Ben', name: null, joinedAt: 'x' },
+        { member: 'Carla', name: null, joinedAt: 'x' },
+      ],
+    });
+    expect(
+      waitingForMeCount(buildCollection([joinedDebtor, declinedOnly, toParticipant], names_)),
+    ).toBe(0);
+  });
+
+  it('opens the first waiting card in page order, and nothing when there is nothing to open', () => {
+    const waiting = organizer('s_wait', [claim('c1', 'Ben', 'Ana', 10000)]);
+    const quiet = organizer('s_quiet', []);
+    const collection = buildCollection([quiet, waiting], names_);
+    expect(autoOpenTarget(collection, { openSessionId: undefined, autoOpen: true })).toBe('s_wait');
+    expect(autoOpenTarget(collection, { openSessionId: undefined, autoOpen: false })).toBeNull();
+    expect(autoOpenTarget(collection, { openSessionId: 's_quiet', autoOpen: true })).toBeNull();
+    expect(
+      autoOpenTarget(buildCollection([quiet], names_), {
+        openSessionId: undefined,
+        autoOpen: true,
+      }),
+    ).toBeNull();
+  });
+
+  it('picks Needs setup before Outstanding', () => {
+    const outstanding = organizer('s_out', [claim('c1', 'Ben', 'Ana', 10000)]);
+    // The organizer is unplaced (no pick, no name match), so the card is in Needs setup with a
+    // claim for others.
+    const setup = organizer('s_setup', [claim('c2', 'Ben', 'Carla', 100)], { me: null });
+    const collection = buildCollection([outstanding, setup], names('Zed'));
+    expect(collection.needsSetup.map((c) => c.session.id)).toEqual(['s_setup']);
+    expect(autoOpenTarget(collection, { openSessionId: undefined, autoOpen: true })).toBe(
+      's_setup',
+    );
+  });
+});
+
+describe('PR 4: Collection holds what is active, History what is done', () => {
+  // Renmar paid ₱1,000 for himself and Jyllan; Kim paid ₱600 for Jyllan and Kim. So Jyllan owes
+  // Renmar ₱500 and Kim ₱300, and Kim has no account.
+  const trip = (over: Partial<Session> = {}) =>
+    finished(
+      'session_trip',
+      ['Jyllan', 'Kim', 'Renmar'],
+      [
+        purchase('r1', 'Renmar', 1000, ['Jyllan', 'Renmar']),
+        purchase('r2', 'Kim', 600, ['Jyllan', 'Kim']),
+      ],
+      {
+        me: 'Renmar',
+        finishedWithCollection: true,
+        participants: [{ member: 'Jyllan', name: null, joinedAt: 'x' }],
+        ...over,
+      },
+    );
+  const paidToRenmar = pay('p1', 'Jyllan', 'Renmar', 50000);
+
+  describe('everyLinePaid', () => {
+    it('is true with no pairs, false with an unpaid pair, true once every pair is paid', () => {
+      const none = finished('s0', ['Ana'], [purchase('r', 'Ana', 100, ['Ana'])]);
+      expect(settlementPairs(none)).toEqual([]);
+      expect(everyLinePaid(none)).toBe(true);
+      expect(everyLinePaid(trip())).toBe(false);
+      expect(everyLinePaid(trip({ payments: [paidToRenmar] }))).toBe(false);
+      expect(
+        everyLinePaid(trip({ payments: [paidToRenmar, pay('p2', 'Jyllan', 'Kim', 30000)] })),
+      ).toBe(true);
+    });
+
+    it('counts an overpaid pair as paid, and a pending claim as not paying anything', () => {
+      const over = trip({ payments: [paidToRenmar, pay('p2', 'Jyllan', 'Kim', 99999)] });
+      expect(everyLinePaid(over)).toBe(true);
+      const claimed = trip({
+        payments: [paidToRenmar],
+        claims: [claim('c1', 'Jyllan', 'Kim', 30000)],
+      });
+      expect(everyLinePaid(claimed)).toBe(false);
+    });
+  });
+
+  describe("the owner's example", () => {
+    it("moves Renmar's card to History while Jyllan's stays in her Collection", () => {
+      const renmar = buildCard(trip({ payments: [paidToRenmar] }), names('Renmar'));
+      expect(renmar.bucket).toBe('settled');
+      // Jyllan is sent only her own payments, and sees ₱300 still owed to Kim.
+      const jyllan = buildCard(
+        trip({
+          role: 'participant',
+          organizerName: 'Renmar',
+          me: 'Jyllan',
+          participants: [],
+          withAccount: ['Renmar', 'Jyllan'],
+          payments: [paidToRenmar],
+        }),
+        names(null),
+      );
+      expect(jyllan.bucket).toBe('outstanding');
+      expect(jyllan.youOweRemainingCents).toBe(30000);
+    });
+
+    it("brings Renmar's card back while a claim to Kim waits, and settles it again once confirmed", () => {
+      const withClaim = buildCard(
+        trip({ payments: [paidToRenmar], claims: [claim('c1', 'Jyllan', 'Kim', 30000)] }),
+        names('Renmar'),
+      );
+      expect(withClaim.bucket).toBe('outstanding');
+      expect(withClaim.forOthers).toHaveLength(1);
+      const confirmed = buildCard(
+        trip({ payments: [paidToRenmar, pay('c1', 'Jyllan', 'Kim', 30000)], claims: [] }),
+        names('Renmar'),
+      );
+      expect(confirmed.bucket).toBe('settled');
+    });
+  });
+
+  describe('historyStatus (A1)', () => {
+    const status = (s: Session, who = names('Renmar')) => historyStatus(buildCard(s, who));
+
+    it('reads Settled with the date for an ordinary settled card', () => {
+      const s = status(trip({ payments: [paidToRenmar, pay('p2', 'Jyllan', 'Kim', 30000)] }));
+      expect(s.status).toMatch(/^Settled /);
+    });
+
+    it('goes in A1 order: presettled, not in the session, no pairs, never placed, even', () => {
+      const settledAll = [paidToRenmar, pay('p2', 'Jyllan', 'Kim', 30000)];
+      expect(status(trip({ payments: settledAll, finishedWithCollection: false })).status).toBe(
+        'Marked as already settled',
+      );
+      expect(status(trip({ payments: settledAll, me: NOT_IN_SESSION })).status).toBe(
+        "You weren't in this session",
+      );
+      const none = finished('s0', ['Ana'], [purchase('r', 'Ana', 100, ['Ana'])], { me: 'Ana' });
+      expect(status(none).status).toBe("Nothing to collect. Everyone's even.");
+      expect(status(trip({ payments: settledAll, me: null }), names('Zed')).status).toBe(
+        "Everyone's paid",
+      );
+      const even = trip({ payments: settledAll, me: 'Kim' });
+      expect(status({ ...even, payments: settledAll }, names('Kim')).status).toMatch(/^Settled /);
+    });
+
+    it('says a member with no lines was even with everyone', () => {
+      const lonely = finished(
+        's1',
+        ['Ana', 'Ben', 'Zed'],
+        [purchase('r', 'Ana', 100, ['Ana', 'Ben'])],
+        { me: 'Zed', finishedWithCollection: true, payments: [pay('p', 'Ben', 'Ana', 5000)] },
+      );
+      expect(historyStatus(buildCard(lonely, names('Zed'))).status).toBe(
+        'You were even with everyone',
+      );
+    });
+
+    it('flags that others still owe each other, for the organizer only', () => {
+      const renmar = buildCard(trip({ payments: [paidToRenmar] }), names('Renmar'));
+      expect(historyStatus(renmar).stillOwed).toBe(true);
+      const all = buildCard(
+        trip({ payments: [paidToRenmar, pay('p2', 'Jyllan', 'Kim', 30000)] }),
+        names('Renmar'),
+      );
+      expect(historyStatus(all).stillOwed).toBe(false);
+      const joinedCard = buildCard(
+        trip({
+          role: 'participant',
+          me: 'Kim',
+          organizerName: 'Renmar',
+          participants: [],
+          withAccount: [],
+          payments: [],
+        }),
+        names(null),
+      );
+      expect(historyStatus(joinedCard).stillOwed).toBe(false);
+    });
+  });
+
+  it('orders settled by settled date, presettled by finish date, ties by finish date then id', () => {
+    const settledAt = (id: string, closedAt: string, paidAt: string, over: Partial<Session> = {}) =>
+      finished(id, ['Ana', 'Ben'], [purchase(`${id}r`, 'Ana', 100, ['Ana', 'Ben'])], {
+        me: 'Ana',
+        finishedWithCollection: true,
+        closedAt,
+        payments: [pay(`${id}p`, 'Ben', 'Ana', 5000, paidAt)],
+        ...over,
+      });
+    const a = settledAt('s_a', '2026-11-02T00:00:00.000Z', '2026-11-10T00:00:00.000Z');
+    const b = settledAt('s_b', '2026-11-03T00:00:00.000Z', '2026-11-10T00:00:00.000Z');
+    const c = settledAt('s_c', '2026-11-01T00:00:00.000Z', '2026-11-12T00:00:00.000Z');
+    const order = buildCollection([a, b, c], names('Ana')).settled.map((x) => x.session.id);
+    // c settled last; a and b settled on the same day, so the later finish (b) goes first.
+    expect(order).toEqual(['s_c', 's_b', 's_a']);
+  });
+
+  it('finds the cards that moved from Collection to History, and ones that came back', () => {
+    const before = buildCollection([trip(), trip({ id: 'other' } as never)], names('Renmar'));
+    const after = buildCollection(
+      [
+        trip({ payments: [paidToRenmar, pay('p2', 'Jyllan', 'Kim', 30000)] }),
+        trip({ id: 'other' } as never),
+      ],
+      names('Renmar'),
+    );
+    expect(movesFromCollection(before, after)).toEqual(['session_trip']);
+    expect(movesFromCollection(after, before)).toEqual([]);
+    expect(movesFromCollection(before, before)).toEqual([]);
+    expect(cameBack('settled', 'outstanding')).toBe(true);
+    expect(cameBack('settled', 'needsSetup')).toBe(true);
+    expect(cameBack('settled', 'settled')).toBe(false);
+    expect(cameBack('outstanding', 'settled')).toBe(false);
   });
 });

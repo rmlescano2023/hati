@@ -74,6 +74,15 @@ alter table expense_sessions add column if not exists me text;
 -- it can be marked as already settled. It is never set back once true.
 alter table expense_sessions add column if not exists finished_with_collection boolean;
 
+-- The finished session's private invite token: 128 random bits from the
+-- server, base64url (22 characters). Null until the organizer first asks for
+-- the link; Reset replaces it, so the old link stops working at once. Drafts
+-- never get one.
+alter table expense_sessions add column if not exists invite_token text;
+
+create unique index if not exists expense_sessions_invite_token_idx
+  on expense_sessions (invite_token) where invite_token is not null;
+
 create table if not exists purchase_records (
   id         text primary key,          -- keeps the existing "rec_xxx" ids
   session_id text not null references expense_sessions (id) on delete cascade,
@@ -101,3 +110,38 @@ create table if not exists session_payments (
 );
 
 create index if not exists session_payments_session_id_idx on session_payments (session_id);
+
+-- Accounts that joined someone else's finished session as one of its members.
+-- One member per account per session (the key), and one account per member
+-- (the unique index). The organizer is never a row here.
+create table if not exists session_participants (
+  session_id text not null references expense_sessions (id) on delete cascade,
+  user_id    text not null references users (id) on delete cascade,
+  member     text not null,
+  joined_at  timestamptz not null default now(),
+  primary key (session_id, user_id)
+);
+
+create unique index if not exists session_participants_member_idx
+  on session_participants (session_id, member);
+
+create index if not exists session_participants_user_id_idx on session_participants (user_id);
+
+-- A joined debtor's "I've paid", waiting for the creditor (or the organizer)
+-- to confirm or decline it. Kept apart from session_payments, which holds
+-- confirmed money only, so no existing total or check ever counts a claim.
+-- Confirming moves it into session_payments under the same id. Unused until
+-- PR 2; created now so the shared database is altered once.
+create table if not exists payment_claims (
+  id           text primary key,          -- client-minted "pay_xxx"; becomes the payment's id on confirm
+  session_id   text not null references expense_sessions (id) on delete cascade,
+  debtor       text not null,
+  creditor     text not null,
+  amount_cents integer not null check (amount_cents > 0),
+  claimed_by   text not null references users (id) on delete cascade,
+  status       text not null default 'pending' check (status in ('pending', 'declined')),
+  created_at   timestamptz not null default now(),
+  decided_at   timestamptz
+);
+
+create index if not exists payment_claims_session_id_idx on payment_claims (session_id);

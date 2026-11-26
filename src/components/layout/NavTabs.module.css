@@ -131,3 +131,77 @@
     margin: 0 auto;
   }
 }
+
+/* A count on a tab, such as the payments waiting for this account's answer (round 3). */
+.count {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  margin-left: 6px;
+  border-radius: var(--radius-pill);
+  /* The same glossy green as the card's "to confirm" pill. */
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0) 55%),
+    linear-gradient(135deg, var(--accent), var(--accent-strong));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    0 0 8px color-mix(in srgb, var(--accent) 40%, transparent);
+  color: var(--bg);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.count::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  /* A gentle diagonal band of light, at most 6% white, drawn behind the text so it never changes
+     the text colour. It crosses for about a second and a half in every four. */
+  background: linear-gradient(
+    105deg,
+    transparent 38%,
+    rgba(255, 255, 255, 0.08) 50%,
+    transparent 62%
+  );
+  transform: translateX(-130%);
+  animation: sweep 4s ease-in-out infinite;
+}
+
+@keyframes sweep {
+  0% {
+    transform: translateX(-130%);
+  }
+  35%,
+  100% {
+    transform: translateX(130%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .count::after {
+    animation: none;
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  /* The floating pill's tabs are icon over label, so the count sits on the icon's corner. */
+  .tab {
+    position: relative;
+  }
+
+  .count {
+    position: absolute;
+    top: 2px;
+    right: 6px;
+    margin-left: 0;
+  }
+}

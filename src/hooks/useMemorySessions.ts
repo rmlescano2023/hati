@@ -94,8 +94,10 @@ export function useMemorySessions(seed: Session[]): SessionsBackend {
   );
 
   const removeAllPayments = useCallback(
-    (sessionId: string) => {
+    (sessionId: string, onSettled?: (ok: boolean) => void) => {
       commit(removeAllPaymentsFrom(sessionsRef.current, sessionId));
+      // In memory there is nothing to wait for.
+      onSettled?.(true);
     },
     [commit],
   );
@@ -126,9 +128,17 @@ export function useMemorySessions(seed: Session[]): SessionsBackend {
       settleSessions,
       removeAllPayments,
       removePayment,
+      // A practice session has no joined members and nothing to claim, so these do nothing.
+      addClaims: () => Promise.resolve(),
+      decideClaim: noop,
+      removeClaim: noop,
       isPaying: () => false,
       replaceAll,
       appendAll,
+      // A practice session is never joined and has no one to remove, so these do nothing (BR-G9).
+      addJoinedSession: noop,
+      leaveSession: noop,
+      removeParticipant: () => Promise.resolve(false),
       status: 'ready',
       loaded: true,
       error: null,
