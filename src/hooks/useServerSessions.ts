@@ -1,9 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '@clerk/clerk-react';
-import type { NewPayment, Payment, Session } from '../types';
+import type { Claim, ClaimDecision, NewClaim, NewPayment, Payment, Session } from '../types';
 import { keepOpenedActivity } from '../lib/activity';
 import { sessionDisplayTitle } from '../lib/sessionLabel';
-import { isFullyPaid, mergeServerPayments, newPayments, settlePayments } from '../lib/collection';
+import {
+  isFullyPaid,
+  isJoined,
+  mergeServerPayments,
+  newClaims,
+  newPayments,
+  settlePayments,
+} from '../lib/collection';
 import { createId } from '../lib/id';
 import {
   DELETED_ELSEWHERE,
@@ -16,19 +23,27 @@ import {
   WHOLE_SESSION,
   addFailure,
   authorisedFetch,
+  createLoadGuard,
+  createQuietReload,
   createPendingWrites,
   createWriteOrder,
   createSaveConfirmations,
   createSaveQueue,
   discardsFailedCreate,
   failedMessage,
+  failedLeaveIds,
   failedSessionIds,
+  keepLocalClaims,
   keepLocalPayments,
   lineKey,
   mergeLoaded,
   messageOf,
   needsRefresh,
   recordFailedMessage,
+  CHECK_INTERVAL_MS,
+  IDLE_PAUSE_MS,
+  checksForChanges,
+  reloadsOnReturn,
   resolveAlreadySettled,
   resolveFailure,
   resolveSuperseded,
@@ -129,7 +144,7 @@ export type SessionsBackend = {
    * request, on screen at once. All or nothing on the server, so a failure
    * puts them all back and "Try again" always shows what the server has.
    */
-  removeAllPayments: (sessionId: string) => void;
+  removeAllPayments: (sessionId: string, onSettled?: (ok: boolean) => void) => void;
   /**
    * Dev-only seeding that only ever adds: sessions already there are left
    * alone, and nothing is deleted, so it is safe on a database with real data.
@@ -143,8 +158,52 @@ export type SessionsBackend = {
     paymentId: string,
     onSettled?: (result: PaymentResult) => void,
   ) => void;
+  /**
+   * A joined debtor's "I've paid": pending claims on screen at once, and on the server in the
+   * background, all or nothing. Like `addPayments`, the caller mints the ids, a failure takes them
+   * off again, and `options.quiet` leaves the banner to the caller (Mark all's batch).
+   */
+  addClaims: (
+    sessionId: string,
+    claims: NewClaim[],
+    onSettled?: (result: PaymentResult) => boolean | void,
+    options?: { quiet?: boolean },
+  ) => Promise<void>;
+  /**
+   * The creditor, or the organizer for a creditor with no account, confirms or declines a claim. A
+   * confirm puts the payment on screen and takes the claim off in one change, and a failure puts
+   * both back.
+   */
+  decideClaim: (
+    sessionId: string,
+    claimId: string,
+    decision: ClaimDecision,
+    onSettled?: (result: PaymentResult) => boolean | void,
+  ) => void;
+  /** The sender withdraws a pending claim, or dismisses a declined one; on screen at once. */
+  removeClaim: (
+    sessionId: string,
+    claimId: string,
+    onSettled?: (result: PaymentResult) => boolean | void,
+  ) => void;
   /** Dev-only seeding: swap the whole list, session by session. */
   replaceAll: (next: Session[]) => void;
+  /**
+   * Puts a session the server has just joined this account to on screen, and keeps it there
+   * against a load that read the list before the join landed.
+   */
+  addJoinedSession: (session: Session) => void;
+  /**
+   * Stops tracking a joined session: gone from the screen at once, and on the server in the
+   * background. A failure brings it back and is reported in the banner.
+   */
+  leaveSession: (sessionId: string) => void;
+  /**
+   * The organizer takes a joined account out of their session. Resolves true once the server has
+   * removed it, and the on-screen list of who joined follows; false on any failure, which the
+   * dialog reports itself.
+   */
+  removeParticipant: (sessionId: string, member: string) => Promise<boolean>;
   status: SyncStatus;
   /**
    * True once a load has succeeded, and from then on. Until then an empty list
@@ -163,6 +222,11 @@ export type SessionsBackend = {
 
 const ENDPOINT = '/api/sessions';
 
+/** Sessions the account joined are asked for explicitly, so a tab on an older bundle is never sent them. */
+const LOAD_ENDPOINT = `${ENDPOINT}?joined=1`;
+
+const PARTICIPANTS_ENDPOINT = '/api/participants';
+
 const SAVE_TIMEOUT = 'Saving is taking too long. Check your connection, then try again.';
 const CREATE_TIMEOUT =
   'Creating the session is taking too long. Check your connection, then try again.';
@@ -180,7 +244,9 @@ const UNDO_ALL_TIMEOUT =
 const PAYMENTS_ENDPOINT = '/api/payments';
 
 /** What a refused payment request may say, read only as far as it is needed. */
-type PaymentErrorBody = { error?: unknown; code?: unknown; payments?: unknown };
+type PaymentErrorBody = { error?: unknown; code?: unknown; payments?: unknown; claims?: unknown };
+
+const CLAIMS_ENDPOINT = '/api/claims';
 
 /**
  * Plain `vite` does not serve `/api`, so a request for it is answered with the
@@ -237,6 +303,25 @@ export function useServerSessions(): SessionsBackend {
   const [failures, setFailures] = useState<readonly Failure[]>([]);
   const [reverted, setReverted] = useState(false);
   const [reloads, setReloads] = useState(0);
+
+  /**
+   * When the last load of any kind started, so a return to the tab inside the window doesn't
+   * reload again (see `reloadsOnReturn`). Null until the first load.
+   */
+  const lastLoadAt = useRef<number | null>(null);
+  /**
+   * Set by the return-to-tab reload for the load it starts. A quiet load never shows the loading
+   * state and says nothing when it fails: nothing the user did has failed, and the next return
+   * tries again (A4).
+   */
+  const [quietReload] = useState(() => createQuietReload());
+  /** The server's fingerprint of the last load, or null (none yet, or an older server). */
+  const loadedState = useRef<string | null>(null);
+  /** When the user last did anything (pointer, key or touch); the check pauses when it is long ago. */
+  const lastInputAt = useRef(Date.now());
+  const checking = useRef(false);
+  /** A load is running, which a change found by the check must not cancel. */
+  const loadRunning = useRef(false);
 
   /**
    * Sessions whose write had failed when "Try again" was pressed, checked
@@ -329,6 +414,8 @@ export function useServerSessions(): SessionsBackend {
    * what makes this window reachable.
    */
   const settledDuringLoad = useRef(new Set<string>());
+  /** Sessions created or removed while a load was out; see `createLoadGuard`. */
+  const [loadGuard] = useState(() => createLoadGuard());
 
   // Signing out unmounts the provider, possibly mid-save, and the prompt must
   // not outlive it.
@@ -350,17 +437,27 @@ export function useServerSessions(): SessionsBackend {
     if (!isLoaded || !isSignedIn) return;
     let cancelled = false;
 
+    const quiet = quietReload.take();
+
     (async () => {
-      setLoading(true);
+      if (!quiet) setLoading(true);
+      loadRunning.current = true;
+      lastLoadAt.current = Date.now();
       settledDuringLoad.current.clear();
+      loadGuard.begin();
       try {
         // The deadline covers the body too, so a late result is never applied.
-        const body = await withDeadline(WRITE_TIMEOUT_MS, async (signal) => {
-          const res = await authedFetch(ENDPOINT, { method: 'GET' }, signal);
+        const { body, state } = await withDeadline(WRITE_TIMEOUT_MS, async (signal) => {
+          const res = await authedFetch(LOAD_ENDPOINT, { method: 'GET' }, signal);
           if (!res.ok) throw new FriendlyError(failedMessage('load your data', res.status));
-          return (await readJson(res)) as Session[];
+          return {
+            body: (await readJson(res)) as Session[],
+            // What this load saw, for the check to compare with. An older server sends none.
+            state: res.headers.get('X-Hati-State'),
+          };
         });
         if (cancelled) return;
+        loadedState.current = state;
         // A load never overrides a write the server hasn't confirmed, so
         // "Try again" during a save, create or delete doesn't undo it on screen.
         const before = sessionsRef.current;
@@ -370,16 +467,25 @@ export function useServerSessions(): SessionsBackend {
         const rollingBack = (id: string) =>
           settledDuringLoad.current.has(id) && revertCandidates.current.has(id);
         const after = keepOpenedActivity(
-          keepLocalPayments(
-            mergeLoaded(
-              Array.isArray(body) ? body : [],
+          // A confirm changes the payments and the claims together, so the two are kept together
+          // by the same predicate: one without the other would show it as both.
+          keepLocalClaims(
+            keepLocalPayments(
+              mergeLoaded(
+                Array.isArray(body) ? body : [],
+                before,
+                (id) =>
+                  queue.isBusy(id) ||
+                  creating.current.has(id) ||
+                  paying.current.has(id) ||
+                  // Created after this load read the server: not in its answer, but real.
+                  loadGuard.wasCreated(id) ||
+                  (settledDuringLoad.current.has(id) && !rollingBack(id)),
+                // Deleted after this load read the server: still in its answer, but gone.
+                (id) => deleting.current.has(id) || loadGuard.wasRemoved(id),
+              ),
               before,
-              (id) =>
-                queue.isBusy(id) ||
-                creating.current.has(id) ||
-                paying.current.has(id) ||
-                (settledDuringLoad.current.has(id) && !rollingBack(id)),
-              (id) => deleting.current.has(id),
+              rollingBack,
             ),
             before,
             rollingBack,
@@ -396,6 +502,8 @@ export function useServerSessions(): SessionsBackend {
         setLoading(false);
       } catch (err) {
         if (cancelled) return;
+        // The screen keeps its last good copy either way, and a quiet load adds nothing to it.
+        if (quiet) return;
         // The sessions on screen stay as they are: empty after a failed first
         // load, and the last good copy after a failed retry.
         fail({
@@ -408,12 +516,101 @@ export function useServerSessions(): SessionsBackend {
         });
         setLoading(false);
       }
-    })();
+    })().finally(() => {
+      // A newer load has already marked itself running, so only the current one clears it.
+      if (!cancelled) loadRunning.current = false;
+    });
 
     return () => {
       cancelled = true;
     };
-  }, [authedFetch, commit, fail, isLoaded, isSignedIn, queue, reloads]);
+  }, [authedFetch, commit, fail, isLoaded, isSignedIn, loadGuard, queue, quietReload, reloads]);
+
+  // Coming back to the tab after a while reloads quietly, so a joined member sees the payments the
+  // organizer has recorded since (D2). It waits for a settled screen: while the first load or a
+  // retry is running, or a failure is on the banner, the reload would cancel the one in flight or
+  // silently replace an edit the user was told did not save, and "Try again" is for that.
+  const canReloadQuietly = loaded && !loading && failures.length === 0;
+
+  /** Starts the quiet reload, which the load effect then runs; never over a load already running. */
+  const reloadQuietly = useCallback(() => {
+    if (quietReload.request()) setReloads((n) => n + 1);
+  }, [quietReload]);
+
+  /**
+   * Asks the server whether anything this account can see has changed, and reloads quietly if so.
+   * A failed or timed-out check says nothing (A4): the next tick tries again. A change is shown at
+   * once, without waiting for the 30-second window, because it is known.
+   */
+  const checkForChanges = useCallback(async () => {
+    checking.current = true;
+    try {
+      const sentFor = loadedState.current;
+      const { state } = await withDeadline(WRITE_TIMEOUT_MS, async (signal) => {
+        const res = await authedFetch(`${LOAD_ENDPOINT}&check=1`, { method: 'GET' }, signal);
+        if (!res.ok) throw new Error('The check failed.');
+        return (await res.json()) as { state?: unknown };
+      });
+      // A load that landed while the check was out has already brought the newer state.
+      if (
+        typeof state === 'string' &&
+        loadedState.current === sentFor &&
+        state !== sentFor &&
+        !loadRunning.current
+      ) {
+        reloadQuietly();
+      }
+    } catch {
+      // Nothing the user did has failed, so nothing is said.
+    } finally {
+      checking.current = false;
+    }
+  }, [authedFetch, reloadQuietly]);
+
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn || !canReloadQuietly) return;
+    const visible = () => document.visibilityState === 'visible';
+    // Coming back reloads (after the 30-second window), and so does clicking into the window: two
+    // windows side by side never fire visibilitychange, but clicking into one fires focus.
+    const onReturn = () => {
+      if (!visible()) return;
+      lastInputAt.current = Date.now();
+      if (!reloadsOnReturn(lastLoadAt.current, Date.now())) return;
+      reloadQuietly();
+    };
+    const tick = () => {
+      if (
+        checksForChanges({
+          visible: visible(),
+          canReload: true,
+          state: loadedState.current,
+          checking: checking.current,
+          lastInputAt: lastInputAt.current,
+          now: Date.now(),
+        })
+      ) {
+        void checkForChanges();
+      }
+    };
+    // Input after the pause resumes the check at once rather than at the next tick.
+    const onInput = () => {
+      const now = Date.now();
+      const wasIdle = now - lastInputAt.current >= IDLE_PAUSE_MS;
+      lastInputAt.current = now;
+      if (wasIdle) tick();
+    };
+    const inputs = ['pointerdown', 'pointermove', 'keydown', 'touchstart'] as const;
+    for (const type of inputs) window.addEventListener(type, onInput, { passive: true });
+    document.addEventListener('visibilitychange', onReturn);
+    window.addEventListener('focus', onReturn);
+    const timer = setInterval(tick, CHECK_INTERVAL_MS);
+    return () => {
+      for (const type of inputs) window.removeEventListener(type, onInput);
+      document.removeEventListener('visibilitychange', onReturn);
+      window.removeEventListener('focus', onReturn);
+      clearInterval(timer);
+    };
+  }, [isLoaded, isSignedIn, canReloadQuietly, checkForChanges, reloadQuietly]);
 
   /**
    * Sends one save, and never rejects because it reports its own errors. A
@@ -531,6 +728,7 @@ export function useServerSessions(): SessionsBackend {
   const addSession = useCallback(
     (session: Session, onDiscarded?: () => void) => {
       commit([...sessionsRef.current, session]);
+      loadGuard.created(session.id);
       // The caller has already navigated into it, so this catches up rather
       // than being awaited.
       const create = (async () => {
@@ -552,6 +750,8 @@ export function useServerSessions(): SessionsBackend {
           // A failed create has nothing left to report once another one lands.
           setFailures((f) => resolveFailure(f, 'create', null));
         } catch (err) {
+          // The server has no such session, so a load that read it must not be made to keep one.
+          loadGuard.createFailed(session.id);
           const timedOut = err instanceof TimeoutError;
           if (
             discardsFailedCreate({
@@ -604,7 +804,7 @@ export function useServerSessions(): SessionsBackend {
       creating.current.set(session.id, create);
       pending.track(create);
     },
-    [authedFetch, commit, fail, pending, queue],
+    [authedFetch, commit, fail, loadGuard, pending, queue],
   );
 
   const removeSession = useCallback(
@@ -614,6 +814,7 @@ export function useServerSessions(): SessionsBackend {
       const removed = sessionsRef.current[index];
       commit(sessionsRef.current.filter((s) => s.id !== sessionId));
       deleting.current.add(sessionId);
+      loadGuard.removed(sessionId);
       const remove = (async () => {
         try {
           await creating.current.get(sessionId);
@@ -640,6 +841,8 @@ export function useServerSessions(): SessionsBackend {
           // than only after "Try again". `deleting` still holds it up to here,
           // so a load landing meanwhile can't fight the restore.
           if (removed) commit(restoreAt(sessionsRef.current, removed, index));
+          // Put back, so a load already out with it must not filter it off the screen again.
+          loadGuard.restored(sessionId);
           fail({
             kind: 'delete',
             sessionId,
@@ -654,7 +857,7 @@ export function useServerSessions(): SessionsBackend {
       })();
       pending.track(remove);
     },
-    [authedFetch, commit, fail, pending, queue],
+    [authedFetch, commit, fail, loadGuard, pending, queue],
   );
 
   const recordOpen = useCallback(
@@ -965,7 +1168,7 @@ export function useServerSessions(): SessionsBackend {
   );
 
   const removeAllPayments = useCallback(
-    (sessionId: string) => {
+    (sessionId: string, onSettled?: (ok: boolean) => void) => {
       const snapshot = sessionsRef.current.find((s) => s.id === sessionId)?.payments ?? [];
       if (snapshot.length === 0) return;
       setPayments(sessionId, () => []);
@@ -991,6 +1194,7 @@ export function useServerSessions(): SessionsBackend {
           // Not found means there is nothing left to undo, which is done too.
           if (status === 204 || status === 404) {
             paymentSucceeded(sessionId, seq, [WHOLE_SESSION]);
+            onSettled?.(true);
             return;
           }
         } catch (err) {
@@ -1012,6 +1216,7 @@ export function useServerSessions(): SessionsBackend {
               ? SIGNED_OUT
               : "Couldn't undo “already settled”, so its payments are still recorded.",
         );
+        onSettled?.(false);
       })().finally(() => {
         settledDuringLoad.current.add(sessionId);
         countPaying(sessionId, -1);
@@ -1084,6 +1289,403 @@ export function useServerSessions(): SessionsBackend {
     [authedFetch, countPaying, paymentFailed, paymentSucceeded, pending, setPayments, writeOrder],
   );
 
+  /** Replaces one session's claims and, with them, its payments, in one change, if the session is still there. */
+  const setLedger = useCallback(
+    (
+      sessionId: string,
+      fn: (ledger: { payments: Payment[]; claims: Claim[] }) => {
+        payments: Payment[];
+        claims: Claim[];
+      },
+    ) => {
+      commit(
+        sessionsRef.current.map((s) =>
+          s.id === sessionId
+            ? { ...s, ...fn({ payments: s.payments, claims: s.claims ?? [] }) }
+            : s,
+        ),
+      );
+    },
+    [commit],
+  );
+
+  /**
+   * Sends one claims request and reads a refusal's body, which carries the ledger as the caller may
+   * see it. The deadline covers the body too.
+   */
+  const claimRequest = useCallback(
+    (path: string, init: RequestInit) =>
+      withDeadline(WRITE_TIMEOUT_MS, async (signal) => {
+        const res = await authedFetch(path, init, signal);
+        const type = res.headers.get('content-type') ?? '';
+        const json =
+          !res.ok && type.includes('application/json')
+            ? ((await res.json()) as PaymentErrorBody)
+            : null;
+        return { status: res.status, body: json };
+      }),
+    [authedFetch],
+  );
+
+  /**
+   * After a refusal that came with the server's ledger, the line shows that rather than waiting for
+   * a reload: its payments and claims, minus any undo or withdraw still in flight, plus any other
+   * add still in flight that the server hasn't got yet.
+   */
+  const applyServerLedger = useCallback(
+    (sessionId: string, body: PaymentErrorBody | null, ids: Set<string>) => {
+      if (!body || !Array.isArray(body.payments) || !Array.isArray(body.claims)) return false;
+      const serverPayments = body.payments as Payment[];
+      const serverClaims = body.claims as Claim[];
+      const adding_ = (id: string) => adding.current.has(id) && !ids.has(id);
+      const removing_ = (id: string) => removing.current.has(id);
+      setLedger(sessionId, ({ payments, claims }) => ({
+        payments: mergeServerPayments(payments, serverPayments, adding_, removing_),
+        claims: mergeServerPayments(claims, serverClaims, adding_, removing_),
+      }));
+      return true;
+    },
+    [setLedger],
+  );
+
+  /** How a claim write ended, for the caller's own message and the banner. */
+  const claimOutcome = useCallback(
+    (
+      sessionId: string,
+      status: number | null,
+      body: PaymentErrorBody | null,
+      timedOut: boolean,
+      fallback: string,
+      onSettled: ((result: PaymentResult) => boolean | void) | undefined,
+    ) => {
+      // Only a refusal of the claim itself has words worth showing; anything else is the banner's.
+      const refusal =
+        (status === 409 || (status === 404 && body?.code === 'not_pending')) &&
+        typeof body?.error === 'string'
+          ? body.error
+          : null;
+      const message =
+        refusal ??
+        (status === 404
+          ? DELETED_ELSEWHERE
+          : status === 401
+            ? SIGNED_OUT
+            : timedOut
+              ? 'This is taking too long. Check your connection and try again.'
+              : fallback);
+      const shown =
+        onSettled?.({
+          ok: false,
+          message,
+          payments: paymentsOf(sessionsRef.current, sessionId),
+          code: typeof body?.code === 'string' ? body.code : undefined,
+          status,
+        }) === true;
+      return { refusal, shown };
+    },
+    [],
+  );
+
+  const addClaims = useCallback(
+    (
+      sessionId: string,
+      claims: NewClaim[],
+      onSettled?: (result: PaymentResult) => boolean | void,
+      options?: { quiet?: boolean },
+    ): Promise<void> => {
+      const session = sessionsRef.current.find((s) => s.id === sessionId);
+      if (!session) {
+        onSettled?.({ ok: false, message: 'This session is gone.', payments: [], status: null });
+        return Promise.resolve();
+      }
+      // Only what this call put on screen is ever taken off again; a retry's claim is the server's.
+      const added = newClaims(session.claims ?? [], claims, new Date().toISOString());
+      setLedger(sessionId, ({ payments, claims: list }) => ({
+        payments,
+        claims: [...list, ...added],
+      }));
+      countPaying(sessionId, 1);
+      const ids = new Set(added.map((c) => c.id));
+      const seq = writeOrder.start();
+      const lines = claims.map(lineKey);
+      const title = sessionDisplayTitle(session);
+
+      const work = (async () => {
+        let status: number | null = null;
+        let body: PaymentErrorBody | null = null;
+        let timedOut = false;
+        try {
+          const result = await claimRequest(CLAIMS_ENDPOINT, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionId, claims }),
+          });
+          if (result.status === 201) {
+            paymentSucceeded(sessionId, seq, lines);
+            onSettled?.({ ok: true });
+            return;
+          }
+          status = result.status;
+          body = result.body;
+        } catch (err) {
+          timedOut = err instanceof TimeoutError;
+        }
+
+        // Every other ending takes the claims off again, so nothing shows as waiting that wasn't sent.
+        setLedger(sessionId, ({ payments, claims: list }) => ({
+          payments,
+          claims: list.filter((c) => !ids.has(c.id)),
+        }));
+        applyServerLedger(sessionId, body, ids);
+        const current = sessionsRef.current.find((s) => s.id === sessionId);
+        if (!current) return;
+
+        const batch = claims.length > 1;
+        const { refusal, shown } = claimOutcome(
+          sessionId,
+          status,
+          body,
+          timedOut,
+          batch
+            ? "Couldn't send what you've paid. Nothing was sent. Try again."
+            : `Couldn't send what you've paid to ${claims[0].creditor} in “${title}”. Try again.`,
+          onSettled,
+        );
+        if (!options?.quiet && (refusal === null || !shown)) {
+          paymentFailed(
+            sessionId,
+            seq,
+            lines,
+            refusal !== null
+              ? batch
+                ? `What you've paid in “${title}” wasn't sent. ${refusal}`
+                : `What you've paid to ${claims[0].creditor} in “${title}” wasn't sent. ${refusal}`
+              : timedOut
+                ? PAYMENTS_TIMEOUT
+                : batch
+                  ? "Couldn't send what you've paid. Nothing was sent. Try again."
+                  : `Couldn't send what you've paid to ${claims[0].creditor} in “${title}”. Try again.`,
+            refusal !== null,
+          );
+        }
+      })().finally(() => {
+        settledDuringLoad.current.add(sessionId);
+        countPaying(sessionId, -1);
+        for (const id of ids) adding.current.delete(id);
+      });
+      for (const id of ids) adding.current.set(id, work);
+      pending.track(work);
+      return work;
+    },
+    [
+      applyServerLedger,
+      claimOutcome,
+      claimRequest,
+      countPaying,
+      paymentFailed,
+      paymentSucceeded,
+      pending,
+      setLedger,
+      writeOrder,
+    ],
+  );
+
+  const decideClaim = useCallback(
+    (
+      sessionId: string,
+      claimId: string,
+      decision: ClaimDecision,
+      onSettled?: (result: PaymentResult) => boolean | void,
+    ) => {
+      const claim = sessionsRef.current
+        .find((s) => s.id === sessionId)
+        ?.claims?.find((c) => c.id === claimId);
+      if (!claim) return;
+      const confirming = decision === 'confirm';
+      // A confirm turns the claim into a payment of the same id and the debtor's time (BR-C7), so
+      // the payment goes on and the claim comes off in one change, and both come back together.
+      const payment: Payment = {
+        id: claim.id,
+        debtor: claim.debtor,
+        creditor: claim.creditor,
+        amountCents: claim.amountCents,
+        createdAt: claim.createdAt,
+      };
+      setLedger(sessionId, ({ payments, claims }) => ({
+        payments: confirming ? [...payments, payment] : payments,
+        claims: claims.filter((c) => c.id !== claimId),
+      }));
+      countPaying(sessionId, 1);
+      const seq = writeOrder.start();
+      const lines = [lineKey(claim)];
+      const ids = new Set([claimId]);
+
+      const work = (async () => {
+        let status: number | null = null;
+        let body: PaymentErrorBody | null = null;
+        let timedOut = false;
+        try {
+          const result = await claimRequest(CLAIMS_ENDPOINT, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: claimId, decision }),
+          });
+          if (result.status === 200) {
+            paymentSucceeded(sessionId, seq, lines);
+            onSettled?.({ ok: true });
+            return;
+          }
+          status = result.status;
+          body = result.body;
+        } catch (err) {
+          timedOut = err instanceof TimeoutError;
+        }
+
+        if (!sessionsRef.current.some((s) => s.id === sessionId)) return;
+        // With the server's ledger the line shows how it really stands. A claim that is no longer
+        // waiting has gone for good. Anything else puts the claim, and the payment, back as they were.
+        const redrawn = applyServerLedger(sessionId, body, ids);
+        if (!redrawn && !(status === 404 && body?.code === 'not_pending')) {
+          setLedger(sessionId, ({ payments, claims }) => ({
+            payments: confirming ? payments.filter((p) => p.id !== claimId) : payments,
+            claims: claims.some((c) => c.id === claimId) ? claims : [...claims, claim],
+          }));
+        } else if (!redrawn) {
+          setLedger(sessionId, ({ payments, claims }) => ({
+            payments: confirming ? payments.filter((p) => p.id !== claimId) : payments,
+            claims,
+          }));
+        }
+        const fallback = confirming
+          ? `Couldn't confirm the payment from ${claim.debtor}. Try again.`
+          : `Couldn't decline the payment from ${claim.debtor}. Try again.`;
+        const { refusal, shown } = claimOutcome(
+          sessionId,
+          status,
+          body,
+          timedOut,
+          fallback,
+          onSettled,
+        );
+        if (refusal === null || !shown) {
+          paymentFailed(
+            sessionId,
+            seq,
+            lines,
+            refusal ?? (timedOut ? PAYMENT_TIMEOUT : fallback),
+            refusal !== null,
+          );
+        }
+      })().finally(() => {
+        settledDuringLoad.current.add(sessionId);
+        countPaying(sessionId, -1);
+        adding.current.delete(claimId);
+      });
+      // An undo of the payment a confirm just put on screen waits for it to land.
+      if (confirming) adding.current.set(claimId, work);
+      pending.track(work);
+    },
+    [
+      applyServerLedger,
+      claimOutcome,
+      claimRequest,
+      countPaying,
+      paymentFailed,
+      paymentSucceeded,
+      pending,
+      setLedger,
+      writeOrder,
+    ],
+  );
+
+  const removeClaim = useCallback(
+    (sessionId: string, claimId: string, onSettled?: (result: PaymentResult) => boolean | void) => {
+      const claim = sessionsRef.current
+        .find((s) => s.id === sessionId)
+        ?.claims?.find((c) => c.id === claimId);
+      if (!claim) return;
+      setLedger(sessionId, ({ payments, claims }) => ({
+        payments,
+        claims: claims.filter((c) => c.id !== claimId),
+      }));
+      countPaying(sessionId, 1);
+      const seq = writeOrder.start();
+      const lines = [lineKey(claim)];
+      const ids = new Set([claimId]);
+      removing.current.add(claimId);
+
+      const work = (async () => {
+        let status: number | null = null;
+        let body: PaymentErrorBody | null = null;
+        let timedOut = false;
+        try {
+          // A withdraw of a claim still being sent waits for it, or it would find nothing to delete.
+          await adding.current.get(claimId);
+          const result = await claimRequest(
+            `${CLAIMS_ENDPOINT}?id=${encodeURIComponent(claimId)}`,
+            { method: 'DELETE' },
+          );
+          // Not found means it is already gone, which is what was asked.
+          if (result.status === 204 || result.status === 404) {
+            paymentSucceeded(sessionId, seq, lines);
+            onSettled?.({ ok: true });
+            return;
+          }
+          status = result.status;
+          body = result.body;
+        } catch (err) {
+          timedOut = err instanceof TimeoutError;
+        }
+
+        if (!sessionsRef.current.some((s) => s.id === sessionId)) return;
+        // Confirmed meanwhile: the server's ledger shows it as the payment it became.
+        if (!applyServerLedger(sessionId, body, ids)) {
+          setLedger(sessionId, ({ payments, claims }) => ({
+            payments,
+            claims: claims.some((c) => c.id === claimId) ? claims : [...claims, claim],
+          }));
+        }
+        const fallback =
+          claim.status === 'declined'
+            ? `Couldn't dismiss the note about your payment to ${claim.creditor}. Try again.`
+            : `Couldn't withdraw your payment to ${claim.creditor}. Try again.`;
+        const { refusal, shown } = claimOutcome(
+          sessionId,
+          status,
+          body,
+          timedOut,
+          fallback,
+          onSettled,
+        );
+        if (refusal === null || !shown) {
+          paymentFailed(
+            sessionId,
+            seq,
+            lines,
+            refusal ?? (timedOut ? UNDO_TIMEOUT : fallback),
+            refusal !== null,
+          );
+        }
+      })().finally(() => {
+        settledDuringLoad.current.add(sessionId);
+        countPaying(sessionId, -1);
+        removing.current.delete(claimId);
+      });
+      pending.track(work);
+    },
+    [
+      applyServerLedger,
+      claimOutcome,
+      claimRequest,
+      countPaying,
+      paymentFailed,
+      paymentSucceeded,
+      pending,
+      setLedger,
+      writeOrder,
+    ],
+  );
+
   /** Creates one seeded session on the server: the row, its content, then its payments. */
   const seedOne = useCallback(
     async (session: Session) => {
@@ -1122,8 +1724,11 @@ export function useServerSessions(): SessionsBackend {
       // Dev-only, so a request per session is fine — there is no bulk
       // endpoint, and adding one for a seeder that never ships would be
       // server surface built for nobody.
-      const prev = sessionsRef.current;
-      commit(next);
+      // Sessions the account joined are never the dev bar's to delete: they are the organizer's, so
+      // they stay on screen and no DELETE is sent for them.
+      const all = sessionsRef.current;
+      const prev = all.filter((s) => !isJoined(s));
+      commit([...next, ...all.filter(isJoined)]);
       // No deadline here: the 30-second limit is for the user's own writes,
       // and a seed of many sessions can rightly take longer.
       const seed = (async () => {
@@ -1176,17 +1781,113 @@ export function useServerSessions(): SessionsBackend {
     [commit, fail, pending, seedOne],
   );
 
+  const addJoinedSession = useCallback(
+    (session: Session) => {
+      commit([...sessionsRef.current.filter((s) => s.id !== session.id), session]);
+      // A load that read the list before the join landed would drop it again. Like a payment, it
+      // is on screen already and the server has it, so the load keeps this copy.
+      settledDuringLoad.current.add(session.id);
+    },
+    [commit],
+  );
+
+  /**
+   * Sessions whose Stop tracking is currently failed, so "Try again" sends the stop itself.
+   * Unlike an organizer's failed delete, which is restored and reloaded, a stop the user asked for
+   * is still what they want.
+   */
+  const leavingFailed = useRef(new Set<string>());
+
+  const leaveSession = useCallback(
+    (sessionId: string) => {
+      const index = sessionsRef.current.findIndex((s) => s.id === sessionId);
+      const left = sessionsRef.current[index];
+      // Nothing to leave if it isn't there, or isn't one the account joined: a member's own
+      // member is named by the session, and an owner has no place to leave.
+      if (!left || !isJoined(left) || left.me === null) return;
+      const member = left.me;
+      const title = sessionDisplayTitle(left);
+      commit(sessionsRef.current.filter((s) => s.id !== sessionId));
+      deleting.current.add(sessionId);
+      loadGuard.removed(sessionId);
+      const leave = (async () => {
+        try {
+          await withDeadline(WRITE_TIMEOUT_MS, async (signal) => {
+            const res = await authedFetch(
+              `${PARTICIPANTS_ENDPOINT}?sessionId=${encodeURIComponent(sessionId)}&member=${encodeURIComponent(member)}`,
+              { method: 'DELETE' },
+              signal,
+            );
+            // A 404 means the session or the place in it has already gone, which is what was asked.
+            if (!res.ok && res.status !== 404) throw new Error('The server refused it.');
+          });
+          leavingFailed.current.delete(sessionId);
+          setFailures((f) => resolveFailure(f, 'delete', sessionId));
+        } catch {
+          leavingFailed.current.add(sessionId);
+          // Still tracking it on the server, so it comes back at once, as a failed delete's does.
+          commit(restoreAt(sessionsRef.current, left, index));
+          loadGuard.restored(sessionId);
+          fail({
+            kind: 'delete',
+            sessionId,
+            message: `Couldn't stop tracking “${title}”. Try again.`,
+          });
+        } finally {
+          deleting.current.delete(sessionId);
+        }
+      })();
+      pending.track(leave);
+    },
+    [authedFetch, commit, fail, loadGuard, pending],
+  );
+
+  const removeParticipant = useCallback(
+    async (sessionId: string, member: string): Promise<boolean> => {
+      try {
+        const removed = await withDeadline(WRITE_TIMEOUT_MS, async (signal) => {
+          const res = await authedFetch(
+            `${PARTICIPANTS_ENDPOINT}?sessionId=${encodeURIComponent(sessionId)}&member=${encodeURIComponent(member)}`,
+            { method: 'DELETE' },
+            signal,
+          );
+          return res.ok;
+        });
+        if (removed) {
+          // The member is claimable again, so the pickers and the delete warning must stop counting them.
+          commit(
+            sessionsRef.current.map((s) =>
+              s.id === sessionId
+                ? { ...s, participants: (s.participants ?? []).filter((p) => p.member !== member) }
+                : s,
+            ),
+          );
+        }
+        return removed;
+      } catch {
+        return false;
+      }
+    },
+    [authedFetch, commit],
+  );
+
   /**
    * Reloads from the server and clears every failure. The sessions whose
    * writes had failed are remembered, so the load can say whether it rolled
    * any of them back. A load failure alone adds none, so it never shows a note.
    */
   const retry = useCallback(() => {
-    for (const id of failedSessionIds(failures)) revertCandidates.current.add(id);
+    const stops = failedLeaveIds(failures, leavingFailed.current);
+    for (const id of failedSessionIds(failures)) {
+      if (!stops.includes(id)) revertCandidates.current.add(id);
+    }
     setFailures([]);
     setReverted(false);
+    // A failed stop is sent again, not just reloaded. It takes the session off the screen and
+    // holds it there against the reload below.
+    for (const id of stops) leaveSession(id);
     setReloads((n) => n + 1);
-  }, [failures]);
+  }, [failures, leaveSession]);
 
   const dismissReverted = useCallback(() => setReverted(false), []);
 
@@ -1205,9 +1906,15 @@ export function useServerSessions(): SessionsBackend {
     settleSessions,
     removeAllPayments,
     removePayment,
+    addClaims,
+    decideClaim,
+    removeClaim,
     isPaying,
     replaceAll,
     appendAll,
+    addJoinedSession,
+    leaveSession,
+    removeParticipant,
     status,
     loaded,
     error,

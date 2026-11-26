@@ -1,0 +1,11 @@
+/* Always dark modules on white with the 4-module quiet zone, whatever the theme (BR-Q3): an
+   inverted code doesn't scan reliably. The colours are literals, not tokens, on purpose, so no
+   theme can ever change them, and forced-colours mode leaves them alone. */
+.qr {
+  display: block;
+  width: 200px;
+  height: 200px;
+  background: #fff;
+  border-radius: var(--radius-sm);
+  forced-color-adjust: none;
+}

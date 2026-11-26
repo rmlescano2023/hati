@@ -1,5 +1,5 @@
 /** The release whose "What's new" is current. A later release bumps it, and each account sees that one once. */
-export const WHATS_NEW_VERSION = 2;
+export const WHATS_NEW_VERSION = 3;
 
 /**
  * Whether this account is due the current "What's new": already onboarded

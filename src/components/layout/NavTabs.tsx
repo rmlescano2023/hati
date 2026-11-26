@@ -1,4 +1,5 @@
 import type { ComponentType, ReactNode } from 'react';
+import { toConfirmCountLine } from '../../lib/joinedSessions';
 import { CollectionIcon, HistoryIcon, HomeIcon } from '../shared/icons';
 import styles from './NavTabs.module.css';
 
@@ -15,9 +16,11 @@ type Props = {
   onChange: (tab: TabId) => void;
   /** Right-hand side of the nav row — the New Session action. */
   actions?: ReactNode;
+  /** A small count on a tab, such as the payments waiting for this account's answer on Collection. */
+  counts?: Partial<Record<TabId, number>>;
 };
 
-export function NavTabs({ active, onChange, actions }: Props) {
+export function NavTabs({ active, onChange, actions, counts = {} }: Props) {
   return (
     <div className={styles.row}>
       <nav className={styles.nav} role="tablist" aria-label="Pages">
@@ -33,6 +36,14 @@ export function NavTabs({ active, onChange, actions }: Props) {
           >
             <Icon className={styles.tabIcon} />
             <span className={styles.tabLabel}>{label}</span>
+            {(counts[id] ?? 0) > 0 && (
+              <>
+                <span className={styles.count} aria-hidden="true">
+                  {(counts[id] ?? 0) > 99 ? '99+' : counts[id]}
+                </span>
+                <span className="visually-hidden">{`, ${toConfirmCountLine(counts[id] ?? 0)}`}</span>
+              </>
+            )}
           </button>
         ))}
       </nav>

@@ -1,4 +1,5 @@
 import { Button } from '../shared/Button';
+import { isJoined } from '../../lib/collection';
 import { useSessionsStore } from '../../context/SessionsStoreContext';
 import { buildDemoSessions, buildNeedsSetupSessions } from '../../lib/demoSessions';
 import type { Guide } from '../../lib/guideOffer';
@@ -21,9 +22,10 @@ type Props = {
  * and a few unplaced ones for Collection's Needs setup question.
  *
  * The two "add" seeds only ever append, so they are safe on the shared
- * database. "Seed Sessions (replace)" and "Clear All" delete every session of
- * the signed-in account, real ones included, with their payments, so never use
- * them on an account that holds real data.
+ * database. "Seed Sessions (replace)" and "Clear All" delete every session the
+ * signed-in account owns, real ones included, with their payments, so never use
+ * them on an account that holds real data. Sessions it joined belong to their
+ * organizers, so these leave them alone.
  *
  * Never rendered in a production build — `import.meta.env.DEV` is statically
  * false there, so this component and `demoSessions` are dropped by the bundler.
@@ -76,7 +78,7 @@ export function DevSessionsBar({
       <Button
         size="sm"
         variant="danger"
-        disabled={sessions.length === 0}
+        disabled={sessions.every(isJoined)}
         onClick={() => {
           if (window.confirm('Delete every session, including History? This cannot be undone.')) {
             replaceAllSessions([]);

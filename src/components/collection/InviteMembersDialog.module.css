@@ -1,0 +1,118 @@
+/* The private link, in mono so it reads as something to copy. It wraps anywhere, and a tap
+   selects all of it. */
+.link {
+  margin: 0;
+  padding: 8px 10px;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--surface2);
+  border-radius: var(--radius-sm);
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+/* The QR and its caption, centred above the link they encode. */
+.qrFigure {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0;
+}
+
+.qrCaption {
+  font-size: 12px;
+  color: var(--text2);
+  text-align: center;
+}
+
+.linkError {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.heading {
+  margin: 8px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* A long list scrolls inside the dialog, so Reset and Done stay in reach. */
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: min(40vh, 18rem);
+  overflow-y: auto;
+  margin: 0;
+  padding: 4px 10px;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  min-width: 0;
+}
+
+.row {
+  /* The list scrolls as a column, so a row keeps its height: shrunk, wrapping text would
+     overlap the next row. */
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 40px;
+  padding: 4px 0;
+}
+
+.rowText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.member {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.rowMeta {
+  font-size: 12px;
+  color: var(--text2);
+  overflow-wrap: anywhere;
+}
+
+.error {
+  margin: 0;
+  font-size: 12px;
+  color: var(--danger-text);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 640px) {
+  /* Remove drops under the row's text rather than squeezing it. */
+  .row {
+    flex-wrap: wrap;
+  }
+}
+
+/* The link, its QR and Copy, kept as one block so they can be marked together. */
+.linkBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* While a new link is on its way, the old one is shown but dimmed and can't be tapped. */
+.updating {
+  opacity: 0.45;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}

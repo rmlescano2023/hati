@@ -15,6 +15,8 @@ type Args = {
   fileNameSuffix?: string;
   /** The session's name, for the page-1 heading and the file name; null when unnamed. */
   name: string | null;
+  /** The organizer's invite link; only History passes it, for a finished session. */
+  inviteUrl?: string;
 };
 
 /**
@@ -27,7 +29,13 @@ type Args = {
  * The renderer is imported dynamically so its ~1MB of code never lands in the
  * initial page bundle.
  */
-export async function downloadSoa({ members, records, fileNameSuffix, name }: Args): Promise<void> {
+export async function downloadSoa({
+  members,
+  records,
+  fileNameSuffix,
+  name,
+  inviteUrl,
+}: Args): Promise<void> {
   const [{ pdf }, { registerPdfFonts, resetFailedPdfFonts }, { SoaDocument }] = await Promise.all([
     import('@react-pdf/renderer'),
     import('./fonts'),
@@ -42,6 +50,7 @@ export async function downloadSoa({ members, records, fileNameSuffix, name }: Ar
     members,
     records,
     name,
+    inviteUrl,
   }) as unknown as ReactElement<DocumentProps>;
 
   let blob: Blob;

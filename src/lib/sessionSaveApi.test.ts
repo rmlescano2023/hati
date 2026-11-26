@@ -13,8 +13,10 @@ type Statement = { text: string; values: unknown[] };
 
 const db = vi.hoisted(() => ({
   userId: 'user_a' as string | null,
-  /** The `rowCount` an `update expense_sessions` reports. */
-  updated: 0,
+  /** The stored row the locking `select … for update` finds, or none. */
+  stored: null as { status: string; members: string[]; me: string | null } | null,
+  /** The members other accounts have joined as. */
+  claimed: [] as string[],
   connects: 0,
   statements: [] as Statement[],
 }));
@@ -23,8 +25,13 @@ vi.mock('../../api/_shared.js', () => {
   const sql = (strings: TemplateStringsArray, ...values: unknown[]) => {
     const text = strings.join('?').replace(/\s+/g, ' ').trim();
     db.statements.push({ text, values });
-    const rowCount = text.startsWith('update expense_sessions') ? db.updated : 0;
-    return Promise.resolve({ rows: [], rowCount });
+    let rows: unknown[] = [];
+    if (text.startsWith('select status, members, me from expense_sessions')) {
+      rows = db.stored ? [db.stored] : [];
+    } else if (text.startsWith('select member from session_participants')) {
+      rows = db.claimed.map((member) => ({ member }));
+    }
+    return Promise.resolve({ rows, rowCount: rows.length });
   };
   return {
     getUserId: async () => db.userId,
@@ -98,16 +105,20 @@ async function put(body: unknown = SESSION) {
 
 const sent = (prefix: string) => db.statements.filter((s) => s.text.startsWith(prefix));
 
+const DRAFT = { status: 'draft', members: [], me: null };
+const CLOSED = { status: 'closed', members: ['Ana', 'Ben'], me: 'Ana' };
+
 beforeEach(() => {
   db.userId = 'user_a';
-  db.updated = 0;
+  db.stored = null;
+  db.claimed = [];
   db.connects = 0;
   db.statements = [];
 });
 
 describe('PUT /api/sessions/:id', () => {
   it('is a 404 that writes nothing when no row of the caller has this id', async () => {
-    db.updated = 0;
+    db.stored = null;
     const res = await put();
 
     expect(res.statusCode).toBe(404);
@@ -118,8 +129,18 @@ describe('PUT /api/sessions/:id', () => {
     expect(db.statements.filter((s) => s.text.includes('purchase_records'))).toHaveLength(0);
   });
 
+  it('locks and reads the stored row of the caller first, scoped to both ids', async () => {
+    db.stored = DRAFT;
+    await put();
+
+    const [lock] = sent('select status, members, me from expense_sessions');
+    expect(lock.text).toMatch(/for update$/);
+    expect(lock.values).toEqual(['s1', 'user_a']);
+    expect(db.statements[1]).toBe(lock);
+  });
+
   it('scopes the update to both the session id and the signed-in user', async () => {
-    db.updated = 1;
+    db.stored = DRAFT;
     await put();
 
     const [update] = sent('update expense_sessions');
@@ -129,7 +150,7 @@ describe('PUT /api/sessions/:id', () => {
   });
 
   it('updates an owned session and replaces its records', async () => {
-    db.updated = 1;
+    db.stored = DRAFT;
     const res = await put();
 
     expect(res.statusCode).toBe(200);
@@ -140,8 +161,8 @@ describe('PUT /api/sessions/:id', () => {
   });
 
   it('never inserts a session, found or not', async () => {
-    for (const updated of [0, 1]) {
-      db.updated = updated;
+    for (const stored of [null, DRAFT, CLOSED]) {
+      db.stored = stored;
       await put();
     }
     expect(sent('insert into expense_sessions')).toHaveLength(0);
@@ -162,5 +183,49 @@ describe('PUT /api/sessions/:id', () => {
     expect(res.statusCode).toBe(400);
     expect(db.statements).toHaveLength(0);
     expect(db.connects).toBe(0);
+  });
+});
+
+describe('PUT /api/sessions/:id on a finished session (BR-R1, E1-17)', () => {
+  const closed = { ...SESSION, status: 'closed', closedAt: '2026-11-02T00:00:00.000Z' };
+
+  it('sends no purchase_records statement, and never touches status, members or closed_at', async () => {
+    db.stored = CLOSED;
+    const res = await put({ ...closed, members: ['Zed'], records: [] });
+
+    expect(res.statusCode).toBe(200);
+    expect(db.statements.filter((s) => s.text.includes('purchase_records'))).toHaveLength(0);
+    const [update] = sent('update expense_sessions');
+    expect(update.text).toContain('name = ?');
+    expect(update.text).toContain('activity_at = greatest');
+    expect(update.text).toContain('me = ?');
+    expect(update.text).not.toMatch(/status\s*=/);
+    expect(update.text).not.toContain('members');
+    expect(update.text).not.toContain('closed_at');
+    expect(update.text).not.toContain('finished_with_collection');
+    expect(sent('commit')).toHaveLength(1);
+  });
+
+  it('still takes a pick of an unclaimed member', async () => {
+    db.stored = CLOSED;
+    db.claimed = [];
+    await put({ ...closed, me: 'Ben' });
+    expect(sent('update expense_sessions')[0].values).toContain('Ben');
+  });
+
+  it('keeps the stored pick when the body names a member someone has joined as', async () => {
+    db.stored = CLOSED;
+    db.claimed = ['Ben'];
+    await put({ ...closed, me: 'Ben' });
+    const [update] = sent('update expense_sessions');
+    expect(update.values).not.toContain('Ben');
+    expect(update.values).toContain('Ana');
+  });
+
+  it('takes a draft save as before when the stored row is a draft, even if the body says closed', async () => {
+    db.stored = DRAFT;
+    await put(closed);
+    expect(sent('delete from purchase_records')).toHaveLength(1);
+    expect(sent('select member from session_participants')).toHaveLength(0);
   });
 });

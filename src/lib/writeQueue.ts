@@ -169,6 +169,51 @@ export function mergeLoaded<S extends { id: string }>(
 }
 
 /**
+ * Which sessions were created or removed on screen while a load was out. A load reads the server
+ * at one moment and answers at another, so a session created after the read isn't in its answer
+ * even though the server has it by then, and one deleted after the read still is. Neither the
+ * in-flight create nor the in-flight delete is still "in flight" by the time the answer lands, so
+ * without this the load drops the new session (a tour's "Session not found") or brings back the
+ * deleted card for a while.
+ *
+ * An entry is kept through the one load that begins after it was recorded, and forgotten when the
+ * load after that begins. Forgetting at the very next load would miss a create or delete that
+ * started before that load and finished while it was out, which is the same race one step earlier.
+ * A write that fails undoes its entry, because the card it put on or took off the screen is put
+ * back, and the server's copy is then the truth a load should be believed about.
+ */
+export function createLoadGuard(): {
+  begin(): void;
+  created(id: string): void;
+  removed(id: string): void;
+  createFailed(id: string): void;
+  restored(id: string): void;
+  wasCreated(id: string): boolean;
+  wasRemoved(id: string): boolean;
+} {
+  // The number of loads begun so far when each entry was recorded.
+  let loads = 0;
+  const created = new Map<string, number>();
+  const removed = new Map<string, number>();
+  const expire = (entries: Map<string, number>) => {
+    for (const [id, at] of entries) if (at < loads - 1) entries.delete(id);
+  };
+  return {
+    begin() {
+      loads += 1;
+      expire(created);
+      expire(removed);
+    },
+    created: (id) => void created.set(id, loads),
+    removed: (id) => void removed.set(id, loads),
+    createFailed: (id) => void created.delete(id),
+    restored: (id) => void removed.delete(id),
+    wasCreated: (id) => created.has(id),
+    wasRemoved: (id) => removed.has(id),
+  };
+}
+
+/**
  * `list` with `session` back at `index`, where it was before a delete that
  * failed took it off the screen. It is left alone if it is there already, and
  * the index is clamped, since the list may have changed while the delete ran.
@@ -178,6 +223,79 @@ export function restoreAt<S extends { id: string }>(list: S[], session: S, index
   const at = Math.min(Math.max(index, 0), list.length);
   return [...list.slice(0, at), session, ...list.slice(at)];
 }
+
+/**
+ * How long the app waits after one load before it quietly reloads on the tab coming back into
+ * view. A member's lines change when the organizer records a payment, and a tab left open
+ * would otherwise show them stale until a manual refresh (D2).
+ */
+export const RELOAD_ON_RETURN_MS = 30_000;
+
+/**
+ * Whether coming back to the tab should reload. The wait counts from the start of the last load of
+ * any kind, so two returns inside the window reload at most once (AC-15.2). Null means nothing
+ * has loaded yet, so the first load is still the one in charge.
+ */
+export const reloadsOnReturn = (lastLoadAt: number | null, now: number): boolean =>
+  lastLoadAt !== null && now - lastLoadAt >= RELOAD_ON_RETURN_MS;
+
+/**
+ * The pending request for a quiet reload, and the flag that makes the load it starts quiet. A return
+ * to the tab fires `visibilitychange` and `focus` together, and React renders them at different
+ * priorities, so each one bumps the reload counter on its own render. The first render's load
+ * consumes the flag and the second, which the first one cancels, finds it gone and shows the
+ * loading page. So a request made while another is still waiting to start is refused: one return
+ * is one reload, and it is quiet.
+ */
+export function createQuietReload(): {
+  /** Whether to start a reload now; false when one was already asked for and hasn't started. */
+  request(): boolean;
+  /** Called as a load starts: whether it is the quiet one that was asked for. */
+  take(): boolean;
+} {
+  let waiting = false;
+  return {
+    request() {
+      if (waiting) return false;
+      waiting = true;
+      return true;
+    },
+    take() {
+      const quiet = waiting;
+      waiting = false;
+      return quiet;
+    },
+  };
+}
+
+/** How often a visible tab asks the server whether anything it can see has changed. */
+export const CHECK_INTERVAL_MS = 15_000;
+
+/**
+ * After this long with no pointer, key or touch input the check pauses, so a tab left open and
+ * unattended doesn't keep the database awake. The next input, or the window gaining focus, resumes
+ * it.
+ */
+export const IDLE_PAUSE_MS = 5 * 60_000;
+
+/**
+ * Whether a tick of the check should ask the server: the page is visible, it can reload quietly,
+ * the last load's state is known to compare against, no check is already in flight, and the user
+ * has done something in the last `IDLE_PAUSE_MS`.
+ */
+export const checksForChanges = (c: {
+  visible: boolean;
+  canReload: boolean;
+  state: string | null;
+  checking: boolean;
+  lastInputAt: number;
+  now: number;
+}): boolean =>
+  c.visible &&
+  c.canReload &&
+  c.state !== null &&
+  !c.checking &&
+  c.now - c.lastInputAt < IDLE_PAUSE_MS;
 
 /**
  * Whether a screen with nothing to list may say so. An empty list is only the
@@ -203,6 +321,24 @@ export function keepLocalPayments<S extends { id: string; payments: unknown }>(
   return loaded.map((s) => {
     const mine = keep(s.id) ? localById.get(s.id) : undefined;
     return mine ? { ...s, payments: mine.payments } : s;
+  });
+}
+
+/**
+ * The loaded list with the on-screen claims of the sessions `keep` names. It is
+ * `keepLocalPayments`' twin and runs with the same predicate: a confirm changes
+ * both lists at once, so keeping one without the other would show a confirmed
+ * claim as a payment and as a pending claim.
+ */
+export function keepLocalClaims<S extends { id: string; claims?: unknown }>(
+  loaded: S[],
+  local: S[],
+  keep: (id: string) => boolean,
+): S[] {
+  const localById = new Map(local.map((s) => [s.id, s]));
+  return loaded.map((s) => {
+    const mine = keep(s.id) ? localById.get(s.id) : undefined;
+    return mine ? { ...s, claims: mine.claims } : s;
   });
 }
 
@@ -408,6 +544,16 @@ export function addFailure(list: readonly Failure[], next: Failure): Failure[] {
   if (older?.seq !== undefined && next.seq !== undefined && older.seq > next.seq) return [...list];
   return [...list.filter((f) => !sameFailure(f, next)), next];
 }
+
+/**
+ * The sessions whose "Stop tracking" failed and still shows as failed, so "Try again" can send
+ * the stop again rather than only reloading. `leaving` is the ids the app sent a stop for: a
+ * failed delete of any other session is the organizer's own, which Try again leaves to a reload.
+ */
+export const failedLeaveIds = (list: readonly Failure[], leaving: ReadonlySet<string>): string[] =>
+  list.flatMap((f) =>
+    f.kind === 'delete' && f.sessionId !== null && leaving.has(f.sessionId) ? [f.sessionId] : [],
+  );
 
 /**
  * Removes the failure with this kind and session. Returns `list` itself when

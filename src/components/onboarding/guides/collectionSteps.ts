@@ -50,10 +50,10 @@ export const COLLECTION_STEPS: GuideStep<CollectionSceneId>[] = [
     place: 'K2',
   },
   {
-    target: 'collection-settled',
+    target: 'collection-done',
     title: 'All done',
     content:
-      "When every line is paid, the session moves to Settled. Tap here to see them. That's it: tap Done to go back to your own Collection.",
+      "When every line of yours is paid, the session leaves Collection and moves to History. Beach trip is paid in full, so it has gone from here. In History you can still see its payments and undo one. That's it: tap Done to go back to your own Collection.",
     place: 'K3',
   },
 ];

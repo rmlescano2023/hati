@@ -198,7 +198,7 @@ describe('the Collection guide steps (AC-TG7.2)', () => {
   it('has the 7 steps in the approved order', () => {
     expect(COLLECTION_STEPS).toHaveLength(7);
     expect(COLLECTION_STEPS.map((s) => s.target).join(', ')).toBe(
-      'collection-totals, collection-unsettled, collection-outstanding, collection-owed, collection-owed, collection-mark-all, collection-settled',
+      'collection-totals, collection-unsettled, collection-outstanding, collection-owed, collection-owed, collection-mark-all, collection-done',
     );
     expect(COLLECTION_STEPS.map((s) => s.place)).toEqual([
       ...Array(3).fill('K1'),
@@ -358,7 +358,7 @@ describe('each Collection scene shows its targets (AC-TG7.1, BR-TG14)', () => {
     }
   });
 
-  it('K1 reads the strip and the three sections', () => {
+  it('K1 reads the strip and both sections', () => {
     const markup = html('K1');
     for (const part of [
       '₱1,480.00',
@@ -366,10 +366,10 @@ describe('each Collection scene shows its targets (AC-TG7.1, BR-TG14)', () => {
       'Not counting 1 session that needs setup',
       'Needs setup (1)',
       'Outstanding (1)',
-      'Settled (1)',
     ]) {
       expect(markup).toContain(part);
     }
+    expect(markup).not.toContain('Settled (');
   });
 
   it("K2 shows Carla's payment and Mark all as paid", () => {
@@ -378,8 +378,13 @@ describe('each Collection scene shows its targets (AC-TG7.1, BR-TG14)', () => {
     expect(markup).toContain('Mark all as paid');
   });
 
-  it('K3 has two settled sessions', () => {
-    expect(html('K3')).toContain('Settled (2)');
+  it('K3 shows the empty Outstanding line and no Settled section', () => {
+    const markup = html('K3');
+    expect(markup).toContain('Outstanding (0)');
+    expect(markup).toContain('Nothing outstanding. Sessions that are paid in full are in History.');
+    expect(count(markup, 'data-tour="collection-done"')).toBe(1);
+    expect(markup).not.toContain('Settled (');
+    expect(markup).not.toContain('collection-settled');
   });
 
   it.each(kIds)('%s never asks "Already settled?" or for a name, and has no "Need help?"', (id) => {
