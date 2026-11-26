@@ -13,6 +13,15 @@
   text-align: center;
 }
 
+/* The export went out without the invite block: a heads-up, not an error. */
+.note {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--warn-text);
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
 .hint {
   font-size: 11px;
   color: var(--text3);
@@ -34,4 +43,29 @@
 .wrap > button {
   width: 100%;
   max-width: var(--footer-action-width);
+}
+
+/* Beside History detail's title it keeps to the button's width, so it can't widen the header. */
+.inline > .note {
+  width: var(--footer-action-width);
+  text-align: left;
+}
+
+@media (max-width: 640px) {
+  /* The buttons are full width on a phone (HistoryDetailPage's .actions), so the note is too. */
+  .inline > .note {
+    width: 100%;
+  }
+}
+
+/* On an open Collection card: next to View details, sized to its label, with its notes under it. */
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.card > .note,
+.card > .error {
+  text-align: left;
 }

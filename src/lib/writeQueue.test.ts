@@ -11,17 +11,25 @@ import {
   SIGNED_OUT,
   WHOLE_SESSION,
   DELETED_ELSEWHERE_MANY,
+  createLoadGuard,
+  createQuietReload,
   createPendingWrites,
   createSaveConfirmations,
   createSaveQueue,
   createWriteOrder,
   discardsFailedCreate,
   failedMessage,
+  failedLeaveIds,
   failedSessionIds,
   isDeletedElsewhere,
   lineKey,
   recordFailedMessage,
+  CHECK_INTERVAL_MS,
+  IDLE_PAUSE_MS,
+  checksForChanges,
+  reloadsOnReturn,
   resolveSuperseded,
+  keepLocalClaims,
   keepLocalPayments,
   mergeLoaded,
   messageOf,
@@ -1249,5 +1257,224 @@ describe('restoreAt (a card whose delete failed comes back where it was)', () =>
     });
     expect(resolveFailure(list, 'delete', 'A')).toBe(list);
     expect(resolveFailure(list, 'delete', 'B')).toEqual([]);
+  });
+});
+
+describe('reloadsOnReturn (AC-15.1, AC-15.2)', () => {
+  it('never reloads before there has been a load', () => {
+    expect(reloadsOnReturn(null, 1_000_000)).toBe(false);
+  });
+
+  it('reloads only once 30 seconds have passed since the last load started', () => {
+    expect(reloadsOnReturn(1_000, 30_999)).toBe(false);
+    expect(reloadsOnReturn(1_000, 31_000)).toBe(true);
+  });
+});
+
+describe('failedLeaveIds (Try again after a failed Stop tracking)', () => {
+  const failure = (kind: Failure['kind'], sessionId: string | null): Failure => ({
+    kind,
+    sessionId,
+    message: 'x',
+  });
+
+  it('names the failed deletes that were stops, and nothing else', () => {
+    const list = [
+      failure('delete', 's1'),
+      failure('delete', 's2'),
+      failure('save', 's1'),
+      failure('load', null),
+    ];
+    expect(failedLeaveIds(list, new Set(['s1']))).toEqual(['s1']);
+    expect(failedLeaveIds(list, new Set())).toEqual([]);
+  });
+});
+
+describe('keepLocalClaims (a confirm moves a claim into the payments)', () => {
+  type S = { id: string; payments: string[]; claims: string[] };
+  const loaded: S[] = [
+    { id: 's1', payments: ['pay_1'], claims: [] },
+    { id: 's2', payments: [], claims: ['clm_2'] },
+  ];
+  const local: S[] = [
+    { id: 's1', payments: ['pay_1', 'clm_1'], claims: ['clm_9'] },
+    { id: 's2', payments: [], claims: [] },
+  ];
+
+  it("takes the on-screen claims of the sessions kept, and the server's elsewhere", () => {
+    const merged = keepLocalClaims(loaded, local, (id) => id === 's1');
+    expect(merged.find((s) => s.id === 's1')?.claims).toEqual(['clm_9']);
+    expect(merged.find((s) => s.id === 's2')?.claims).toEqual(['clm_2']);
+  });
+
+  it('moves with the payments, so a confirmed claim is never both', () => {
+    const keep = (id: string) => id === 's1';
+    const merged = keepLocalClaims(keepLocalPayments(loaded, local, keep), local, keep);
+    const s1 = merged.find((s) => s.id === 's1')!;
+    expect(s1.payments).toEqual(['pay_1', 'clm_1']);
+    expect(s1.claims).toEqual(['clm_9']);
+  });
+});
+
+describe('the "anything changed?" check (round 3, item 5)', () => {
+  it('runs every 15 seconds and pauses after 5 minutes with no input', () => {
+    expect(CHECK_INTERVAL_MS).toBe(15_000);
+    expect(IDLE_PAUSE_MS).toBe(300_000);
+  });
+
+  const ready = {
+    visible: true,
+    canReload: true,
+    state: 'abc' as string | null,
+    checking: false,
+    lastInputAt: 1_000_000,
+    now: 1_000_000,
+  };
+
+  it('checks only when visible, able to reload, with a known state, none in flight, and not idle', () => {
+    expect(checksForChanges(ready)).toBe(true);
+    expect(checksForChanges({ ...ready, visible: false })).toBe(false);
+    expect(checksForChanges({ ...ready, canReload: false })).toBe(false);
+    expect(checksForChanges({ ...ready, state: null })).toBe(false);
+    expect(checksForChanges({ ...ready, checking: true })).toBe(false);
+  });
+
+  it('pauses at exactly 5 minutes without input and resumes with the next input', () => {
+    const at = (ms: number) => ({ ...ready, now: ready.lastInputAt + ms });
+    expect(checksForChanges(at(IDLE_PAUSE_MS - 1))).toBe(true);
+    expect(checksForChanges(at(IDLE_PAUSE_MS))).toBe(false);
+    expect(
+      checksForChanges({
+        ...at(IDLE_PAUSE_MS + 60_000),
+        lastInputAt: ready.lastInputAt + IDLE_PAUSE_MS + 59_000,
+      }),
+    ).toBe(true);
+  });
+});
+
+describe('createLoadGuard (QA B2 and B5: a load that read the server before a local change)', () => {
+  type S = { id: string };
+  const merge = (server: S[], local: S[], guard: ReturnType<typeof createLoadGuard>): S[] =>
+    mergeLoaded(
+      server,
+      local,
+      (id) => guard.wasCreated(id),
+      (id) => guard.wasRemoved(id),
+    );
+
+  it('keeps a session created while the load was out, though the load never saw it (B2)', () => {
+    const guard = createLoadGuard();
+    guard.begin();
+    // The tour creates its session after the load's read and before its answer lands.
+    guard.created('tour');
+    const merged = merge([{ id: 'a' }], [{ id: 'a' }, { id: 'tour' }], guard);
+    expect(merged.map((s) => s.id)).toEqual(['a', 'tour']);
+  });
+
+  it('keeps a session deleted while the load was out gone, though the load still had it (B5)', () => {
+    const guard = createLoadGuard();
+    guard.begin();
+    guard.removed('b');
+    // The delete has already landed, so nothing is "in flight" to hold it, but this load read first.
+    const merged = merge([{ id: 'a' }, { id: 'b' }], [{ id: 'a' }], guard);
+    expect(merged.map((s) => s.id)).toEqual(['a']);
+  });
+
+  it('keeps an entry through the load that began after it and forgets it at the one after, so only loads that overlap a change are held back', () => {
+    const guard = createLoadGuard();
+    guard.begin();
+    guard.created('tour');
+    guard.removed('b');
+    // The next load overlaps the change, so it is still held back.
+    guard.begin();
+    expect(guard.wasCreated('tour')).toBe(true);
+    expect(guard.wasRemoved('b')).toBe(true);
+    // A load that began after both loads, so after the change had landed, is the truth, as before.
+    guard.begin();
+    expect(guard.wasCreated('tour')).toBe(false);
+    expect(guard.wasRemoved('b')).toBe(false);
+    expect(merge([{ id: 'a' }], [{ id: 'a' }, { id: 'tour' }], guard).map((s) => s.id)).toEqual([
+      'a',
+    ]);
+  });
+
+  it('holds back a load for a create that began before it and finished while it was out', () => {
+    const guard = createLoadGuard();
+    guard.begin();
+    // The create starts while load 1 is out, and load 2 begins before it finishes.
+    guard.created('tour');
+    guard.begin();
+    // Load 2 read the server before the create landed, and the create has finished by its answer.
+    const merged = merge([{ id: 'a' }], [{ id: 'a' }, { id: 'tour' }], guard);
+    expect(merged.map((s) => s.id)).toEqual(['a', 'tour']);
+  });
+
+  it('holds back a load for a delete that began before it and finished while it was out', () => {
+    const guard = createLoadGuard();
+    guard.begin();
+    guard.removed('b');
+    guard.begin();
+    const merged = merge([{ id: 'a' }, { id: 'b' }], [{ id: 'a' }], guard);
+    expect(merged.map((s) => s.id)).toEqual(['a']);
+  });
+
+  it('shows a card whose delete failed when the load that was out answers with it (restored)', () => {
+    const guard = createLoadGuard();
+    guard.begin();
+    guard.removed('b');
+    // The delete failed and the card was put back, though the load is still out.
+    guard.restored('b');
+    const merged = merge([{ id: 'a' }, { id: 'b' }], [{ id: 'a' }, { id: 'b' }], guard);
+    expect(merged.map((s) => s.id)).toEqual(['a', 'b']);
+    expect(guard.wasRemoved('b')).toBe(false);
+  });
+
+  it('believes a load about a create that failed, so a session the server lacks is not kept (createFailed)', () => {
+    const guard = createLoadGuard();
+    guard.begin();
+    guard.created('tour');
+    guard.createFailed('tour');
+    expect(guard.wasCreated('tour')).toBe(false);
+    expect(merge([{ id: 'a' }], [{ id: 'a' }, { id: 'tour' }], guard).map((s) => s.id)).toEqual([
+      'a',
+    ]);
+  });
+
+  it('undoes only the entry it names', () => {
+    const guard = createLoadGuard();
+    guard.begin();
+    guard.removed('b');
+    guard.removed('c');
+    guard.created('x');
+    guard.restored('b');
+    expect(guard.wasRemoved('c')).toBe(true);
+    expect(guard.wasCreated('x')).toBe(true);
+  });
+});
+
+describe('createQuietReload (N1: visibilitychange and focus together on a tab return)', () => {
+  it('starts one reload for the two events of a return, and that load is quiet', () => {
+    const reload = createQuietReload();
+    let bumps = 0;
+    // visibilitychange, then focus, both before the load effect has run.
+    for (let event = 0; event < 2; event++) if (reload.request()) bumps += 1;
+    expect(bumps).toBe(1);
+    // The one load that starts is the quiet one, so it never shows the loading page.
+    expect(reload.take()).toBe(true);
+  });
+
+  it('is not left waiting once its load has started, so the next return reloads again', () => {
+    const reload = createQuietReload();
+    expect(reload.request()).toBe(true);
+    expect(reload.take()).toBe(true);
+    expect(reload.request()).toBe(true);
+  });
+
+  it('is not quiet for a load nobody asked to be quiet, such as the first or a retry', () => {
+    const reload = createQuietReload();
+    expect(reload.take()).toBe(false);
+    reload.request();
+    reload.take();
+    expect(reload.take()).toBe(false);
   });
 });

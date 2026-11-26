@@ -6,6 +6,71 @@
   border-top: 1px solid var(--border);
 }
 
+/* Waiting for this account to confirm (round 3): a soft green panel with a thin glowing outline,
+   inside the card's padding, with a gentle light sweep behind the text. */
+.line[data-to-confirm] {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  /* A soft green wash, lightest on the left and fading out towards the surface, with a 3px accent
+     bar on the left edge. The ring and glow are shadows, not borders, so nothing shifts. */
+  background:
+    linear-gradient(var(--accent), var(--accent)) left / 3px 100% no-repeat,
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--accent) 10%, transparent),
+      color-mix(in srgb, var(--accent) 4%, transparent) 55%,
+      transparent
+    );
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent),
+    0 0 14px color-mix(in srgb, var(--accent) 16%, transparent);
+  /* The top rule would draw over the outline; it is the outline's job now. */
+  border-top-color: transparent;
+}
+
+.line[data-to-confirm]::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  /* A gentle diagonal band of light, at most 6% white, drawn behind the text so it never changes
+     the text colour. It crosses for about a second and a half in every four. */
+  background: linear-gradient(
+    105deg,
+    transparent 38%,
+    rgba(255, 255, 255, 0.06) 50%,
+    transparent 62%
+  );
+  transform: translateX(-130%);
+  animation: sweep 4s ease-in-out infinite;
+}
+
+/* The small grey time is too faint on the tint, so it takes the next step up. */
+.line[data-to-confirm] .time {
+  color: var(--text2);
+}
+
+@keyframes sweep {
+  0% {
+    transform: translateX(-130%);
+  }
+  35%,
+  100% {
+    transform: translateX(130%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .line[data-to-confirm]::after {
+    animation: none;
+    display: none;
+  }
+}
+
 .top {
   display: flex;
   align-items: baseline;
@@ -84,9 +149,12 @@
   color: var(--text2);
 }
 
-.input {
-  font-family: var(--mono);
+.amountBox {
   max-width: 14rem;
+}
+
+.amountBox input {
+  font-family: var(--mono);
 }
 
 .message {
@@ -104,6 +172,12 @@
   color: var(--danger-text);
 }
 
+/* What is waiting on a claim, under the figures it is never part of. */
+.pending {
+  font-size: 12px;
+  color: var(--warn-text);
+}
+
 .history {
   display: flex;
   flex-direction: column;
@@ -119,6 +193,17 @@
   gap: 10px;
   font-size: 12px;
   color: var(--text2);
+}
+
+/* A refusal on an entry takes its own line under the entry's text. */
+.entryError {
+  flex: 0 0 100%;
+}
+
+/* Confirm and Decline, kept together. */
+.entryActions {
+  display: flex;
+  gap: 8px;
 }
 
 .entryText {
@@ -141,5 +226,21 @@
   /* Undo drops under the payment's text when the row is too narrow for both. */
   .entry {
     flex-wrap: wrap;
+  }
+
+  /* Confirm and Decline drop under the text together, sharing the row (E2-11). */
+  .entryActions {
+    width: 100%;
+  }
+
+  .entryActions > button {
+    flex: 1 1 auto;
+    /* Confirm and Decline are answers to someone's payment: a full 44px target (round 5 UX). */
+    min-height: 44px;
+  }
+
+  /* Undo is a destructive control too, so it is a full 44px target on a phone. */
+  .entry [data-undo] {
+    min-height: 44px;
   }
 }

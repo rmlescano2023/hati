@@ -75,6 +75,27 @@
   overflow-wrap: anywhere;
 }
 
+/* How a settled session ended for this viewer, and a quiet note beneath it (PR 4). */
+.status {
+  font-size: 12px;
+  color: var(--text2);
+  overflow-wrap: anywhere;
+}
+
+.note {
+  font-size: 11px;
+  color: var(--warn-text);
+  overflow-wrap: anywhere;
+}
+
+/* Who shared a session the account joined, in the same quiet type as the purchase count. */
+.shared {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--text3);
+  overflow-wrap: anywhere;
+}
+
 .count {
   font-size: 11px;
   letter-spacing: 0.04em;
@@ -117,4 +138,19 @@
   width: 15px;
   height: 15px;
   display: block;
+}
+
+@media (max-width: 640px) {
+  /* The bin keeps its 15px icon but gets a 44 by 44px hit area, centred where the icon was, so it
+     is a real tap target on a phone. The count line leaves room for it. */
+  .delete {
+    min-width: 44px;
+    min-height: 44px;
+    right: 4px;
+    bottom: 4px;
+  }
+
+  .count {
+    padding-right: 48px;
+  }
 }

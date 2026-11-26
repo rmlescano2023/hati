@@ -11,8 +11,11 @@ import { purgeMemberFromItem } from '../lib/calculations';
 import { includeMember, type ItemRef } from '../lib/includeMember';
 import { createId } from '../lib/id';
 import { applyItemEdit, type StagedItem } from '../lib/staging';
+import { isJoined } from '../lib/collection';
 import { applySessionName, normaliseSessionName } from '../lib/sessionName';
 import type {
+  ClaimDecision,
+  NewClaim,
   NewPayment,
   NewPurchaseRecord,
   PurchaseItem,
@@ -49,7 +52,7 @@ type SessionsStoreValue = {
   /** Marks finished sessions as already settled, one all-or-nothing request each; see `useServerSessions`. */
   settleSessions: (sessionIds: string[]) => Promise<{ settled: string[]; failed: string[] }>;
   /** Undoes "already settled" on one session, in one request; see `useServerSessions`. */
-  removeAllPayments: (sessionId: string) => void;
+  removeAllPayments: (sessionId: string, onSettled?: (ok: boolean) => void) => void;
   /** Whether a payment write for the session is still waiting on the server; see `useServerSessions`. */
   isPaying: (sessionId: string) => boolean;
   /** Undoes one payment; see `useServerSessions`. */
@@ -58,8 +61,34 @@ type SessionsStoreValue = {
     paymentId: string,
     onSettled?: (result: PaymentResult) => void,
   ) => void;
-  /** Removes a session outright. Unlike closing, nothing is kept. */
+  /** A joined debtor says they've paid; see `useServerSessions`. */
+  addClaims: (
+    sessionId: string,
+    claims: NewClaim[],
+    onSettled?: (result: PaymentResult) => boolean | void,
+    options?: { quiet?: boolean },
+  ) => Promise<void>;
+  /** Confirms or declines a claim; see `useServerSessions`. */
+  decideClaim: (
+    sessionId: string,
+    claimId: string,
+    decision: ClaimDecision,
+    onSettled?: (result: PaymentResult) => boolean | void,
+  ) => void;
+  /** Withdraws a pending claim or dismisses a declined one; see `useServerSessions`. */
+  removeClaim: (
+    sessionId: string,
+    claimId: string,
+    onSettled?: (result: PaymentResult) => boolean | void,
+  ) => void;
+  /** Removes a session outright. Unlike closing, nothing is kept. A joined session is never deleted: leave it instead. */
   deleteSession: (sessionId: string) => void;
+  /** Puts a session the account has just joined on screen; see `useServerSessions`. */
+  addJoinedSession: (session: Session) => void;
+  /** Stops tracking a joined session; see `useServerSessions`. */
+  leaveSession: (sessionId: string) => void;
+  /** The organizer removes a joined account; see `useServerSessions`. */
+  removeParticipant: (sessionId: string, member: string) => Promise<boolean>;
   /** Moves a draft to the top of Home because the user opened it. Silent; see BR-8. */
   recordOpen: (sessionId: string) => void;
   /**
@@ -160,9 +189,15 @@ function SessionsStoreCore({
     settleSessions,
     removeAllPayments,
     removePayment,
+    addClaims,
+    decideClaim,
+    removeClaim,
     isPaying,
     replaceAll,
     appendAll,
+    addJoinedSession,
+    leaveSession,
+    removeParticipant,
     status,
     loaded,
     error,
@@ -188,7 +223,10 @@ function SessionsStoreCore({
       fn: (session: Session) => Session,
       onSettled?: (saved: boolean) => void,
     ) => {
-      mutateSession(sessionId, fn, onSettled);
+      // A joined session is read-only. No screen offers an edit on one, and the server refuses a
+      // save of a finished session's content anyway; this is the backstop, so a stray call is a
+      // no-op that sends nothing.
+      mutateSession(sessionId, (session) => (isJoined(session) ? session : fn(session)), onSettled);
     },
     [mutateSession],
   );
@@ -273,9 +311,12 @@ function SessionsStoreCore({
 
   const deleteSession = useCallback(
     (sessionId: string) => {
+      // A participant can't delete the organizer's session. The server would answer 404 and the
+      // card would come back, so it never leaves the screen at all.
+      if (sessions.some((s) => s.id === sessionId && isJoined(s))) return;
       removeSession(sessionId);
     },
-    [removeSession],
+    [removeSession, sessions],
   );
 
   const addMember = useCallback(
@@ -407,8 +448,14 @@ function SessionsStoreCore({
       settleSessions,
       removeAllPayments,
       removePayment,
+      addClaims,
+      decideClaim,
+      removeClaim,
       isPaying,
       deleteSession,
+      addJoinedSession,
+      leaveSession,
+      removeParticipant,
       recordOpen,
       addMember,
       removeMember,
@@ -439,8 +486,14 @@ function SessionsStoreCore({
       settleSessions,
       removeAllPayments,
       removePayment,
+      addClaims,
+      decideClaim,
+      removeClaim,
       isPaying,
       deleteSession,
+      addJoinedSession,
+      leaveSession,
+      removeParticipant,
       recordOpen,
       addMember,
       removeMember,

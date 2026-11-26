@@ -11,8 +11,17 @@ import { SessionsStoreProvider } from './context/SessionsStoreContext';
 import { ProfileProvider } from './context/ProfileContext';
 import { SignedOutScreen } from './components/layout/SignedOutScreen';
 import { ConfigError } from './components/layout/ConfigError';
+import { browserStorage, readJoinParam, stashJoin, withoutJoinParam } from './lib/joinLink';
 
 const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+
+// An invite link's token is stashed before Clerk's hash routing or a sign-in redirect can drop
+// it, and taken out of the address bar so a refresh can't replay it (architect E1).
+const joinRaw = readJoinParam(window.location.search);
+if (joinRaw !== null) {
+  stashJoin(browserStorage(), joinRaw, Date.now());
+  window.history.replaceState(window.history.state, '', withoutJoinParam(window.location.href));
+}
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

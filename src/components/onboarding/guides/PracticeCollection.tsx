@@ -49,7 +49,7 @@ export function PracticeCollection({ onEnd }: Props) {
   };
 
   // Beach trip paid in full at C6 is scene K3, so moving there lets the tour follow along
-  // (`reachedNext`) rather than leave C6's tooltip pointing at a card that has gone to Settled.
+  // (`reachedNext`) rather than leave C6's tooltip pointing at a card that has gone to History.
   const onBeachPaid = useCallback((paid: boolean) => {
     if (paid && step.current === MARK_ALL_STEP) setScene('K3');
   }, []);

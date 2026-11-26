@@ -42,3 +42,19 @@ export function textCells(node: ReactNode, out: Cell[] = []): Cell[] {
 }
 
 export const monoCells = (cells: Cell[]) => cells.filter((c) => c.style.fontFamily === 'DM Mono');
+
+/** Every element of a react-pdf primitive (`Link`, `Svg`, `Path`) in the tree. Components aren't expanded. */
+export function elementsOf(
+  node: ReactNode,
+  type: unknown,
+  out: ReactElement<Record<string, unknown>>[] = [],
+): ReactElement<Record<string, unknown>>[] {
+  if (Array.isArray(node)) {
+    node.forEach((n) => elementsOf(n, type, out));
+  } else if (isValidElement(node)) {
+    const el = node as ReactElement<Record<string, unknown>>;
+    if (el.type === type) out.push(el);
+    elementsOf(el.props.children as ReactNode, type, out);
+  }
+  return out;
+}

@@ -176,3 +176,72 @@ describe('deleteSessionMessage', () => {
     );
   });
 });
+
+describe('deleteSessionMessage with members tracking it (AC-13.1 to AC-13.3)', () => {
+  const closed = { status: 'closed', closedAt: '2026-05-02T08:00:00.000Z' } as const;
+  const joiner = (member: string) => ({ member, name: null, joinedAt: '2026-05-03T00:00:00.000Z' });
+  const payment = (id: string) => ({
+    id,
+    debtor: 'Ana',
+    creditor: 'Ben',
+    amountCents: 100,
+    createdAt: '2026-05-03T08:00:00.000Z',
+  });
+  const three = [record('2026-04-24'), record('2026-04-25'), record('2026-04-26')];
+
+  it('says how many members will lose it, with recorded payments', () => {
+    const s = session({
+      ...closed,
+      name: 'Bali Trip',
+      records: three,
+      payments: [1, 2, 3, 4].map((n) => payment(`pay_${n}`)),
+      participants: [joiner('Ben'), joiner('Cara')],
+    });
+    expect(deleteSessionMessage(s)).toBe(
+      '“Bali Trip” and its 3 purchases will be deleted, along with its 4 recorded payments. 2 members are tracking it on Hati, and it will disappear from their Collection and History too. Its statement can no longer be downloaded and the payments cannot be recovered. This cannot be undone.',
+    );
+  });
+
+  it('says it without payments, for one member', () => {
+    const s = session({
+      ...closed,
+      name: 'Bali Trip',
+      records: three,
+      participants: [joiner('Ben')],
+    });
+    expect(deleteSessionMessage(s)).toBe(
+      '“Bali Trip” and its 3 purchases will be deleted, and its statement can no longer be downloaded. 1 member is tracking it on Hati, and it will disappear from their Collection and History too. This cannot be undone.',
+    );
+  });
+
+  it("is today's message when nobody has joined", () => {
+    const s = session({ ...closed, name: 'Bali Trip', records: three, participants: [] });
+    expect(deleteSessionMessage(s)).toBe(
+      '“Bali Trip” and its 3 purchases will be deleted, and its statement can no longer be downloaded, and it will leave Collection. This cannot be undone.',
+    );
+  });
+});
+
+describe('deleteSessionMessage by where the session is (QA B4)', () => {
+  const closedBali = session({
+    status: 'closed',
+    closedAt: '2026-05-02T08:00:00.000Z',
+    name: 'Bali Trip',
+    records: [record('2026-04-24')],
+  });
+
+  it('says it will leave Collection only for a session that is in Collection', () => {
+    expect(deleteSessionMessage(closedBali)).toContain('and it will leave Collection.');
+    expect(deleteSessionMessage(closedBali, 'collection')).toContain(
+      'and it will leave Collection.',
+    );
+  });
+
+  it('does not mention Collection for a session that is in History', () => {
+    const message = deleteSessionMessage(closedBali, 'history');
+    expect(message).toBe(
+      '“Bali Trip” and its 1 purchase will be deleted, and its statement can no longer be downloaded. This cannot be undone.',
+    );
+    expect(message).not.toContain('Collection');
+  });
+});
