@@ -58,6 +58,32 @@
   text-align: left;
 }
 
+/* A long message scrolls inside the dialog, so the title and buttons stay on
+   screen. The cap matches IncludeMemberDialog's: it keeps the dialog inside
+   the browser's own limit for a modal, so the dialog itself never scrolls. */
+.scrollable .body {
+  max-height: calc(100vh - 2rem - 8px);
+  max-height: calc(100dvh - 2rem - 8px);
+}
+
+.scrollable .message {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* "Latest" and "Earlier": real headings under the dialog's h2, sized as labels. */
+.notesHeading {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.notesHeading ~ .notesHeading {
+  margin-top: 6px;
+}
+
 @media (max-width: 640px) {
   /* Three buttons don't fit side by side at 375px. Stacked in reading order,
      the primary last, nearest the thumb. */

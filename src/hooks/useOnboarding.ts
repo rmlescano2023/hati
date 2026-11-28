@@ -10,6 +10,8 @@ type Result = {
   markSeen: () => void;
   /** True once we know this returning account hasn't seen the current "What's new". */
   whatsNewDue: boolean;
+  /** The account's last seen "What's new" version as read, unparsed; whatsNewNotes() reads it (BR-WC1). */
+  whatsNewSeen: unknown;
   /** Marks the current "What's new" seen. */
   markWhatsNewSeen: () => void;
   /** Whether each guide was started or its offer declined; null until read, and for good if the read failed (AC-TG9.8). */
@@ -36,6 +38,7 @@ export function useOnboarding(): Result {
   const { getToken, isLoaded, isSignedIn } = useAuth();
   const [shouldRun, setShouldRun] = useState(false);
   const [newDue, setNewDue] = useState(false);
+  const [whatsNewSeen, setWhatsNewSeen] = useState<unknown>(null);
   const [guideSeen, setGuideSeen] = useState<GuideSeen>(null);
 
   useEffect(() => {
@@ -57,6 +60,7 @@ export function useOnboarding(): Result {
         if (cancelled) return;
         setShouldRun(body.onboardedAt === null);
         setNewDue(whatsNewDue(body.onboardedAt, body.whatsNewVersion));
+        setWhatsNewSeen(body.whatsNewVersion);
         setGuideSeen({
           expenses: body.expensesGuideSeenAt != null,
           collection: body.collectionGuideSeenAt != null,
@@ -139,5 +143,13 @@ export function useOnboarding(): Result {
     [getToken, guideSeen],
   );
 
-  return { shouldRun, markSeen, whatsNewDue: newDue, markWhatsNewSeen, guideSeen, markGuideSeen };
+  return {
+    shouldRun,
+    markSeen,
+    whatsNewDue: newDue,
+    whatsNewSeen,
+    markWhatsNewSeen,
+    guideSeen,
+    markGuideSeen,
+  };
 }
