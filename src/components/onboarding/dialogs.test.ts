@@ -1,8 +1,12 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { GuideOfferDialog } from './GuideOfferDialog';
 import { TutorialsDialog } from './TutorialsDialog';
+import { WhatsNewDialog } from './WhatsNewDialog';
+import { whatsNewNotes } from '../../lib/whatsNew';
 
 const noop = () => {};
 // React escapes apostrophes and quotes in markup; the copy is compared as typed.
@@ -54,5 +58,72 @@ describe('GuideOfferDialog (AC-TG9.1, AC-TG10.1)', () => {
     const markup = render(guide);
     expect(markup.indexOf('Not now')).toBeGreaterThan(-1);
     expect(markup.indexOf('Show me')).toBeGreaterThan(markup.indexOf('Not now'));
+  });
+});
+
+describe('WhatsNewDialog (AC-WC1, AC-WC5)', () => {
+  const render = (seen: unknown) =>
+    text(
+      renderToStaticMarkup(
+        createElement(WhatsNewDialog, {
+          open: true,
+          notes: whatsNewNotes(seen),
+          onClose: noop,
+          onShowMeHow: noop,
+        }),
+      ),
+    );
+  const v3 = ['Joined sessions.', "“I've paid.”", 'Collection and History.'];
+  const inOrder = (markup: string, parts: string[]) => {
+    const at = parts.map((p) => markup.indexOf(p));
+    expect(at.every((i) => i > -1)).toBe(true);
+    expect(at).toEqual([...at].sort((a, b) => a - b));
+  };
+
+  it('lists all seven notes for an account that has seen nothing, under real headings (AC-WC1.1)', () => {
+    const markup = render(0);
+    inOrder(markup, [
+      '>Latest</h3>',
+      ...v3,
+      '>Earlier</h3>',
+      'Receipts, item by item.',
+      'Guides.',
+      '<strong>Collection.</strong>',
+      'Your name.',
+    ]);
+    inOrder(markup, ['Got it', 'Show me how']);
+  });
+
+  it('lists the notes after release 1 for an account that saw it (AC-WC1.2)', () => {
+    const markup = render(1);
+    inOrder(markup, ['>Latest</h3>', ...v3, '>Earlier</h3>', 'Receipts, item by item.', 'Guides.']);
+    expect(markup).not.toContain('<strong>Collection.</strong>');
+    expect(markup).not.toContain('Your name.');
+    inOrder(markup, ['Got it', 'Show me how']);
+  });
+
+  it('shows the three current notes with no headings and one button for an account that saw 2 (AC-WC1.3, AC-WC5.5)', () => {
+    const markup = render(2);
+    expect(markup).not.toContain('<h3');
+    expect(markup).not.toContain('Latest');
+    expect(markup).not.toContain('Earlier');
+    inOrder(markup, v3);
+    expect(markup).toContain(
+      "Collection now shows only what's still being paid; settled sessions are in History.",
+    );
+    expect(markup).toContain('Got it');
+    expect(markup).not.toContain('Show me how');
+  });
+
+  it('adds no tab stop of its own; that appears only while the notes overflow', () => {
+    for (const seen of [0, 1, 2]) expect(render(seen)).not.toContain('tabindex');
+  });
+
+  it('scrolls only the message of a scrollable dialog, and leaves every other message alone (BR-WC9)', () => {
+    const css = readFileSync(resolve(__dirname, './OnboardingDialog.module.css'), 'utf8');
+    const block = (selector: string) =>
+      css.match(new RegExp(`^${selector.replace('.', '\\.')} \\{([^}]*)\\}`, 'm'))?.[1] ?? '';
+    expect(block('.scrollable .message')).toContain('overflow-y: auto');
+    expect(block('.message')).not.toContain('overflow');
   });
 });
