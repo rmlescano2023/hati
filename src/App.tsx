@@ -20,14 +20,15 @@ import { OnboardingTour } from './components/onboarding/OnboardingTour';
 import { OnboardingDialog } from './components/onboarding/OnboardingDialog';
 import { TutorialsDialog, type Tutorial } from './components/onboarding/TutorialsDialog';
 import { GuideOfferDialog } from './components/onboarding/GuideOfferDialog';
+import { WhatsNewDialog } from './components/onboarding/WhatsNewDialog';
 import { PracticeCollection } from './components/onboarding/guides/PracticeCollection';
 import { PracticeExpenses } from './components/onboarding/guides/PracticeExpenses';
 import { JoinFlow } from './components/join/JoinFlow';
-import onboardingStyles from './components/onboarding/OnboardingDialog.module.css';
 import type { ScreenShape } from './components/onboarding/steps';
 import { useInvites } from './hooks/useInvites';
 import { useOnboarding } from './hooks/useOnboarding';
 import { guideOfferDue, type Guide } from './lib/guideOffer';
+import { whatsNewNotes } from './lib/whatsNew';
 import { buildCollection, waitingForMeCount } from './lib/collection';
 import { joinFlowReady } from './lib/joinedSessions';
 import { browserStorage, clearJoin, inviteUrl, peekJoin } from './lib/joinLink';
@@ -134,6 +135,7 @@ export default function App() {
     shouldRun: firstLogin,
     markSeen,
     whatsNewDue,
+    whatsNewSeen,
     markWhatsNewSeen,
     guideSeen,
     markGuideSeen,
@@ -579,34 +581,18 @@ export default function App() {
           Show me
         </Button>
       </OnboardingDialog>
-      <OnboardingDialog
+      <WhatsNewDialog
         open={whatsNewOpen}
-        title="What's new in Hati"
-        message={
-          <span className={onboardingStyles.points}>
-            <span>
-              <strong>Joined sessions.</strong> On a finished session, tap Share with members and
-              share the link. Each person signs in, picks who they are, and follows what they owe or
-              are owed in their own Collection.
-            </span>
-            <span>
-              <strong>&ldquo;I&apos;ve paid.&rdquo;</strong> Members who joined can tell you
-              they&apos;ve paid. It waits until you confirm or decline it, so you both end up with
-              the same figures.
-            </span>
-            <span>
-              <strong>Collection and History.</strong> Collection now shows only what&apos;s still
-              being paid; settled sessions are in History.
-            </span>
-          </span>
-        }
-        onDismiss={closeWhatsNew}
-      >
-        {/* No guide covers joined sessions, so there is no "Show me how" to point at the wrong thing. */}
-        <Button variant="primary" onClick={closeWhatsNew}>
-          Got it
-        </Button>
-      </OnboardingDialog>
+        // The preview shows what an account that has seen nothing would, the longest list (OQ-2).
+        notes={whatsNewNotes(whatsNewPreview ? 0 : whatsNewSeen)}
+        onClose={closeWhatsNew}
+        onShowMeHow={() => {
+          // A previewed What's new writes nothing, so neither does the guide it starts.
+          const mark = !whatsNewPreview;
+          closeWhatsNew();
+          startTutorial('expenses', 'menu', mark);
+        }}
+      />
       {offer && (
         <GuideOfferDialog
           guide={offer.guide}
